@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+run_mix() {
+  if command -v mise >/dev/null 2>&1; then
+    mise exec -- mix "$@"
+  else
+    mix "$@"
+  fi
+}
+
+echo "pre-push: running mix precommit..."
+run_mix precommit
+echo "pre-push: mix precommit passed."

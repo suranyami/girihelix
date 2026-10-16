@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+run_mix() {
+  if command -v mise >/dev/null 2>&1; then
+    mise exec -- mix "$@"
+  else
+    mix "$@"
+  fi
+}
+
+# Fast gate only: compile --warnings-as-errors, format --check-formatted,
+# credo -a --strict. Seconds, not minutes, so committing stays cheap.
+#
+# The full gate — sobelow and the suite under coverage — runs in the pre-push
+# hook. Putting it here instead would make every commit take minutes and push
+# people toward --no-verify, which is worse than a fast gate that always runs.
+#
+# Install with `./scripts/setup-githooks.sh`, which sets core.hooksPath=.githooks
+# so these tracked hooks are used rather than whatever sits in .git/hooks.
+echo "pre-commit: running mix precommit.fast..."
+run_mix precommit.fast
+echo "pre-commit: mix precommit.fast passed."
