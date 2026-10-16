@@ -18,17 +18,17 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     square = unit_square()
 
     assert Polygon.num_vertices(square) == 4
-    assert Polygon.vertex(square, 0) == Point.new(0.0, 0.0)
-    assert Polygon.vertex(square, 2) == Point.new(1.0, 1.0)
+    assert Polygon.vertex(square, 0) == {:ok, Point.new(0.0, 0.0)}
+    assert Polygon.vertex(square, 2) == {:ok, Point.new(1.0, 1.0)}
     assert square |> Polygon.points() |> length() == 4
   end
 
-  test "vertex/2 raises past the end rather than returning a spare slot" do
-    assert_raise ArgumentError, ~r/out of range/, fn -> Polygon.vertex(unit_square(), 4) end
+  test "vertex/2 reports an index past the end as data" do
+    assert Polygon.vertex(unit_square(), 4) == {:error, :out_of_range}
   end
 
   test "area/1 is the shoelace area, and discards winding" do
-    assert Polygon.area(unit_square()) == 1.0
+    assert Polygon.area(unit_square()) == {:ok, 1.0}
 
     # the same square, wound the other way, has the same area
     clockwise =
@@ -39,43 +39,42 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
         Point.new(1.0, 0.0)
       ])
 
-    assert Polygon.area(clockwise) == 1.0
+    assert Polygon.area(clockwise) == {:ok, 1.0}
   end
 
   test "area/1 of a triangle" do
     triangle = Polygon.new([Point.new(0.0, 0.0), Point.new(4.0, 0.0), Point.new(0.0, 3.0)])
 
-    assert Polygon.area(triangle) == 6.0
+    assert Polygon.area(triangle) == {:ok, 6.0}
   end
 
   # Review Focus 5: the Java takes a remainder modulo the vertex count, so an
-  # empty polygon raises ArithmeticException rather than returning zero. Raising
-  # here keeps that an error rather than turning it into a value.
-  test "area/1 raises on an empty polygon" do
-    assert_raise ArgumentError, ~r/empty polygon/, fn -> Polygon.area(Polygon.new([])) end
+  # empty polygon raises ArithmeticException rather than returning zero. An error
+  # tuple keeps that an error rather than turning it into a value, and lets the
+  # caller match it.
+  test "area/1 reports an empty polygon as data" do
+    assert Polygon.area(Polygon.new([])) == {:error, :empty_polygon}
   end
 
   test "arc_length/2 measures the open or closed path" do
     square = unit_square()
 
-    assert Polygon.arc_length(square, false) == 3.0
-    assert Polygon.arc_length(square, true) == 4.0
+    assert Polygon.arc_length(square, false) == {:ok, 3.0}
+    assert Polygon.arc_length(square, true) == {:ok, 4.0}
   end
 
   test "arc_length/2 of a single point is zero either way" do
     single = Polygon.new([Point.new(2.0, 3.0)])
 
-    assert Polygon.arc_length(single, false) == 0.0
-    assert Polygon.arc_length(single, true) == 0.0
+    assert Polygon.arc_length(single, false) == {:ok, 0.0}
+    assert Polygon.arc_length(single, true) == {:ok, 0.0}
   end
 
-  test "arc_length/2 raises on an empty closed polygon" do
-    assert_raise ArgumentError, ~r/empty polygon/, fn ->
-      Polygon.arc_length(Polygon.new([]), true)
-    end
+  test "arc_length/2 reports an empty closed polygon as data" do
+    assert Polygon.arc_length(Polygon.new([]), true) == {:error, :empty_polygon}
 
     # ... but an empty open path is legitimately zero
-    assert Polygon.arc_length(Polygon.new([]), false) == 0.0
+    assert Polygon.arc_length(Polygon.new([]), false) == {:ok, 0.0}
   end
 
   test "contains_point?/2 is true inside and false outside" do
@@ -87,7 +86,8 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
   end
 
   # An empty polygon contains nothing, which is a decision: the Java indexes
-  # pts[0] and throws. Returning false is the honest answer to the question.
+  # pts[0] and throws. Returning false is the honest answer to the question, and
+  # containment cannot fail, so there is no error tuple to return.
   test "contains_point?/2 is false for an empty polygon" do
     refute Polygon.contains_point?(Polygon.new([]), Point.new(0.0, 0.0))
   end
@@ -96,8 +96,8 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     square = unit_square()
     moved = Polygon.apply_transform(square, Transform.translate(10.0, 0.0))
 
-    assert Polygon.vertex(moved, 0) == Point.new(10.0, 0.0)
-    assert Polygon.vertex(square, 0) == Point.new(0.0, 0.0)
+    assert Polygon.vertex(moved, 0) == {:ok, Point.new(10.0, 0.0)}
+    assert Polygon.vertex(square, 0) == {:ok, Point.new(0.0, 0.0)}
   end
 
   test "point_in_poly/2 takes the polygon as a closed list" do

@@ -20,6 +20,13 @@ defmodule Girihelix.Engine.Geometry.Transform do
   Three names differ from the Java, to stay clear of Elixir's `Kernel`:
   `apply/2` is `apply_to/2`, `apply(double, double)` is `apply_coords/3`, and
   `translate(Point)` is `translate_point/1`.
+
+  **Failures are data.** The functions that can fail — `invert/1`,
+  `reflect_through_line/2`, `match_two_segments/4` and
+  `dist_from_inverted_zero/2` — return `{:ok, result} | {:error, reason}`, and
+  callers thread them with `with`. `invert!/1` is the bang escape hatch for a
+  caller that has already established invertibility; the Java's
+  `IllegalArgumentException` maps to `{:error, :non_invertible}`.
   """
 
   alias Girihelix.Engine.Geometry.Point
@@ -36,6 +43,8 @@ defmodule Girihelix.Engine.Geometry.Transform do
           f: float()
         }
 
+  @type reason :: :non_invertible | :degenerate_line
+
   @doc "Builds a transform from its six scalars."
   @spec new(number(), number(), number(), number(), number(), number()) :: t()
   def new(a, b, c, d, e, f) do
@@ -49,9 +58,9 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   The all-zero matrix, which collapses everything to the origin.
 
-  It is **not** a null transform: its determinant is zero, so `invert/1` raises on
-  it. The Java exposes this as the shared mutable constant `ZERO`; here it is a
-  function, so no caller can corrupt it for another.
+  It is **not** a null transform: its determinant is zero, so `invert/1` reports
+  `{:error, :non_invertible}` on it. The Java exposes this as the shared mutable
+  constant `ZERO`; here it is a function, so no caller can corrupt it for another.
   """
   @spec zero() :: t()
   def zero, do: scale(0.0)
@@ -97,14 +106,20 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   Reflection in the line through `p` and `q`.
 
-  Maps the line onto the unit x interval, flips y, and maps back. Raises when the
-  two points coincide, because the line is then undefined and the intermediate
-  transform is singular — one of the few places the Java validates anything.
+  Maps the line onto the unit x interval, flips y, and maps back. Returns
+  `{:error, :degenerate_line}` when the two points coincide, because the line is
+  then undefined — one of the few places the Java validates anything, and it does
+  so by throwing.
   """
-  @spec reflect_through_line(Point.t(), Point.t()) :: t()
+  @spec reflect_through_line(Point.t(), Point.t()) :: {:ok, t()} | {:error, :degenerate_line}
+  def reflect_through_line(p, q) when p === q, do: {:error, :degenerate_line}
+
   def reflect_through_line(p, q) do
     onto_line = match_line_segment(p, q)
-    compose(onto_line, compose(scale(1.0, -1.0), invert(onto_line)))
+
+    with {:ok, inverse} <- invert(onto_line) do
+      {:ok, compose(onto_line, compose(scale(1.0, -1.0), inverse))}
+    end
   end
 
   @doc """
@@ -136,35 +151,52 @@ defmodule Girihelix.Engine.Geometry.Transform do
     Point.new(a * x + b * y + c, d * x + e * y + f)
   end
 
+  @doc "The determinant of the transform, which is the determinant of its linear part."
+  @spec determinant(t()) :: float()
+  def determinant(%__MODULE__{a: a, b: b, d: d, e: e}), do: a * e - b * d
+
   @doc """
-  The inverse transform.
+  The inverse transform, or `{:error, :non_invertible}`.
 
-  Raises on a singular transform. The Java tests the determinant for **exact**
-  equality with `0.0`, not against a tolerance, so a matrix with a determinant of
-  `1e-300` inverts to enormous values rather than raising. That behaviour is kept:
-  the test is `det == 0.0` here too.
+  The Java tests the determinant for **exact** equality with `0.0`, not against a
+  tolerance, so a matrix with a determinant of `1e-300` inverts to enormous values
+  rather than failing. That behaviour is kept: the test here is `determinant == 0.0`
+  too. Use `invert!/1` when the caller already knows the transform is invertible.
   """
-  @spec invert(t()) :: t()
-  def invert(%__MODULE__{a: a, b: b, c: c, d: d, e: e, f: f}) do
-    det = a * e - b * d
+  @spec invert(t()) :: {:ok, t()} | {:error, :non_invertible}
+  def invert(%__MODULE__{} = transform), do: inverted(transform, determinant(transform))
 
-    if det == 0.0 do
-      raise ArgumentError, "non-invertible transform"
+  defp inverted(%__MODULE__{}, determinant) when determinant == 0.0, do: {:error, :non_invertible}
+
+  defp inverted(%__MODULE__{a: a, b: b, c: c, d: d, e: e, f: f}, determinant) do
+    {:ok,
+     new(
+       e / determinant,
+       -b / determinant,
+       (b * f - c * e) / determinant,
+       -d / determinant,
+       a / determinant,
+       (c * d - a * f) / determinant
+     )}
+  end
+
+  @doc """
+  `invert/1` for a caller that has established invertibility, raising otherwise.
+
+  The bang variant is the sanctioned escape hatch: a bang function raising is
+  Elixir's own convention, not an inherited Java idiom.
+  """
+  @spec invert!(t()) :: t()
+  def invert!(transform) do
+    case invert(transform) do
+      {:ok, inverse} -> inverse
+      {:error, reason} -> raise ArgumentError, "non-invertible transform (#{reason})"
     end
-
-    new(
-      e / det,
-      -b / det,
-      (b * f - c * e) / det,
-      -d / det,
-      a / det,
-      (c * d - a * f) / det
-    )
   end
 
   @doc "Whether the transform reverses orientation, i.e. its determinant is negative."
   @spec flips(t()) :: boolean()
-  def flips(%__MODULE__{a: a, b: b, d: d, e: e}), do: a * e - b * d < 0.0
+  def flips(transform), do: determinant(transform) < 0.0
 
   @doc """
   The transform carrying the unit interval on the positive x axis onto `p`-`q`.
@@ -181,19 +213,24 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   The transform carrying the segment `p1`-`q1` onto `p2`-`q2`.
 
-  Maps `p1` to `p2` and `q1` to `q2`. Both factors are similarities
-  parameterised `p` to `q`, so the result never flips either.
+  Maps `p1` to `p2` and `q1` to `q2`. Both factors are similarities parameterised
+  `p` to `q`, so the result never flips either. Reports
+  `{:error, :non_invertible}` when the source segment has no length.
   """
-  @spec match_two_segments(Point.t(), Point.t(), Point.t(), Point.t()) :: t()
+  @spec match_two_segments(Point.t(), Point.t(), Point.t(), Point.t()) ::
+          {:ok, t()} | {:error, :non_invertible}
   def match_two_segments(p1, q1, p2, q2) do
-    compose(match_line_segment(p2, q2), invert(match_line_segment(p1, q1)))
+    with {:ok, inverse} <- p1 |> match_line_segment(q1) |> invert() do
+      {:ok, compose(match_line_segment(p2, q2), inverse)}
+    end
   end
 
   @doc """
   The distance between the images of `(v, 0)` and `(0, 0)`.
 
   A renderer utility in the Java, used to scale stroke widths with zoom. The
-  geometry core does not need it, but the SVG emitter will.
+  geometry core does not need it, but the SVG emitter will. Measures through the
+  inverse, so it reports `{:error, :non_invertible}` for a singular transform.
   """
   @spec dist_from_zero(t(), number()) :: float()
   def dist_from_zero(transform, v) do
@@ -203,9 +240,16 @@ defmodule Girihelix.Engine.Geometry.Transform do
     )
   end
 
-  @doc "`dist_from_zero/2` measured through the inverse. Raises on a singular transform."
-  @spec dist_from_inverted_zero(t(), number()) :: float()
+  @doc """
+  `dist_from_zero/2` measured through the inverse.
+
+  Returns `{:error, :non_invertible}` for a singular transform, since the Java's
+  `distFromInvertedZero` inverts without checking.
+  """
+  @spec dist_from_inverted_zero(t(), number()) :: {:ok, float()} | {:error, :non_invertible}
   def dist_from_inverted_zero(transform, v) do
-    transform |> invert() |> dist_from_zero(v)
+    with {:ok, inverse} <- invert(transform) do
+      {:ok, dist_from_zero(inverse, v)}
+    end
   end
 end

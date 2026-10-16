@@ -119,29 +119,30 @@ defmodule Girihelix.Engine.Geometry.PointTest do
     a = Point.new(0.0, 0.0)
     b = Point.new(4.0, 0.0)
 
-    assert Point.parameterization_on_line(Point.new(2.0, 0.0), a, b) == 0.5
-    assert Point.parameterization_on_line(Point.new(-4.0, 0.0), a, b) == -1.0
+    assert Point.parameterization_on_line(Point.new(2.0, 0.0), a, b) == {:ok, 0.5}
+    assert Point.parameterization_on_line(Point.new(-4.0, 0.0), a, b) == {:ok, -1.0}
   end
 
-  test "parameterization_on_line/3 raises on a zero-length segment" do
+  # An expected failure is returned as data, not raised, so the caller can
+  # pattern-match it rather than wrapping the call in a rescue.
+  test "parameterization_on_line/3 reports a zero-length segment as data" do
     degenerate = Point.new(1.0, 1.0)
 
-    assert_raise ArgumentError, ~r/zero-length/, fn ->
-      Point.parameterization_on_line(Point.new(4.0, 5.0), degenerate, degenerate)
-    end
+    assert Point.parameterization_on_line(Point.new(4.0, 5.0), degenerate, degenerate) ==
+             {:error, :degenerate_segment}
   end
 
   test "center/1 averages the non-nil entries" do
     points = [Point.new(0.0, 0.0), nil, Point.new(4.0, 2.0)]
-    assert Point.center(points) == Point.new(2.0, 1.0)
+    assert Point.center(points) == {:ok, Point.new(2.0, 1.0)}
   end
 
   # Java returns Point(NaN, NaN) here, because 1.0/0.0 is Infinity and
-  # 0.0 * Infinity is NaN. Raising is a deliberate divergence: an empty list is
-  # a programming error, and a NaN coordinate propagates silently for ever.
-  test "center/1 raises on a list with no real points" do
-    assert_raise ArgumentError, ~r/cannot average/, fn -> Point.center([]) end
-    assert_raise ArgumentError, ~r/cannot average/, fn -> Point.center([nil]) end
+  # 0.0 * Infinity is NaN — a coordinate poison that propagates for ever. An
+  # error tuple is a deliberate divergence, and the caller pattern-matches it.
+  test "center/1 reports a list with no real points as data" do
+    assert Point.center([]) == {:error, :no_points}
+    assert Point.center([nil]) == {:error, :no_points}
   end
 
   test "recenter/2 subtracts the centre, leaving nils alone" do

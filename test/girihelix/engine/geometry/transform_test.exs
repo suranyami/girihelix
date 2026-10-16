@@ -55,7 +55,8 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
   end
 
   test "reflect_through_line/2 fixes the line and reverses either side of it" do
-    transform = Transform.reflect_through_line(Point.new(0.0, 0.0), Point.new(1.0, 0.0))
+    assert {:ok, transform} =
+             Transform.reflect_through_line(Point.new(0.0, 0.0), Point.new(1.0, 0.0))
 
     on_line = Transform.apply_to(transform, Point.new(7.0, 0.0))
     assert_in_delta on_line.x, 7.0, 1.0e-12
@@ -69,20 +70,37 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert Transform.flips(transform)
   end
 
+  # A reflection needs the line to exist, so coincident points are an expected
+  # failure and are reported as data rather than raised.
+  test "reflect_through_line/2 reports coincident points as data" do
+    same = Point.new(2.0, 2.0)
+
+    assert Transform.reflect_through_line(same, same) == {:error, :degenerate_line}
+  end
+
   test "invert/1 undoes a transform" do
     transform = 0.7 |> Transform.rotate() |> Transform.compose(Transform.translate(4.0, -2.0))
     point = Point.new(1.5, -3.25)
 
     moved = Transform.apply_to(transform, point)
-    round_tripped = Transform.apply_to(Transform.invert(transform), moved)
+    assert {:ok, inverse} = Transform.invert(transform)
+    round_tripped = Transform.apply_to(inverse, moved)
 
     assert_in_delta round_tripped.x, point.x, 1.0e-12
     assert_in_delta round_tripped.y, point.y, 1.0e-12
   end
 
-  test "invert/1 raises on a singular transform" do
+  test "invert/1 reports a singular transform as data" do
+    assert Transform.invert(Transform.zero()) == {:error, :non_invertible}
+  end
+
+  # The bang variant is the sanctioned escape hatch for a caller that has already
+  # established invertibility: it raises rather than returning a tuple.
+  test "invert!/1 raises where invert/1 returns an error tuple" do
+    assert {:ok, _transform} = Transform.invert(Transform.scale(2.0))
+
     assert_raise ArgumentError, ~r/non-invertible/, fn ->
-      Transform.invert(Transform.zero())
+      Transform.invert!(Transform.zero())
     end
   end
 
@@ -110,13 +128,13 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
   end
 
   test "match_two_segments/4 carries one segment onto another" do
-    transform =
-      Transform.match_two_segments(
-        Point.new(1.0, 1.0),
-        Point.new(2.0, 1.0),
-        Point.new(0.0, 0.0),
-        Point.new(0.0, 4.0)
-      )
+    assert {:ok, transform} =
+             Transform.match_two_segments(
+               Point.new(1.0, 1.0),
+               Point.new(2.0, 1.0),
+               Point.new(0.0, 0.0),
+               Point.new(0.0, 4.0)
+             )
 
     start = Transform.apply_to(transform, Point.new(1.0, 1.0))
     finish = Transform.apply_to(transform, Point.new(2.0, 1.0))
@@ -127,6 +145,13 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert_in_delta finish.y, 4.0, 1.0e-12
   end
 
+  test "match_two_segments/4 reports a zero-length source segment as data" do
+    same = Point.new(1.0, 1.0)
+
+    assert Transform.match_two_segments(same, same, Point.new(0.0, 0.0), Point.new(1.0, 0.0)) ==
+             {:error, :non_invertible}
+  end
+
   test "equality is exact on all six doubles, with no tolerance" do
     assert Transform.translate(1.0, 2.0) == Transform.translate(1.0, 2.0)
     refute Transform.translate(1.0, 2.0) == Transform.translate(1.0, 2.0 + 1.0e-12)
@@ -135,5 +160,12 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
   test "dist_from_zero/2 scales with the transform and its argument" do
     assert_in_delta Transform.dist_from_zero(Transform.scale(3.0), 1.0), 3.0, 1.0e-12
     assert_in_delta Transform.dist_from_zero(Transform.scale(3.0), 2.0), 6.0, 1.0e-12
+  end
+
+  test "dist_from_inverted_zero/2 measures through the inverse, or reports singularity" do
+    assert {:ok, distance} = Transform.dist_from_inverted_zero(Transform.scale(3.0), 2.0)
+    assert_in_delta distance, 2.0 / 3.0, 1.0e-12
+
+    assert Transform.dist_from_inverted_zero(Transform.zero(), 1.0) == {:error, :non_invertible}
   end
 end

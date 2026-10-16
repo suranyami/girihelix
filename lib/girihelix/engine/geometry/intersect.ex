@@ -9,18 +9,23 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   returns `{s, t}`, the fractions along each segment. The Java packs those into a
   `Point`, where they are not a location at all.
 
-  **Everything that fails returns `nil`, and the reasons are indistinguishable.**
-  Parallel segments, a crossing outside the segment, and a zero-length segment all
-  give `nil`, so no caller can tell which happened.
+  **Failure is `nil`, and the reasons are indistinguishable.** Parallel segments, a
+  crossing outside the segment, and a zero-length segment all give `nil`, so no
+  caller can tell which happened. An error tuple would invent a distinction the
+  source deliberately does not make, so `nil` stays — and it is data the caller
+  matches, not an exception.
 
   **Overlapping collinear segments and endpoint-touching pairs are not handled.**
   The source says so and stops there. Callers that need those cases handle them
-  themselves, which is exactly what the `nil` check in `Rosette` is for.
+  themselves, which is exactly what the `nil` match in `Rosette` is for.
   """
 
   alias Girihelix.Engine.Geometry.Loose
   alias Girihelix.Engine.Geometry.Point
 
+  # Read at compile time so the guards below can use it: a guard cannot call a
+  # function, and duplicating the literal here would let the two drift apart.
+  @tol Loose.tol()
   @near_slack 0.2
 
   @doc """
@@ -29,29 +34,29 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   `s` is the fraction along `p1 -> q1`, `t` along `p2 -> q2`. Parallel segments —
   including a zero-length one, whose direction vector is zero — return `nil`.
 
-  The parallel test is `Loose.zero(det)`, an **absolute** `1e-7` on a quantity
-  with units of length squared. It is therefore scale dependent: a map scaled up
-  by 1000 will have near-parallel edges declared intersecting. Kept as-is, because
-  it is the source's behaviour.
+  The parallel test is an **absolute** `1e-7` on a quantity with units of length
+  squared, which is the source's `Loose.zero(det)`. It is therefore scale
+  dependent: a map scaled up by 1000 will have near-parallel edges declared
+  intersecting. Kept as-is, because it is the source's behaviour.
   """
   @spec get_intersection_params(Point.t(), Point.t(), Point.t(), Point.t()) ::
           {float(), float()} | nil
   def get_intersection_params(%Point{} = p1, %Point{} = q1, %Point{} = p2, %Point{} = q2) do
     d1 = Point.subtract(q1, p1)
     d2 = Point.subtract(q2, p2)
-    det = d1.x * d2.y - d1.y * d2.x
+    crossing(p1, q1, p2, q2, d1, d2, d1.x * d2.y - d1.y * d2.x)
+  end
 
-    if Loose.zero(det) do
-      nil
-    else
-      # Adapted from O'Rourke's _Computational Geometry in C_, transcribed rather
-      # than simplified: the signs are easy to get wrong and a mistake here is
-      # silently a swapped or negated parameter.
-      s = -(p1.x * d2.y + p2.x * (p1.y - q2.y) + q2.x * (p2.y - p1.y)) / det
-      t = (p1.x * (p2.y - q1.y) + q1.x * (p1.y - p2.y) + p2.x * d1.y) / det
+  defp crossing(_p1, _q1, _p2, _q2, _d1, _d2, determinant) when abs(determinant) < @tol, do: nil
 
-      {s, t}
-    end
+  defp crossing(p1, q1, p2, q2, d1, d2, determinant) do
+    # Adapted from O'Rourke's _Computational Geometry in C_, transcribed rather
+    # than simplified: the signs are easy to get wrong and a mistake here is
+    # silently a swapped or negated parameter.
+    {
+      -(p1.x * d2.y + p2.x * (p1.y - q2.y) + q2.x * (p2.y - p1.y)) / determinant,
+      (p1.x * (p2.y - q1.y) + q1.x * (p1.y - p2.y) + p2.x * d1.y) / determinant
+    }
   end
 
   @doc """
@@ -61,9 +66,9 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   @spec stay_on_segments({float(), float()} | nil) :: {float(), float()} | nil
   def stay_on_segments(nil), do: nil
 
-  def stay_on_segments({s, t}) do
-    if within?(s, Loose.tol()) and within?(t, Loose.tol()), do: {s, t}
-  end
+  def stay_on_segments({s, t}) when s >= -@tol and s <= 1.0 + @tol and t >= -@tol and t <= 1.0 + @tol, do: {s, t}
+
+  def stay_on_segments({_s, _t}), do: nil
 
   @doc """
   Keeps a parameter pair only if both parameters are within `0.2` of `[0, 1]`.
@@ -80,9 +85,10 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   @spec stay_near_segments({float(), float()} | nil) :: {float(), float()} | nil
   def stay_near_segments(nil), do: nil
 
-  def stay_near_segments({s, t}) do
-    if within?(s, @near_slack) and within?(t, @near_slack), do: {s, t}
-  end
+  def stay_near_segments({s, t})
+      when s >= -@near_slack and s <= 1.0 + @near_slack and t >= -@near_slack and t <= 1.0 + @near_slack, do: {s, t}
+
+  def stay_near_segments({_s, _t}), do: nil
 
   @doc """
   The crossing of two segments, as a position on the first.
@@ -114,26 +120,20 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   """
   @spec get_true_intersection(Point.t(), Point.t(), Point.t(), Point.t()) :: Point.t() | nil
   def get_true_intersection(p1, q1, p2, q2) do
-    case p1 |> get_intersection_params(q1, p2, q2) |> stay_on_segments() do
-      nil ->
-        nil
-
-      {s, t} ->
-        if both_endpoints?(s, t), do: nil, else: Point.convex_sum(p1, q1, s)
-    end
+    resolve(p1, q1, p1 |> get_intersection_params(q1, p2, q2) |> stay_on_segments())
   end
 
   defp interpolate(_p1, _q1, nil), do: nil
   defp interpolate(p1, q1, {s, _t}), do: Point.convex_sum(p1, q1, s)
 
-  defp within?(value, slack), do: value >= -slack and value <= 1.0 + slack
+  defp resolve(_p1, _q1, nil), do: nil
+  defp resolve(p1, q1, {s, t}), do: crossing_point(p1, q1, s, {at_an_end?(s), at_an_end?(t)})
 
-  # the crossing sits at an end of segment 1 AND at an end of segment 2
-  defp both_endpoints?(s, t) do
-    at_start_of_1 = s < Loose.tol()
-    at_end_of_1 = 1.0 - s < Loose.tol()
-    at_an_end_of_2 = t < Loose.tol() or 1.0 - t < Loose.tol()
+  # A crossing at an end of BOTH segments is a shared vertex, not a crossing.
+  defp crossing_point(_p1, _q1, _s, {true, true}), do: nil
+  defp crossing_point(p1, q1, s, _ends), do: Point.convex_sum(p1, q1, s)
 
-    (at_start_of_1 or at_end_of_1) and at_an_end_of_2
-  end
+  defp at_an_end?(parameter) when parameter < @tol, do: true
+  defp at_an_end?(parameter) when 1.0 - parameter < @tol, do: true
+  defp at_an_end?(_parameter), do: false
 end

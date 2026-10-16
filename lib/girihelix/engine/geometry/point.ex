@@ -11,6 +11,10 @@ defmodule Girihelix.Engine.Geometry.Point do
   `1e-10`. Both spell "equals" and they differ by four orders of magnitude in
   squared terms — two in linear terms, a factor of a hundred — so a caller must
   know which one it wants.
+
+  The two functions that can fail, `parameterization_on_line/3` and `center/1`,
+  return `{:ok, result} | {:error, reason}` rather than raising, so a caller
+  pattern-matches instead of rescuing.
   """
 
   @tolerance 1.0e-7
@@ -95,16 +99,16 @@ defmodule Girihelix.Engine.Geometry.Point do
   The unit vector in this direction.
 
   Returns the point **itself** when the magnitude is exactly zero — an exact
-  comparison, not a tolerant one, matching the Java.
+  comparison, not a tolerant one, matching the Java. Never fails, so it returns a
+  point rather than a tuple.
   """
   @spec normalize(t()) :: t()
-  def normalize(p) do
-    m = mag(p)
+  def normalize(p), do: normalized(p, mag(p))
 
-    # An explicit comparison rather than a `0.0` pattern: a float literal pattern
-    # matches only `+0.0` and would miss a negative zero.
-    if m == 0.0, do: p, else: scale(p, 1.0 / m)
-  end
+  # A guarded clause rather than a `0.0` pattern: a float literal in a pattern
+  # matches only `+0.0`, and the comparison states the intent.
+  defp normalized(p, magnitude) when magnitude == 0.0, do: p
+  defp normalized(p, magnitude), do: scale(p, 1.0 / magnitude)
 
   @doc """
   The convex sum `(1 - t) * a + t * b`.
@@ -133,19 +137,16 @@ defmodule Girihelix.Engine.Geometry.Point do
 
   The band makes the relation non-transitive: `a` can compare equal to `b`, and
   `b` to `c`, while `a` compares less than `c`. Sorting through this comparator
-  therefore produces an unstable order, which is faithful to the Java and is
-  pinned by a test rather than silently relied upon.
+  is therefore unstable, which is faithful to the Java and is pinned by a test.
+  Note that `Enum.sort/2` wants a boolean predicate, so this comparator is not a
+  drop-in for it; see the test file for the conversion.
   """
   @spec compare_to(t(), t()) :: -1 | 0 | 1
-  def compare_to(a, b) do
-    diff = mag2(a) - mag2(b)
+  def compare_to(a, b), do: order(mag2(a) - mag2(b))
 
-    cond do
-      diff < -@tolerance2 -> -1
-      diff > @tolerance2 -> 1
-      true -> 0
-    end
-  end
+  defp order(diff) when diff < -@tolerance2, do: -1
+  defp order(diff) when diff > @tolerance2, do: 1
+  defp order(_diff), do: 0
 
   @doc "The angle of this point with respect to the origin, in `-pi..pi`."
   @spec angle(t()) :: float()
@@ -167,8 +168,8 @@ defmodule Girihelix.Engine.Geometry.Point do
     unwrap(angle_to(vertex, to) - angle_to(vertex, from))
   end
 
-  defp unwrap(res) when res < 0.0, do: unwrap(res + 2.0 * :math.pi())
-  defp unwrap(res), do: res
+  defp unwrap(result) when result < 0.0, do: unwrap(result + 2.0 * :math.pi())
+  defp unwrap(result), do: result
 
   @doc """
   The squared distance from `p` to the **segment** `a`-`b`, not to the infinite
@@ -178,41 +179,31 @@ defmodule Girihelix.Engine.Geometry.Point do
   segment is guarded rather than divided through: Java's division yields `NaN`,
   every comparison against `NaN` is false, and the clamp falls through to the
   second endpoint. This returns that same value explicitly — Elixir's `/` raises
-  on a zero divisor, so the guard is required to reproduce it. See
-  `parameterization_on_line/3`, which raises instead.
+  on a zero divisor, so the guard is required to reproduce it. Always returns a
+  distance, so it is not a tuple.
   """
   @spec dist2_to_line(t(), t(), t()) :: float()
   def dist2_to_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
     delta = subtract(b, a)
-    denom = dot(delta, delta)
-
-    # An explicit comparison, not a `0.0` pattern: a float literal pattern matches
-    # only `+0.0`. A squared length is never negative zero in practice, but the
-    # comparison states the intent and does not depend on that.
-    if denom == 0.0 do
-      # degenerate segment: reproduce the Java's NaN fall-through to `b`
-      dist2(b, p)
-    else
-      project(p, a, b, denom)
-    end
+    to_segment(p, a, b, dot(delta, delta))
   end
 
-  defp project(p, a, b, denom) do
+  # A degenerate segment: reproduce the Java's NaN fall-through to `b`.
+  defp to_segment(p, _a, b, squared_length) when squared_length == 0.0, do: dist2(b, p)
+  defp to_segment(p, a, b, squared_length), do: project(p, a, b, squared_length)
+
+  defp project(p, a, b, squared_length) do
     delta = subtract(b, a)
-    t = dot(subtract(p, a), delta) / denom
-
-    cond do
-      t >= 0.0 and t <= 1.0 ->
-        projection = new(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y))
-        dist2(p, projection)
-
-      t < 0.0 ->
-        dist2(a, p)
-
-      true ->
-        dist2(b, p)
-    end
+    t = dot(subtract(p, a), delta) / squared_length
+    nearest(p, a, b, t)
   end
+
+  defp nearest(p, a, b, t) when t >= 0.0 and t <= 1.0 do
+    dist2(p, new(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y)))
+  end
+
+  defp nearest(p, a, _b, t) when t < 0.0, do: dist2(a, p)
+  defp nearest(p, _a, b, _t), do: dist2(b, p)
 
   @doc "The distance from `p` to the segment `a`-`b`."
   @spec dist_to_line(t(), t(), t()) :: float()
@@ -222,45 +213,43 @@ defmodule Girihelix.Engine.Geometry.Point do
   The unclamped parameter of `p` along the line through `a` and `b`.
 
   `0.0` at `a`, `1.0` at `b`, negative before `a`, greater than `1.0` past `b`.
-
-  Raises on a zero-length segment. Java divides through and yields `NaN`, which
-  every caller then reads as "not on the segment"; raising is a deliberate
-  divergence, recorded here, because a parameter along a segment with no length
-  is meaningless and a silent `NaN` is worse than an error.
+  Returns `{:ok, parameter}`, or `{:error, :degenerate_segment}` for a segment
+  with no length. Java divides through and yields `NaN`, which every caller then
+  reads as "not on the segment"; an error tuple is a deliberate divergence,
+  because a parameter along a segment with no length is meaningless and a silent
+  `NaN` is worse than data the caller can match.
   """
-  @spec parameterization_on_line(t(), t(), t()) :: float()
+  @spec parameterization_on_line(t(), t(), t()) :: {:ok, float()} | {:error, :degenerate_segment}
   def parameterization_on_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
     delta = subtract(b, a)
-    denom = dot(delta, delta)
-
-    if denom == 0.0 do
-      raise ArgumentError, "cannot parameterise along a zero-length segment"
-    else
-      dot(subtract(p, a), delta) / denom
-    end
+    parameterise(p, a, delta, dot(delta, delta))
   end
+
+  defp parameterise(_p, _a, _delta, squared_length) when squared_length == 0.0, do: {:error, :degenerate_segment}
+
+  defp parameterise(p, a, delta, squared_length), do: {:ok, dot(subtract(p, a), delta) / squared_length}
 
   @doc """
   The mean of the non-nil points.
 
-  Raises when there is nothing to average. The Java divides by a zero count and
-  returns `Point(NaN, NaN)`, which is a silent coordinate poison; raising is a
-  deliberate divergence, recorded in the plan.
+  Returns `{:ok, point}`, or `{:error, :no_points}` when there is nothing to
+  average. The Java divides by a zero count and returns `Point(NaN, NaN)`, which
+  is a silent coordinate poison; an error tuple is a deliberate divergence so the
+  caller matches instead of rescuing.
   """
-  @spec center([t() | nil]) :: t()
+  @spec center([t() | nil]) :: {:ok, t()} | {:error, :no_points}
   def center(points) do
     {sum, count} =
       Enum.reduce(points, {origin(), 0}, fn
         nil, acc -> acc
-        %__MODULE__{} = p, {sum, n} -> {add(sum, p), n + 1}
+        %__MODULE__{} = point, {sum, n} -> {add(sum, point), n + 1}
       end)
 
-    if count == 0 do
-      raise ArgumentError, "cannot average an empty set of points"
-    end
-
-    scale(sum, 1.0 / count)
+    average(sum, count)
   end
+
+  defp average(_sum, 0), do: {:error, :no_points}
+  defp average(sum, count), do: {:ok, scale(sum, 1.0 / count)}
 
   @doc """
   Subtracts `center` from each non-nil point, leaving nils in place.
@@ -272,7 +261,7 @@ defmodule Girihelix.Engine.Geometry.Point do
   def recenter(points, center) do
     Enum.map(points, fn
       nil -> nil
-      %__MODULE__{} = p -> subtract(p, center)
+      %__MODULE__{} = point -> subtract(point, center)
     end)
   end
 end

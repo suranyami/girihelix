@@ -106,15 +106,13 @@ defmodule Girihelix.Engine.Steps do
 
   defp advance([], _previous, acc, _max), do: {:ok, Enum.reverse(acc)}
 
-  defp advance([step | rest], previous, acc, max) do
-    index = previous.index + 1
+  # At capacity: stop, keeping the frames built so far. `:infinity` is not an
+  # integer, so it falls through to the clause that runs the next step.
+  defp advance([_step | _rest], %Frame{index: index}, acc, max) when is_integer(max) and index + 1 >= max,
+    do: {:ok, Enum.reverse(acc)}
 
-    if at_capacity?(index, max) do
-      {:ok, Enum.reverse(acc)}
-    else
-      run_one(step, rest, previous, acc, max, index)
-    end
-  end
+  defp advance([step | rest], %Frame{index: index} = previous, acc, max),
+    do: run_one(step, rest, previous, acc, max, index + 1)
 
   defp run_one(step, rest, previous, acc, max, index) do
     state = step.run.(previous.state)
@@ -131,7 +129,4 @@ defmodule Girihelix.Engine.Steps do
          stacktrace: __STACKTRACE__
        }}
   end
-
-  defp at_capacity?(_index, :infinity), do: false
-  defp at_capacity?(index, max), do: index >= max
 end

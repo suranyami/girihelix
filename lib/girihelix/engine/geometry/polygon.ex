@@ -11,6 +11,11 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   A list is already growable, so three of the five Java constructors have no
   counterpart here, and `addVertex`/`setVertex` are replaced by building a new
   polygon from a list.
+
+  **Failures are data.** `area/1`, `arc_length/2` and `vertex/2` return
+  `{:ok, result} | {:error, reason}` where the Java threw. `contains_point?/2` and
+  `point_in_poly/2` cannot fail and return booleans. The closing edge is implicit:
+  do not repeat the first vertex as the last.
   """
 
   alias Girihelix.Engine.Geometry.Point
@@ -21,7 +26,14 @@ defmodule Girihelix.Engine.Geometry.Polygon do
 
   @type t :: %__MODULE__{points: [Point.t()]}
 
-  @doc "Builds a polygon from its vertices, in order."
+  @type reason :: :empty_polygon | :out_of_range
+
+  @doc """
+  Builds a polygon from its vertices, in order.
+
+  The polygon is closed implicitly — the edge from the last vertex back to the
+  first is part of it — so the first vertex must not be repeated at the end.
+  """
   @spec new([Point.t()]) :: t()
   def new(points) when is_list(points), do: %__MODULE__{points: points}
 
@@ -34,17 +46,17 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   def num_vertices(%__MODULE__{points: points}), do: length(points)
 
   @doc """
-  The vertex at `index`.
+  The vertex at `index`, or `{:error, :out_of_range}`.
 
-  Raises when out of range. The Java's `getVertex` does not check against its
-  `size`, so it can read a spare array slot and return `null` — a caller that
-  trusts it can be handed nothing rather than an error.
+  The Java's `getVertex` does not check against its `size`, so it can read a spare
+  array slot and return `null` — a caller that trusts it can be handed nothing
+  rather than data it can match.
   """
-  @spec vertex(t(), non_neg_integer()) :: Point.t()
+  @spec vertex(t(), non_neg_integer()) :: {:ok, Point.t()} | {:error, :out_of_range}
   def vertex(%__MODULE__{points: points}, index) do
     case Enum.fetch(points, index) do
-      {:ok, point} -> point
-      :error -> raise ArgumentError, "vertex index #{index} out of range"
+      {:ok, point} -> {:ok, point}
+      :error -> {:error, :out_of_range}
     end
   end
 
@@ -57,60 +69,37 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   @doc """
   The shoelace area, with the sign discarded.
 
-  Raises on an empty polygon. The Java's `% size` divides by zero and raises
-  `ArithmeticException`; returning `0.0` here would turn an error into a value.
+  Returns `{:error, :empty_polygon}` for an empty polygon. The Java's `% size`
+  divides by zero and raises `ArithmeticException`; returning a value here would
+  turn an error into something that looks like an answer.
   """
-  @spec area(t()) :: float()
-  def area(%__MODULE__{points: []}) do
-    raise ArgumentError, "an empty polygon has no area"
-  end
-
-  def area(%__MODULE__{points: points}) do
-    vertices = List.to_tuple(points)
-    size = tuple_size(vertices)
-
-    total =
-      Enum.reduce(0..(size - 1), 0.0, fn index, acc ->
-        %Point{x: x1, y: y1} = elem(vertices, index)
-        %Point{x: x2, y: y2} = elem(vertices, rem(index + 1, size))
-        acc + (x1 * y2 - y1 * x2)
-      end)
-
-    abs(total) * 0.5
-  end
+  @spec area(t()) :: {:ok, float()} | {:error, :empty_polygon}
+  def area(%__MODULE__{points: []}), do: {:error, :empty_polygon}
+  def area(%__MODULE__{points: points}), do: {:ok, shoelace(points)}
 
   @doc """
   The length of the path through the vertices.
 
-  When `closed`, the edge from the last vertex back to the first is included.
-  Raises on an empty **closed** polygon, where the Java indexes out of bounds;
-  an empty open path is legitimately zero.
+  When `closed` is true the edge from the last vertex back to the first is
+  included. An empty **closed** polygon reports `{:error, :empty_polygon}`, where
+  the Java indexes out of bounds; an empty open path is legitimately `{:ok, 0.0}`.
   """
-  @spec arc_length(t(), boolean()) :: float()
-  def arc_length(%__MODULE__{points: []}, true) do
-    raise ArgumentError, "an empty polygon has no closed perimeter"
+  @spec arc_length(t(), boolean()) :: {:ok, float()} | {:error, :empty_polygon}
+  def arc_length(%__MODULE__{points: []}, true), do: {:error, :empty_polygon}
+  def arc_length(%__MODULE__{points: []}, false), do: {:ok, 0.0}
+
+  def arc_length(%__MODULE__{points: points}, true) do
+    {:ok, open_length(points) + Point.dist(List.first(points), List.last(points))}
   end
 
-  def arc_length(%__MODULE__{points: []}, false), do: 0.0
-
-  def arc_length(%__MODULE__{points: points}, closed) do
-    open =
-      points
-      |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.reduce(0.0, fn [a, b], acc -> acc + Point.dist(a, b) end)
-
-    if closed do
-      open + Point.dist(List.first(points), List.last(points))
-    else
-      open
-    end
-  end
+  def arc_length(%__MODULE__{points: points}, false), do: {:ok, open_length(points)}
 
   @doc """
   Whether a point lies inside the polygon.
 
-  Returns `false` for an empty polygon: it contains nothing, and the Java's
-  out-of-bounds index is not a more useful answer.
+  False for an empty polygon: it contains nothing, and the Java's out-of-bounds
+  index is not a more useful answer. Cannot fail, so it returns a boolean rather
+  than a tuple.
 
   A point exactly **on** the boundary is not reported reliably either way, and the
   asymmetry is inherited from the source: the lower and left edges of the unit
@@ -164,16 +153,42 @@ defmodule Girihelix.Engine.Geometry.Polygon do
     inside
   end
 
+  defp shoelace(points) do
+    vertices = List.to_tuple(points)
+    size = tuple_size(vertices)
+
+    total =
+      Enum.reduce(0..(size - 1), 0.0, fn index, acc ->
+        %Point{x: x1, y: y1} = elem(vertices, index)
+        %Point{x: x2, y: y2} = elem(vertices, rem(index + 1, size))
+        acc + (x1 * y2 - y1 * x2)
+      end)
+
+    abs(total) * 0.5
+  end
+
+  defp open_length(points) do
+    points
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.reduce(0.0, fn [a, b], acc -> acc + Point.dist(a, b) end)
+  end
+
   # Normalise the edge so that (xmin, ymin) is its lower-x end, then ask whether
   # the point is above the edge at this x. Strict `>` throughout, so a point
   # exactly on an edge does not toggle.
-  defp straddles?(%Point{x: ax, y: ay}, %Point{x: bx, y: by}, x, y, inside) do
-    {xmin, ymin, xmax, ymax} = if ax < bx, do: {ax, ay, bx, by}, else: {bx, by, ax, ay}
+  defp straddles?(previous, current, x, y, inside) do
+    {xmin, ymin, xmax, ymax} = bounds(previous, current)
 
-    if xmin <= x and x < xmax and (x - xmin) * (ymax - ymin) > (y - ymin) * (xmax - xmin) do
-      not inside
-    else
+    flip(
+      xmin <= x and x < xmax,
+      (x - xmin) * (ymax - ymin) > (y - ymin) * (xmax - xmin),
       inside
-    end
+    )
   end
+
+  defp bounds(%Point{x: ax, y: ay}, %Point{x: bx, y: by}) when ax < bx, do: {ax, ay, bx, by}
+  defp bounds(%Point{x: ax, y: ay}, %Point{x: bx, y: by}), do: {bx, by, ax, ay}
+
+  defp flip(true, true, inside), do: not inside
+  defp flip(_straddles, _above, inside), do: inside
 end
