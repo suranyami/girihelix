@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# Reference implementations -- LOCAL ONLY, never published
+# ---------------------------------------------------------------------------
+# Both Taprats versions are kept locally as porting oracles and are excluded
+# from this repository:
+#
+#   reference/0.3/      Taprats 0.3 (2000). All rights reserved -- "You may not
+#                       copy, redistribute or reuse this source code".
+#   reference/1.1.12/   Taprats 1.1.12, the maintained release. It is GPL, so it
+#                       could be redistributed, but it is deliberately kept out
+#                       of the published tree as well, to keep third-party
+#                       source out of the repository.
+#
+# girihelix itself is GPLv3-or-later (see LICENSE). The decision to derive from
+# Taprats, and the licence reasoning behind it, are recorded in
+# docs/algorithm-analysis.md.
+/reference/
+
+# ---------------------------------------------------------------------------
+# Elixir / Phoenix
+# ---------------------------------------------------------------------------
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+*.ez
+*.beam
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.DS_Store
+.elixir_ls/
