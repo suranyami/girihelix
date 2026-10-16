@@ -440,6 +440,22 @@ edges, then sorts; `mergeMap` does the expensive work of reconciling topology.
 `Prototype` uses the fast path for mass replication and the slow path only to weld
 the final pieces together.
 
+Three 1.1.12 changes sit on top of that, none of which alter the merge semantics:
+
+- **Every mutator is `synchronized`** — `insertVertex`, `insertEdge`, `mergeMap`,
+  `mergeSimple`, `mergeSimpleMany`, `scale`, `translate`, `transformMap`,
+  `transformVertex`, `removeVertex`, `removeEdge`, `clone`. A port onto a
+  single-process model can ignore this, but it is a hint that the class is shared
+  across threads in the Swing UI.
+- **The home-grown sort is gone.** 0.3 called `Sort.quickSort` with its own
+  `Comparison` interface; 1.1.12 uses `Collections.sort` with anonymous
+  `Comparator<Vertex>` and `Comparator<Edge>`. That is why `general/Sort.java` and
+  `general/Comparison.java` disappear entirely.
+- **`cleanCopy()` was added**, called at the head of `mergeMap`, `mergeSimple` and
+  `mergeSimpleMany`. It nulls the scratch `copy` pointer on every vertex, so stale
+  state from a previous merge cannot leak into the next. Worth reproducing: it is
+  cheap and it removes a whole class of bug.
+
 ### `Intersect`: segment crossings
 
 `Intersect` is deliberately minimal. It is segment-to-segment only, and it is
@@ -457,15 +473,21 @@ Two behaviours are worth carrying over exactly:
   with some humour — that this leaves "um, nothing". Callers that need the
   degenerate case must handle it themselves, which is precisely the `null` check
   in `Rosette`.
-- **There are two entry points.** `getIntersection` returns the crossing position
-  by interpolating `p1.convexSum( q1, s )`. `getTrueIntersection` additionally
-  returns `null` when the crossing lies at the endpoints of *both* segments, and
-  is the variant `Infer` uses so that two contacts never pair at a shared vertex.
+- **There are three entry points, not two.** All of them take a crossing found by
+  `getIntersectionParams` and filter it by a different amount of slack:
+  `getIntersection` accepts only parameters inside `[0, 1]` (through
+  `stayOnSegments`); `getNearIntersection` accepts up to `0.2` beyond either end
+  (through `stayNearSegments`); and `getTrueIntersection` additionally rejects a
+  crossing that lands at the endpoints of *both* segments, which is the variant
+  `infer` uses so two contacts never pair at a shared vertex. The near variant is
+  new in 1.1.12 and is what the added inference modes reach for when tidy
+  intersections do not exist.
 
-One trap: the class declares `private static final double TOL = 1.0E-9`, but that
-constant is never referenced. Every actual test uses `Loose.TOL`, which is 1e-7 —
-two orders of magnitude looser. A port that faithfully reproduces the declared
-constant instead of the used one will behave differently.
+One trap, and it is a 0.3 trap that 1.1.12 removed: 0.3 declared
+`private static final double TOL = 1.0E-9` and never referenced it, with every
+real test using `Loose.TOL` at 1e-7 — two orders of magnitude looser. 1.1.12
+deleted the dead constant. Porting 0.3 by copying the declared value would
+therefore diverge; there is nothing to copy in 1.1.12.
 
 ### `Transform` and `FillRegion`
 
@@ -478,6 +500,11 @@ whether the transform reverses orientation. `RadialFigure` leans on `compose` to
 build its c_n rotation ladder; `Infer` leans on `invert` to return from its working
 frame.
 
+1.1.12 adds three methods to `Transform`, all conveniences rather than changes:
+`distFromZero` and `distFromInvertedZero`, which measure how far a point sits from
+the transform's origin and from its inverse image, and `assign`, an in-place copy
+of another transform. The arithmetic is otherwise untouched.
+
 `FillRegion` answers the question `Prototype` opens with: which integer
 combinations of `t1` and `t2` place a copy of the translational unit over a given
 region. It changes basis into the translation-vector coordinate system and then
@@ -488,17 +515,22 @@ Its own comment flags a limitation a port must decide about rather than inherit
 silently: the fill "can leave gaps around the edge of the region", and the
 workaround belongs to the client — "the region is simply expanded before filling".
 Seamless output in girihelix needs either that same expand-then-fill convention or
-a correct fill.
+a correct fill. `FillRegion` is otherwise **unchanged** between the releases: five
+lines of difference, all reformatting. So this is not an oversight that was later
+corrected.
 
 ---
 
-## Rendering: `RenderInterlace`
+## Rendering: `Interlace`
 
-`RenderInterlace` is, in Kaplan's words, "probably the most important rendering
-style from an historical point of view". It assigns an over-under rule to the
-map's edges and draws a weave that follows it. The rule is "conceptually simple
-but difficult in practice", and he notes he wants robustness against degenerate
-maps produced elsewhere in the program — "(*sigh*)".
+The renderer is `csk.taprats.style.Interlace`, the renamed and relocated
+`ui/RenderInterlace`. It is, in Kaplan's words, "probably the most important
+rendering style from an historical point of view". It assigns an over-under rule
+to the map's edges and draws a weave that follows it. The rule is "conceptually
+simple but difficult in practice", and he notes he wants robustness against
+degenerate maps produced elsewhere in the program — "(*sigh*)". The class comment
+is otherwise carried over verbatim from 0.3, stale `RenderInterlace` reference
+included.
 
 The premise is that if a diagram can be interlaced at all, one choice at a single
 vertex determines every other one. So the assignment is a graph traversal, and its
@@ -523,6 +555,11 @@ relation across the vertex:
   and the under/over state **alternates** at each step, `cur_under` being flipped
   after every hand-off. That alternation is the entire weave rule.
 
+1.1.12 keeps that rule exactly but stops recursing: `propagate` and `buildFrom`
+now take a `Stack<Edge>` and iterate, which is precisely the fix 0.3's FIXME
+proposed. Both became `private static final`, as did `assignInterlacing`, so the
+traversal is no longer part of the public surface.
+
 Drawing is a separate pass, and it is where the trigonometry lives. For each edge
 `getPoints` produces three points — `below`, `cen`, `above` — for each end, so
 `setMap` stores six points per edge. Which case applies depends on the degree of
@@ -540,6 +577,14 @@ the vertex being approached, and on whether the edge is under there:
 two black lines across the gap. The weave is an illusion produced by geometry
 alone: the ribbon that is *over* is drawn unbroken, and the one that is *under* is
 interrupted.
+
+Three changes land on the drawing half in 1.1.12. `getPoints` became `void` — it
+writes into the style's representation instead of returning an array of three
+points per edge end — and the cap case moved behind a helper, `capGap`. And a new
+**shadow** property appears (`getShadow`, `setShadow`, `getShadowVector`), letting
+the weave be drawn with a drop shadow; it has no counterpart in 0.3. The gap and
+shadow are both exposed as style properties with setters, which is how the editor
+sliders drive them.
 
 Two FIXMEs in this file are worth carrying forward rather than rediscovering:
 
@@ -560,15 +605,31 @@ Two FIXMEs in this file are worth carrying forward rather than rediscovering:
 
 | Taprats | girihelix | Note |
 | --- | --- | --- |
-| `Loose` | a tolerance module | `TOL = 1e-7`, `TOL2 = 1e-10`; route every fuzzy comparison through it |
+| `Loose` | a tolerance module | `TOL = 1e-7`, `TOL2 = 1e-10`, `NEAR_TOL = 1e-4`; the `near/2` and `near/3` overloads take an explicit tolerance and are what `Infer` relies on |
 | `Point`, `Transform`, `Map`, `Vertex`, `Edge`, `Polygon` | immutable structs | Every mutating call becomes a returned value |
 | `Figure`, `RadialFigure` | behaviour plus implementations | `build_unit/1` returning a map; the c_n replication in one shared helper |
 | `Prototype.construct` | a pure function over a region | Four nested instancing passes; maps onto `Enum` and `Stream` |
-| `Infer` | the same algorithm, thresholds preserved | A behavioural specification, not a template to improve |
-| `Tiling` built-ins | data, not code | The Java is generated code; these belong in a data file |
-| `RenderInterlace` | a render module | Keep the weave assignment separate from SVG path building |
+| `Infer.infer` | the contact-inference pass, thresholds preserved | A behavioural specification, not a template to improve |
+| `Infer.inferStar` and the rest | six further strategies | Documented here by signature only — see the scope note below |
+| `KnownTilings` | tiling data, not code | 58 tilings from three sources; belongs in a data file, not in a module body |
+| `Feature` equality | an explicit decision | Structural in 1.1.12, reference identity in 0.3; the port must choose one |
+| `Style` hierarchy | a render module | Keep the weave assignment separate from SVG path building |
 | AWT `Graphics` | SVG | The only layer with no meaningful port |
 | Swing UI | Phoenix LiveView | Figures become assigns on a socket, not mutable objects |
+
+### What to port first
+
+The honest scope of this document: **`Infer.infer` is analysed in detail**, and
+the six other inference strategies are recorded by name and signature only. That
+ordering is deliberate. `infer` is the algorithm Taprats was built around and the
+one the 2000 system depends on; the others are 2010s additions for particular
+tiling families. Land `infer`, plus the figure constructions, the map and the
+interlace renderer, and girihelix reproduces the original tool. The remaining
+strategies can then be ported one at a time, each read properly against 1.1.12
+source rather than from this summary, and each checked against the `Infer` UI
+editors that drive them (`ui/figure/ExplicitStarEditor`,
+`ExplicitHourglassEditor`, `ExplicitIntersectEditor`, `ExplicitGirihEditor`,
+`ExplicitRosetteEditor`).
 
 Three things stand out as the real work, none of which that table conveys.
 
@@ -616,15 +677,22 @@ faces. Two properties belong in a port:
   walk rather than reuse this.
 
 So face-based work is a **port**, not new development — but it carries the
-even-degree precondition with it.
+even-degree precondition with it. `Faces` changed only by generics between the
+releases (`Vector<Vertex>` in `extractFace`), so both caveats carry over
+verbatim.
 
 ---
 
-## The newer release: 1.1.12
+## Changes from 0.3 to 1.1.12
 
-The 2000 source is not the last word. Its header promised the licence might be
-relaxed, and it was. Taprats now lives on SourceForge, credited to Kaplan with
-Pierre Baillargeon, last touched 2019, at version 1.1.12.
+This document describes 1.1.12. The original 2000 release, `reference/0.3/`, is
+kept alongside as the baseline, and this section records what changed — both
+because the deltas matter for a port, and because it is the evidence behind the
+corrections made above.
+
+The 2000 header promised the licence might be relaxed, and it was: Taprats now
+lives on SourceForge, credited to Kaplan with Pierre Baillargeon, last touched
+2019.
 
 That release is a substantial refactor rather than a patch. Since 1.1.12 is the
 version to port from, the size of the change is worth stating precisely.
