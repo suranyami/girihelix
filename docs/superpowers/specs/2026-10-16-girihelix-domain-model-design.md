@@ -159,7 +159,10 @@ architecture does not foreclose them.
   so the database enforces design-to-tiling integrity. Taprats serialised a
   prototype by tiling name and raised when the registry lacked it; this design
   removes that coupling.
-- **`Feature` and `PlacedFeature` as their own tables**, not embedded, so the
-  shared-feature relationship is explicit.
+- **`Feature`, `PlacedFeature` and `DesignElement` as their own tables**, not
+  embedded. For `Feature` and `PlacedFeature` this makes the shared-feature
+  relationship explicit, since one `Feature` serves several `PlacedFeature`s.
+  `DesignElement` has its own identity as an authored pairing, and a `Design` has
+  many of them.
 - **Interlace deferred.** v1 proves the pipeline with the three simple renderers
   before taking on the hardest one and its inherited defects.
