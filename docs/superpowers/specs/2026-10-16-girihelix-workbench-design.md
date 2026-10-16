@@ -119,7 +119,7 @@ def steps(n, d, s) do
 end
 ```
 
-`step/3` records `__ENV__.file` and `__ENV__.line`, which is what makes the source
+`step/4` records `__ENV__.file` and `__ENV__.line`, which is what makes the source
 pane exact: a frame knows the lines that produced it, with no introspection and no
 heuristic search.
 
