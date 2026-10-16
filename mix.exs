@@ -93,6 +93,7 @@ defmodule Girihelix.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:tidewave, "~> 0.9", only: [:dev]},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:phoenix, "~> 1.8.14"},
       {:phoenix_ecto, "~> 4.5"},
