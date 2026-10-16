@@ -1,12 +1,17 @@
 # Algorithm analysis: the Taprats reference implementation
 
 This document is the porting specification for **girihelix**, an Elixir
-reimplementation of Taprats — Craig S. Kaplan's 2000 Java design tool for
-Islamic star patterns. It is derived directly from the Java source preserved
-under [`reference/`](../reference/). The analysis below is of `reference/0.3/`,
-the original 2000 release; `reference/1.1.12/` is the current maintained release,
-at changeset `b6c172`. Both are kept locally and git-ignored, so neither is
-committed, and neither is compiled by this project.
+reimplementation of Taprats — Craig S. Kaplan's Java design tool for
+computer-generated Islamic star patterns. It is derived directly from the Java
+source preserved under [`reference/`](../reference/), and describes
+**Taprats 1.1.12**, the current maintained release at changeset `b6c172`, which
+is the version girihelix ports.
+
+The original 2000 release, `reference/0.3/`, is kept alongside as a second
+opinion and is the baseline for the change summary near the end of this
+document. Where the two differ behaviourally, the difference is called out
+inline. Neither tree is committed to the repository, and neither is compiled by
+this project.
 
 The subject is the computational core: tilings, figures, the contact-inference
 pass, the planar map, and the interlace renderer. The Swing/AWT user interface
@@ -21,11 +26,19 @@ level, sitting on a shared geometry substrate that all three speak in terms of.
 
 | Layer | Reference classes | Java package |
 | --- | --- | --- |
-| Tiling | `Tiling`, `Feature`, `PlacedFeature`, `Selection` | `csk.taprats.tile` |
+| Tiling | `Tiling`, `Feature`, `PlacedFeature`, `KnownTilings` | `csk.taprats.tile` |
 | Figure | `Figure`, `RadialFigure`, `Star`, `Rosette`, `ScaleFigure`, `ConnectFigure`, `ExplicitFigure` | `csk.taprats.app` |
 | Prototype | `Prototype`, `DesignElement` | `csk.taprats.app` |
 | Inference | `Infer` | `csk.taprats.app` |
-| Geometry | `Map`, `Vertex`, `Edge`, `Point`, `Transform`, `Polygon`, `Rect` | `csk.taprats.geometry` |
+| Geometry | `Map`, `Vertex`, `Edge`, `Point`, `Transform`, `Polygon`, `Rect`, `Faces` | `csk.taprats.geometry` |
+| Style | `Style`, `Interlace`, `Plain`, `Filled`, `Outline`, `Emboss`, `Sketch`, `Colored`, `Thick` | `csk.taprats.style` |
+| Support | `Loose`, `Signal` | `csk.taprats.general` |
+| Text | `L`, `Taprats`, `Taprats_fr` | `csk.taprats.i18n` |
+
+One structural quirk to keep in mind: in 1.1.12 the source tree does **not**
+mirror these package names. Files sit at `src/app/`, `src/geometry/` and so on,
+while their declarations still read `package csk.taprats.app;`. Paths quoted in
+this document are relative to `reference/1.1.12/src/`.
 
 Data flows downward. A `Figure` is a high-level object that knows how to *build*
 a `Map`. The class comment in `Figure.java` gives the rationale directly: maps
@@ -36,7 +49,9 @@ evaluator touches maps.
 ### How a design is assembled
 
 `Prototype.construct( Polygon region )` in `app/Prototype.java` is the
-top-level entry point. It instances the design in four nested passes:
+top-level entry point. Its algorithm is unchanged from 0.3; the class has gained
+generics, `equals`/`hashCode`, and `Serializable`. It instances the design in
+four nested passes:
 
 1. `FillRegion.fill` walks the lattice, firing a callback for each integer
    `(t1, t2)` pair whose translational unit meets the region.
@@ -46,6 +61,13 @@ top-level entry point. It instances the design in four nested passes:
    reuses that feature inside one translational unit.
 4. `mergeSimpleMany` again stamps that composite at every lattice translation,
    then `Map.mergeMap` slow-merges it into the finished design.
+
+The serialization is worth noting because it constrains the port. A `Prototype`
+writes only its tiling's *name* and its feature-to-figure table, and `readObject`
+reconstitutes the tiling through `KnownTilings.find( name )`, raising
+`IOException` with `"Tiling <name> not found."` when the registry lacks it. A
+saved design therefore depends on the tiling registry still holding that name —
+a coupling worth either reproducing or deliberately dropping.
 
 ---
 
