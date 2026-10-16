@@ -153,6 +153,13 @@ the primitive every construction below is written in terms of. `getMap` composes
 | `ConnectFigure` | a child figure | `ScaleFigure` with `s` solved so extended edges meet |
 | `ExplicitFigure` | a `Map` | Returns a clone of the stored map |
 
+These six constructions are **behaviourally unchanged from 0.3**. Diffing the two
+releases leaves only mechanical edits: added generics (`Vector<Transform>`,
+`Enumeration<Vertex>`), the removal of casts those generics made redundant, and
+reformatting. The only deletion is `RadialFigure`'s `time` field, which was never
+read. The descriptions below were therefore verified against both releases — and
+where they hold in both, that is stated rather than assumed.
+
 ### `Star` — the [n/d]s construction
 
 `d` is the skip: how far round the circle each edge reaches. Because it is a
@@ -174,8 +181,11 @@ rotated apex: a single edge when `d` is integral, and otherwise an extra vertex
 
 ### `Rosette` — Lee's construction
 
-`q`, clamped to `[−0.99, 0.99]`, controls sharpness; `s`, clamped to `(n−1)/2`,
-controls how many steps the unit reaches out. From `tip = (1,0)` and
+`q`, clamped to `[−0.99, 0.99]`, controls sharpness; `s` controls how many steps
+the unit reaches out. The `s` clamp moved between releases — 0.3 computed
+`s_clamp = Math.min( s, (n−1)/2 )` inside `buildUnit`, whereas 1.1.12 applies
+`this.s = Math.min( s, (n-1)/2 )` in *both* constructors. The effect is identical,
+but the location differs, which will mislead a naive diff. From `tip = (1,0)` and
 `up_outer = getArc( 0.5·don )` scaled by `r_outer = 1 / cos( π·don )`, the code
 derives `bisector` — the midpoint of the drop from `up_outer` to `(0, r_outer)`.
 Kaplan's comment identifies this as the centre of the bottom edge of an
