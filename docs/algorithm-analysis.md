@@ -54,13 +54,20 @@ generics, `equals`/`hashCode`, and `Serializable`. It instances the design in
 four nested passes:
 
 1. `FillRegion.fill` walks the lattice, firing a callback for each integer
-   `(t1, t2)` pair whose translational unit meets the region.
+   `(t1, t2)` pair whose translational unit meets the region. The callback
+   collects one `Transform.translate` per placement.
 2. For each `Feature` bound to a `Figure`, `Figure.getMap()` builds that
    figure's map once, at unit scale.
 3. `Map.mergeSimpleMany` instances it at every `PlacedFeature` transform that
-   reuses that feature inside one translational unit.
+   reuses that feature inside one translational unit, into a scratch map.
 4. `mergeSimpleMany` again stamps that composite at every lattice translation,
-   then `Map.mergeMap` slow-merges it into the finished design.
+   then `Map.mergeMap` slow-merges the result into the finished design.
+
+Passes 2 to 4 run **once per bound feature**, not once in total. Both
+`mergeSimpleMany` calls are cheap; `mergeMap` is the slow topological weld, so a
+design with *n* decorated features performs *n* of them. That is the algorithm's
+real cost model, and a port that hoisted the fast passes out of the loop would
+change the merge order, and with it the result.
 
 The serialization is worth noting because it constrains the port. A `Prototype`
 writes only its tiling's *name* and its feature-to-figure table, and `readObject`
@@ -118,12 +125,25 @@ and it loads from three sources in order:
 2. `readExternalTilings()` — tilings found in the `tilings/` directory;
 3. `readJarTilings()` — tilings bundled inside the distributed jar.
 
-**Fifty-eight** tilings ship as built-ins, against fourteen in 0.3. All fourteen
-originals survive unchanged in name (`4^4`, `6`, `10`, `18`, `4.6.12`, `8.12`,
-`9.12`, `16.8`, `3.12^2`, `4.8^2`, `csk_5`, `csk_7`, `csk_9`, `square_12`); the
-other forty-four are additions, several named for the buildings that inspired
-them — `alhambra16`, `Seville Alcazar 12.8.6`, `Al-Mustansiriyya`, `Ilkhanid
-Uljaytu`, `Great Mosque of Malatya`, `Mughal I'timad` and others.
+Only the first two do anything in the reference tree. **Fifty-eight** tilings are
+generated as Java, and `reference/1.1.12/tilings/` holds **60** `.tiling` data
+files, but `readJarTilings` is dead: it looks for a `tilings/tilings.txt` that
+does not exist anywhere in the tree.
+
+Because `add()` stores by name and `readExternalTilings` runs *after*
+`addCodeTilings`, the registry ends up holding **86 distinct names**, of which
+**32** code-generated tilings are shadowed by a same-named file. Reading
+"fifty-eight built-ins" as the catalogue size is therefore wrong in two
+directions at once: the file directory contributes 28 names the code block does
+not have, and a third of the code block never takes effect. Both facts matter for
+a port, which has to decide which source wins — and the answer is not neutral,
+because the shadowed and shadowing versions of a name need not agree.
+
+All fourteen 0.3 originals survive unchanged in name (`4^4`, `6`, `10`, `18`,
+`4.6.12`, `8.12`, `9.12`, `16.8`, `3.12^2`, `4.8^2`, `csk_5`, `csk_7`, `csk_9`,
+`square_12`); the rest are additions, several named for the buildings that
+inspired them — `alhambra16`, `Seville Alcazar 12.8.6`, `Al-Mustansiriyya`,
+`Ilkhanid Uljaytu`, `Great Mosque of Malatya`, `Mughal I'timad` and others.
 
 The built-ins are still not hand-written. `exportTilingAsCode` regenerates the
 Java for a `Tiling` — the tool that produces `addCodeTilings` — with
@@ -179,17 +199,36 @@ rotated apex: a single edge when `d` is integral, and otherwise an extra vertex
 `cent`, found by intersecting `getArc( di·don ) → getArc( −dfrac·don )` with
 `a → getArc( d·don )`.
 
+Three details in that description are load-bearing and easy to lose. `clamp_s`
+and `outer_s` are computed from the **pre-snap** `di`, so the `dfrac ≈ 1` case —
+which increments `di` — leaves `outer_s` a step short and disables the
+`clamp_s == di` closure entirely. `cent` is found using `getArc( d · don )` with
+the **raw, unclamped** `d`, while every other point in the construction uses
+`clamp_d`. And `Star` carries **no null guard** where `Rosette` carries one: a
+failed intersection is dereferenced and throws. The two constructions meet
+degenerate input differently, and a port has to decide that per figure rather than
+once.
+
 ### `Rosette` — Lee's construction
 
 `q`, clamped to `[−0.99, 0.99]`, controls sharpness; `s` controls how many steps
-the unit reaches out. The `s` clamp moved between releases — 0.3 computed
-`s_clamp = Math.min( s, (n−1)/2 )` inside `buildUnit`, whereas 1.1.12 applies
-`this.s = Math.min( s, (n-1)/2 )` in *both* constructors. The effect is identical,
-but the location differs, which will mislead a naive diff. From `tip = (1,0)` and
-`up_outer = getArc( 0.5·don )` scaled by `r_outer = 1 / cos( π·don )`, the code
-derives `bisector` — the midpoint of the drop from `up_outer` to `(0, r_outer)`.
-Kaplan's comment identifies this as the centre of the bottom edge of an
-equilateral triangle, i.e. the bisector of the angle leaving `up_outer`.
+the unit reaches out. 1.1.12 applies `this.s = Math.min( s, (n-1)/2 )` in its
+*constructor* and again in the setter `setS`; in 0.3 the clamp lived only in
+`buildUnit`. That is a change of *location*, not of effect — and it is easy to
+overstate, because 1.1.12 **still** recomputes
+`s_clamp = Math.min( s, (n-1)/2 )` inside `buildUnit`, exactly as 0.3 did. Both
+releases therefore perform the same arithmetic in more than one place.
+
+From `tip = (1,0)` and `up_outer = getArc( 0.5·don )` scaled by
+`r_outer = 1 / cos( π·don )`, the code derives `bisector` as
+`up_outer.subtract( new Point( 0.0, r_outer ) )` scaled by `0.5` — **half the
+difference vector**, not the midpoint of the segment between those two points.
+For `n = 8` the two differ in sign as well as magnitude: the code yields
+`(0.5, −0.334)`, where the segment's midpoint is `(0.5, 0.748)`. Kaplan's comment
+calls it "the centre of the bottom edge of an equilateral triangle", which
+describes neither point — the triangle `origin – up_outer – (0, r_outer)` is
+isosceles, with sides 1.082, 1.082 and 1.0. Port the arithmetic literally rather
+than the comment.
 
 The ray angle `th` begins as the angle of `rtip − tip`, then blends. For `q ≥ 0`
 it rotates toward vertical: `th ← th·(1−q) + (π/2)·q`. For `q < 0` it moves
@@ -197,16 +236,25 @@ toward a *stable* ray derived from `stable_isect = up_outer +
 normalize( up_outer )·(−up_outer.y)`, giving `th ← th·(1+q) − stable_angle·q`.
 Then `qtip = (1 + cos th, sin th)`, `key_point` is the intersection of
 `(tip, qtip)` with `(up_outer, bisector)`, and
-`key_end = key_point.convexSum( stable_isect, 10.0 )` projects a long segment
-through `key_point` for the steps that follow. Each of the `s` steps intersects
+`key_end = key_point.convexSum( stable_isect, 10.0 )`. Because
+`convexSum( other, t )` is `(1 − t)·this + t·other`, that evaluates to
+`10·stable_isect − 9·key_point` — a **ten-fold extrapolation past**
+`stable_isect`, not a segment drawn through `key_point`. The distinction decides
+which of the later `stayOnSegments` tests pass. Each of the `s` steps intersects
 that key line with its `Tr`-rotated copy, mirroring every hit in y.
 
 A FIXME in the source records a genuine failure mode. For some `(n, q, s)` —
 Kaplan cites `n = 12`, `q = −0.8`, `s = 4` — the segments being intersected end
 up parallel, the intersection returns `null`, and that vertex is silently
-skipped. He checks after the fact rather than deriving when it happens. A port
-must either reproduce the null check exactly or detect the degenerate case
-properly; drifting here changes the output geometry.
+skipped. It is worth being precise about what "skipped" means, because it is not
+a clean omission: `buildUnit` does *nothing* on `null`, so the write index is not
+advanced either, the figure ends up with fewer vertices than it has steps, and the
+assembly loop bridges the gap with one longer edge on both the top chain and its
+mirror. Note also that `Intersect.getIntersection` returns `null` for *both*
+"parallel" and "the crossing lies off the segment", so the caller cannot
+distinguish the two cases. Kaplan checks after the fact rather than deriving when
+it happens. A port must either reproduce the skip exactly or detect the
+degenerate case properly; drifting here changes the output geometry.
 
 ### `ScaleFigure` — pulling a figure out to its cell
 
@@ -428,7 +476,7 @@ is where the meaning lives:
 
 | Method | Purpose |
 | --- | --- |
-| `insertVertex`, `insertEdge` | Build the graph; `insertEdge` maintains the no-crossing invariant |
+| `insertVertex`, `insertEdge` | Build the graph. Neither tests for crossings: the no-crossing invariant is a *caller* precondition, not something the map enforces |
 | `mergeSimpleMany( other, transforms )` | Replicate `other` once per transform, rebuilding edges between copies |
 | `mergeMap( other, consume )` | Slow merge that welds `other` in and unifies coincident vertices |
 | `transformMap`, `scale`, `translate` | Apply an affine transform to every vertex in place |
@@ -451,10 +499,11 @@ Three 1.1.12 changes sit on top of that, none of which alter the merge semantics
   `Comparison` interface; 1.1.12 uses `Collections.sort` with anonymous
   `Comparator<Vertex>` and `Comparator<Edge>`. That is why `general/Sort.java` and
   `general/Comparison.java` disappear entirely.
-- **`cleanCopy()` was added**, called at the head of `mergeMap`, `mergeSimple` and
-  `mergeSimpleMany`. It nulls the scratch `copy` pointer on every vertex, so stale
-  state from a previous merge cannot leak into the next. Worth reproducing: it is
-  cheap and it removes a whole class of bug.
+- **`cleanCopy()` was added**, called at the **tail** of `mergeMap`,
+  `mergeSimple` and `mergeSimpleMany` — four call sites in all, the fourth being
+  `clone`. It nulls the scratch `copy` pointer on every vertex, so stale state
+  from a previous merge cannot leak into the next. Worth reproducing: it is cheap
+  and it removes a whole class of bug.
 
 ### `Intersect`: segment crossings
 
@@ -601,11 +650,61 @@ Two FIXMEs in this file are worth carrying forward rather than rediscovering:
 
 ---
 
+## Output: coordinates and the SVG export
+
+The three simple styles and the exporter are not otherwise analysed here, but one
+thing about them has to be, because it is absent from the source's own comments
+and it decides whether girihelix's output can be compared with Taprats' at all.
+
+`plugins/SVGExporter.java` writes its markup through Batik's `SVGGraphics2D`, so
+the file is a straight dump of the AWT drawing calls: `<line>` elements and
+`<polygon>` elements, never `<path>`, each carrying a folded
+`style="stroke:rgb(r,g,b)"` attribute. Two consequences surprise anyone who opens
+one expecting a reference to match against.
+
+- **There is no `width`, no `height` and no `viewBox`.** Batik writes a canvas
+  size only when one has been set on it, and Taprats never sets one. The output is
+  framed for a Swing panel at a moment in time, not for a document.
+- **Coordinates arrive already screen-oriented and truncated.** The affine map
+  lives in the UI, not in the exporter: `X = ( x − left ) · W / width` and
+  `Y = ( top − y ) · W / width`, where `left`, `top` and `width` describe the
+  current view rectangle and `W` is the panel's pixel width. The y axis is flipped
+  there — map space is y-up, screen space is y-down — and the result is truncated
+  toward zero by a Java `(int)` cast, which is visible in the output.
+
+The viewport is only a `( left, top, width )` triple; its height is derived as
+`geo_width · panel_height / panel_width`. Nothing anywhere computes a map's
+bounds: the client passes `Prototype.construct` the visible world rectangle, which
+is also how the fill's edge gaps get absorbed — by expanding that rectangle first.
+Stroke widths bypass the truncation and scale with zoom, while the default
+one-pixel stroke does not.
+
+For girihelix this is a **decision, not a port**. The geometry matches Taprats; the
+framing cannot, because there is nothing to match. A viewport has to be invented,
+and the y flip applied deliberately rather than inherited.
+
+The three v1 target styles are simpler than their names suggest, and each has one
+property worth knowing before porting it.
+
+- `Plain` draws one segment per edge in edge order, in a single colour, with no
+  joins, caps or fills of its own.
+- `Filled` draws one filled polygon per kept face — white faces first, then black,
+  **in the same colour**. Its defaults therefore render a flat single-colour
+  silhouette, not a two-tone pattern; two-tone needs two layers with one of the
+  two flags turned off. Which faces count as "white" follows from the map's edge
+  insertion order rather than from geometry, so the polarity is arbitrary and can
+  differ between builds.
+- `Outline` interleaves a six-point fill and two black lines *per edge*, so a later
+  fill overdraws an earlier edge's lines. Its half-width offset defaults to `0.05`
+  map units and is used undoubled, and its only numeric tolerance is a `1e-7`
+  guard on a miter whose angle approaches zero.
+
 ## Porting map to Elixir
 
 | Taprats | girihelix | Note |
 | --- | --- | --- |
-| `Loose` | a tolerance module | `TOL = 1e-7`, `TOL2 = 1e-10`, `NEAR_TOL = 1e-4`; the `near/2` and `near/3` overloads take an explicit tolerance and are what `Infer` relies on |
+| `Loose` | a tolerance module | `TOL = 1e-7`, `TOL2 = 1e-10`; the `near/2` and `near/3` overloads take an explicit tolerance and are what `Infer` relies on. `NEAR_TOL = 1e-4` is declared but never referenced anywhere in the tree, as are `lessThan` and `greaterThan` — dead surface, not worth porting |
+| `Point`'s tolerances | two constants, not one | `TOLERANCE = 1e-7` and `TOLERANCE2 = 1e-14`, used by `Point.equals`; `Loose.equals( Point, Point )` tests `TOL2 = 1e-10` instead. The two "equal points" tests therefore differ by four orders of magnitude in **squared** terms — two in linear terms, a factor of a hundred — and different callers use each, so a port must decide which one it means at every call site |
 | `Point`, `Transform`, `Map`, `Vertex`, `Edge`, `Polygon` | immutable structs | Every mutating call becomes a returned value |
 | `Figure`, `RadialFigure` | behaviour plus implementations | `build_unit/1` returning a map; the c_n replication in one shared helper |
 | `Prototype.construct` | a pure function over a region | Four nested instancing passes; maps onto `Enum` and `Stream` |
@@ -636,11 +735,16 @@ Three things stand out as the real work, none of which that table conveys.
 **Mutability is the structural change.** The Java mutates in place almost
 everywhere: `Point`'s `scaleD`, `addD`, `subtractD`, `normalizeD` and `perpD`
 alongside their pure siblings, plus `Map.scale` and `Map.transformMap`, and — most
-awkwardly — the traversal flags in `Infer` (`taken`, `isect_idx`) and
-`RenderInterlace` (`visited`, `start_under`), written through `setData`. The pure
-`Point` operations port directly. The traversal flags do not: they must become
-explicit state, threaded through a fold or held in a keyed map. That rewrite,
-rather than the geometry, is where the port will actually spend its time.
+awkwardly — the traversal state the algorithms keep. Two different mechanisms are
+at work here and the distinction matters for the port.
+
+The renderer hangs its state on the graph itself, through `setData`: that is where
+`RenderInterlace`'s `visited` and `start_under` live, in `Vertex` and `Edge`. Those
+have to become explicit state, threaded through a fold or held in a keyed map.
+`Infer`, by contrast, does **not** use `setData` at all — it keeps its own
+parallel arrays (`taken`, `isect_idx`), which is a plainer rewrite than it first
+looks. The pure `Point` operations port directly. This rewrite, rather than the
+geometry, is where the port will actually spend its time.
 
 **Object identity does not translate.** Several places key on identity rather than
 value. `ConnectFigure.rotateHalf` uses a `Hashtable` keyed by `Vertex`.
@@ -664,14 +768,23 @@ The extraction is implemented, not left to the caller.
 
 `Faces.extractFaces( map, blk, wht )` walks the map to build every face, then
 propagates colours with a depth-first search over an explicit `java.util.Stack`,
-filling the two vectors with the corner points of a **two-colouring** of the
-faces. Two properties belong in a port:
+appending the corner points of a **two-colouring** of the faces to the two
+`Vector<Point[]>` arguments it is handed. Three properties belong in a port:
 
 - It assumes a *checkerboard* diagram — every vertex of even degree, except
   possibly at the borders. When that assumption fails it does not silently return
-  nonsense; it throws `InternalError( "Filling problem 1" )` on an inconsistent
-  colouring.
-- It returns `Polygon`s rather than graph structures, because "the only code that
+  nonsense; it throws `InternalError`, and there are **two** messages, not one:
+  `"Filling problem 1"` when a face already constrained by a white neighbour then
+  meets a black one, and `"Filling problem 2"` for the mirror case.
+- The precondition is **never checked**, so the failure is neither prompt nor
+  deterministic. The only degree test present (`< 2`) silently *drops* a face, and
+  a third case — an `UNDONE` face, marked in the source by nothing more than a
+  "This shouldn't happen." comment — is dropped too. Colour detection fires only
+  against neighbours already decided, and the walk skips faces still being
+  processed, so *which* face raises, and *which* of the two messages it raises,
+  both depend on traversal order.
+- It hands back `Point[]` arrays — not `Polygon`s, and not graph structures —
+  because "the only code that
   cares about faces doesn't need graph information about the faces, just the
   coordinates of their corners". Anything needing face *adjacency* has to redo the
   walk rather than reuse this.
@@ -733,7 +846,7 @@ What this means for the imperfections recorded above:
 | `RenderInterlace` gap wrong by `sin θ` | **Still open** — FIXME still present |
 | `RenderInterlace` recursion / stack overflow | **Fixed** — rewritten around an explicit `Stack<Edge>`, precisely the remedy the 2000 comment itself proposed; the `-Xss10M` note is gone |
 | `Intersect`'s dead `TOL = 1e-9` | **Fixed** — the unused constant was deleted |
-| `Loose` tolerances | **Extended** — `TOL`/`TOL2` unchanged, with `NEAR_TOL` and `near/2,3` added |
+| `Loose` tolerances | **Extended** — `TOL`/`TOL2` unchanged, with `near/2,3` added and a `NEAR_TOL` constant that no code in the tree ever reads |
 
 Two consequences follow. Three of the degenerate cases are still unfixed more
 than fifteen years later, so they are not oversights awaiting a tidy-up; they are
@@ -769,3 +882,59 @@ upstream file headers actually grant. Neither reference tree is published: both
 `reference/0.3/` and `reference/1.1.12/` are git-ignored and kept locally only,
 so the repository contains no third-party source, and contributors fetch the
 upstream reference themselves. The licence text is at the repository root.
+
+---
+
+## Corrections from the source re-read
+
+Every file this document describes has since been re-read in full to produce
+per-module porting notes. That pass confirmed the great majority of what is above,
+and found fifteen places where the document was wrong or incomplete. They are
+listed here rather than edited in silently, so the change is auditable.
+
+Corrections, in document order:
+
+1. `insertEdge` was said to maintain the no-crossing invariant. It performs no
+   crossing test at all; the invariant is a caller precondition.
+2. `cleanCopy` was said to run at the *head* of the three merge methods. It runs
+   at the tail, and has four call sites, not three.
+3. `Prototype.construct`'s four passes merged two distinct `mergeSimpleMany`
+   calls under one name, and omitted that `mergeMap` runs once per bound feature.
+4. The built-in tiling count was given as fifty-eight. That is the size of the
+   generated code block; the shipped `.tiling` directory adds 28 names and
+   shadows 32, so the registry actually holds 86.
+5. `readJarTilings` was presented as a live source. It is dead in this tree.
+6. `Star`'s `clamp_s` and `outer_s` were not noted as computed from the pre-snap
+   `di`, and `cent` was not noted as using the raw unclamped `d`.
+7. `Star`'s absence of a null guard, against `Rosette`'s single one, was not
+   recorded.
+8. `Rosette`'s `s` clamp was said to be applied "in both constructors", making its
+   location differ from 0.3. There is one constructor; the second site is the
+   setter; and `buildUnit` still recomputes the clamp.
+9. `bisector` was described as a segment midpoint. It is half the difference
+   vector — a different point, and not the one Kaplan's comment describes.
+10. `key_end` was described as a segment drawn through `key_point`. It is a
+    ten-fold extrapolation past `stable_isect`.
+11. `Rosette`'s parallel-segment case was described as skipping a vertex. It also
+    leaves the write index unadvanced, so the two chains are bridged by a longer
+    edge.
+12. `Faces` was said to return `Polygon`s. It appends `Point[]` arrays.
+13. `Faces` was said to raise one message. There are two, and the precondition
+    behind them is never checked, so which one fires depends on traversal order.
+14. `Loose.NEAR_TOL` was listed as part of the tolerance surface. It is dead, as
+    are `lessThan` and `greaterThan`.
+15. `Infer`'s traversal flags were attributed to `setData`. `Infer` does not use
+    `setData`; the `setData` users are the interlace renderer's state, held in
+    `Vertex` and `Edge`.
+
+Material the document previously omitted has been folded into the sections above
+rather than listed here: the two `Point` tolerances and their four-orders-of-
+magnitude disagreement with `Loose.equals`; the coordinate mapping, the y flip and
+the `int` truncation; the fact that Taprats' SVG carries no size or `viewBox`; and
+`Filled`'s single-colour default with its arbitrary polarity.
+
+The per-module notes are more detailed than this document and were written from a
+full read of each file. They live under `reference/porting-notes/`, which is
+git-ignored alongside the two reference trees for the same reason: they are
+derived from third-party source and the repository publishes none. Where this
+document and those notes disagree, the notes are the more detailed account.

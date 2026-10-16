@@ -177,6 +177,12 @@
           # style's "files are focused (<800 lines)" rule. Source lives in
           # .credo/checks/. girihelix has no event sourcing, so work/core's
           # NoStrongConsistency check is deliberately not carried over.
+          #
+          # NOTE: a GIRI002 check to enforce the no-if/cond rule mechanically was
+          # written and then withdrawn — see AGENTS.md. It loaded and its run/2
+          # was invoked for every engine file, but Credo discarded every issue it
+          # returned, including a hardcoded one, so it enforced nothing while
+          # appearing to. Better absent than silently passing.
           {Girihelix.Credo.Checks.ModuleLength, []}
         ],
         disabled: [
