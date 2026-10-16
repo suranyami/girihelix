@@ -252,20 +252,52 @@ warns that if you see weird behaviour in Taprats, it "probably" comes from here.
 For a port this matters: every threshold in this file is behavioural
 specification, not an implementation detail to be tidied away.
 
+### Seven strategies, one analysed here
+
+In 0.3 `Infer` had a single entry point. In 1.1.12 it has **seven**, and the class
+grew from 645 to 1,570 lines:
+
+| Strategy | Signature | Approach |
+| --- | --- | --- |
+| `infer` | `( feature )` | Contact inference — the 0.3 algorithm, analysed below |
+| `inferStar` | `( feature, d, s )` | Builds star half-branches per polygon side |
+| `inferHourglass` | `( feature, d, s )` | Hourglass filler |
+| `inferRosette` | `( feature, q, s, r )` | Rosette filler, with a radius parameter |
+| `inferIntersect` | `( feature, starSides, starSkip, s )` | Ranks side-to-side intersections |
+| `inferIntersectProgressive` | `( feature, starSides, starSkip, s )` | Progressive variant of the above |
+| `inferGirih` | `( feature, starSides, starSkip )` | Derives the branch angle from the gap it hops |
+
+`inferGirih` is the most explicit about its mathematics: it computes
+`polygonInnerAngle = π(sides−2)/sides`, then
+`starBranchInnerAngle = starSkip · polygonInnerAngle − (starSkip − 1) · π`, and
+finally `requiredRotation = (π − starBranchInnerAngle) / 2`. Fractional skips are
+supported, which is what makes the family continuous.
+
+The rest of this section analyses **`infer` only** — the contact-inference
+algorithm that the 2000 system was built on and that the port should land first.
+The other six are additions, and their internals have not been read.
+
+Two new helpers support them: `intersection_info` (side, other side, which edge
+is left, a *squared* distance to avoid a square root, and the intersection point;
+`Comparable`) and `edges_length_info` (also `Comparable`). Both are ordering
+machinery for picking the best intersection, and both are new in 1.1.12.
+
 Three package-private helpers carry the state.
 
 | Type | Holds |
 | --- | --- |
 | `placed_points` | A `Feature`, its `Transform`, and `mids` — its transformed edge midpoints |
-| `adjacency_info` | Which `Feature`, which edge index, and which `Transform` lies across a given edge |
+| `adjacency_info` | Which `Feature`, which edge index, which `Transform` lies across an edge, and the tolerance at which that match was found |
 | `contact` | One contact on the boundary: `position`, `other`, the probe ray `end`, plus `isect`, `isect_idx`, `colinear`, `taken` |
+| `intersection_info` | One side-to-side intersection: sides, side-ness, squared distance, point |
+| `edges_length_info` | Edge lengths, used to order candidates |
 
 The midpoint trick is load-bearing. Because these tilings are edge-to-edge, an
 edge is uniquely identified by its midpoint, so edges are matched by comparing
-`mids` rather than testing endpoint pairs, with `Loose.equals` supplying the
+`mids` rather than testing endpoint pairs, with `Loose.near` supplying the
 tolerance. A `contact`'s `end` is
 `position + normalize( position − other ) · 100` — a probe long enough to reach
-crossings well beyond the tile.
+crossings well beyond the tile. The `contact` class is unchanged from 0.3.
 
 The six contact kinds are ordered by desirability, and that ordering *is* the
 heuristic:
@@ -287,20 +319,41 @@ finite search. `findPrimaryFeature` then picks the instance inside `(0,0)` — t
 index range `numFeatures·4` to `numFeatures·5` — and throws `InternalError` if it
 is missing, asserting that the block really did surround the feature.
 
-`getAdjacencies` matches each edge midpoint of the feature against every other
-placed tile's midpoints, recording the `feature`, edge index and transform of the
-winner. Failing to find a neighbour likewise throws `InternalError`, since the 3×3
-block should have made that impossible.
+### Progressive tolerance: a real robustness fix
 
-`buildContacts` then clones each adjacent feature's figure map, applies that
-adjacency's transform, and for every edge `(a, b)` of the tile scans the adjacent
-map's vertices for ones lying on that edge. The test is
-`Loose.zero( pos.distToLine( a, b ) )` together with `pos.dist2( a ) > Loose.TOL2`,
-which excludes vertices sitting at the edge's own endpoints. Every edge incident
-on such a vertex is added as a `contact`; Kaplan's comment notes he wants
-"hopefully *both*" of them. So the contacts are the neighbouring figure's edges
-arriving at the tile boundary, and `Infer`'s remaining job is to decide which of
-them pair off and where they cross.
+This is the most interesting change to `infer` between the releases, and it is an
+improvement rather than a rewrite.
+
+In **0.3**, `getAdjacencies` scanned for a midpoint match at one fixed tolerance
+(`Loose.equals`, so `TOL2`-based) and **threw `InternalError( "Couldn't find
+adjacent feature!" )`** when it failed — the 3×3 block being expected to guarantee
+a neighbour.
+
+In **1.1.12**, `getAdjacency` *escalates*: it starts at `tolerance = 1e-12`,
+doubles until it exceeds `5.0`, and returns the first match at the tightest
+tolerance that works, **recording that tolerance on the `adjacency_info`**.
+Failure returns `null` rather than throwing, and `buildContacts` substitutes an
+empty map for a null adjacency. The only `InternalError` left in `Infer` is
+`findPrimaryFeature`'s, for a feature absent from the `(0,0)` unit.
+
+`buildContacts` then uses the discovered tolerance instead of a global one. For
+each edge `(a, b)` it clones the adjacent feature's map, applies the adjacency's
+transform, and scans its vertices with:
+
+```java
+double dist2 = pos.dist2ToLine( a, b );
+if(   Loose.near( dist2, adj.tolerance )
+&&  ! Loose.near( pos, a, adj.tolerance )
+&&  ! Loose.near( pos, b, adj.tolerance ) )
+```
+
+Two details differ from 0.3 and both matter. The distance is **squared**
+(`dist2ToLine`, avoiding a square root), and the endpoint exclusion tests **both**
+`a` and `b`, where 0.3 tested only `a` via `pos.dist2( a ) > Loose.TOL2`. Every
+edge incident on an accepted vertex becomes a `contact`; Kaplan's comment still
+notes he wants "hopefully *both*" of them. The contacts are therefore the
+neighbouring figure's edges arriving at the tile boundary, and `infer`'s
+remaining job is to decide which pair off and where they cross.
 
 ### The pairing heuristic
 
