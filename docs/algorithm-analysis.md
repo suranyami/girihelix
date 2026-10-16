@@ -83,23 +83,53 @@ what `FillRegion` computes.
 | --- | --- |
 | `Feature` | A tile: an array of `Point`s plus a `regular` flag |
 | `PlacedFeature` | A `Feature` with a `Transform`, so tiles can be shared and re-placed |
-| `Tiling` | Vectors `t1`, `t2` plus the `PlacedFeature` list, and a name |
+| `Tiling` | Vectors `t1`, `t2`, the `PlacedFeature` list, a name, description and author |
+| `KnownTilings` | The static registry of built-in and loaded tilings |
 | `DesignElement` | A `Feature` bound to a `Figure` — the pairing `Prototype` stores |
 
 `Feature` keeps its points in an array rather than wrapping a `Polygon` because
 per-point metadata is added and removed over time, while the vertex count never
 changes after construction. The `regular` flag is load-bearing: `DesignElement`'s
 one-argument constructor gives a regular polygon with more than four sides a
-default `Rosette( n, 0.0, 3 )`, and an empty `ExplicitFigure` otherwise.
+default `Rosette( n, 0.0, 3 )` and an empty `ExplicitFigure` otherwise. That
+constructor is byte-identical to 0.3.
 
-Fourteen tilings ship as built-ins and are registered in a static dictionary:
-`4^4`, `6`, `10`, `18`, `4.6.12`, `8.12`, `9.12`, `16.8`, `3.12^2`, `4.8^2`, and
-the custom `csk_5`, `csk_7`, `csk_9`, `square_12`. Names follow the usual
-vertex-configuration notation for uniform tilings where one applies. The
-built-ins are not hand-written: they are emitted by the `DesignerPanel` tool into
-a static initialiser, and a dozen private `beginTiling`/`addPlacement`/`endTiling`
-helpers exist to keep that generated code short. `readTiling( Reader )` parses the
-same format through a `StreamTokenizer`, so tilings can also be loaded from a file.
+### A behavioural change to watch: `Feature` equality
+
+This matters more than it looks. In 0.3, `Feature` declared no `equals`, so
+`Prototype`'s figure table and its `if( f.equals( feature ) )` match both used
+**reference identity**. Sharing one `Feature` object across several
+`PlacedFeature`s was therefore meaningful, and `PlacedFeature`'s own comment says
+so. In 1.1.12, `Feature` overrides `equals` and `hashCode` **structurally** — the
+`regular` flag plus every vertex — so two distinct but geometrically identical
+tiles now compare equal and hash alike.
+
+Both `Prototype` and `Infer` match features by equality, so this changes which
+tiles count as the same tile. A port should decide deliberately: structural
+equality reproduces 1.1.12, identity reproduces 0.3.
+
+### Where the built-in tilings live
+
+`Tiling` itself no longer knows any tilings. `KnownTilings` is the registry,
+offering `add`, `find( name )`, `countTilings`, `getTilingNames` and `getTilings`,
+and it loads from three sources in order:
+
+1. `addCodeTilings()` — the generated Java block, some 3,200 lines of it;
+2. `readExternalTilings()` — tilings found in the `tilings/` directory;
+3. `readJarTilings()` — tilings bundled inside the distributed jar.
+
+**Fifty-eight** tilings ship as built-ins, against fourteen in 0.3. All fourteen
+originals survive unchanged in name (`4^4`, `6`, `10`, `18`, `4.6.12`, `8.12`,
+`9.12`, `16.8`, `3.12^2`, `4.8^2`, `csk_5`, `csk_7`, `csk_9`, `square_12`); the
+other forty-four are additions, several named for the buildings that inspired
+them — `alhambra16`, `Seville Alcazar 12.8.6`, `Al-Mustansiriyya`, `Ilkhanid
+Uljaytu`, `Great Mosque of Malatya`, `Mughal I'timad` and others.
+
+The built-ins are still not hand-written. `exportTilingAsCode` regenerates the
+Java for a `Tiling` — the tool that produces `addCodeTilings` — with
+`regroupFeatures` keeping each feature written only once. `Tiling.readTiling`
+parses the same format through a `StreamTokenizer`, and the new `writeTiling`
+emits it, so a tiling now round-trips through a file.
 
 ---
 
