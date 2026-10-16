@@ -511,12 +511,35 @@ The 2000 source is not the last word. Its header promised the licence might be
 relaxed, and it was. Taprats now lives on SourceForge, credited to Kaplan with
 Pierre Baillargeon, last touched 2019, at version 1.1.12.
 
-That release is a substantial refactor rather than a patch. Packages are
-flattened to the top level (`app/`, `geometry/`, `tile/`, `ui/`). Render styles
-are extracted out of `ui/` into `style/`, renamed `Render*` to `*` — the split
-that `RenderStyle`'s own comment predicted. The built-in tilings move out of
-generated Java into `KnownTilings` plus the distributed jar. New material appears
-alongside: `i18n/`, `Version.java`, and `plugins/SVGExporter.java`.
+That release is a substantial refactor rather than a patch. Since 1.1.12 is the
+version to port from, the size of the change is worth stating precisely.
+
+- **It is not a patch.** Of the 36 paths the two releases share, **32 differ
+  substantively**. Only four are unchanged once reformatting and comments are
+  discounted: `DesignElement`, `Rect`, `UnitCallback`, `WindowCloser`.
+- **30 files disappear and 66 appear.** Most disappearances are relocations, not
+  deletions: UI classes are redistributed into new subpackages, and
+  `tile/DesignerPanel`, `FeatureView`, `Selection` and `TilingViewer` move under
+  `ui/tile/`. `general/Comparison` and `general/Sort` are genuinely gone,
+  replaced by the standard library — the commit message reads "Replaced the
+  home-grown sorting with the faster…".
+- **The directory layout stops mirroring packages.** Sources move from
+  `csk/taprats/app/` to `app/`, but the declarations still read
+  `package csk.taprats.app;` — the layout is flatter, the namespace is not. The
+  package count actually *grows*, from 7 to 16: new top-level `i18n`, `plugins`
+  and `style`, and `ui` splitting into `ui/figure`, `ui/geometry`, `ui/style`,
+  `ui/tile` and `ui/toolkit`.
+- **Render styles leave the UI.** `ui/Render*` becomes `style/*` with the prefix
+  dropped — the split `RenderStyle`'s own comment predicted — and two styles are
+  added, `Colored` and `Thick`.
+- **Built-in tilings stop being code.** `Tiling.java` sheds roughly 480 lines,
+  and `KnownTilings` takes over the dictionary, loading the tilings at startup
+  instead of emitting them as Java.
+- **New material**: `i18n/` (three classes, including a French translation),
+  `Version.java`, and `plugins/SVGExporter.java` — SVG export arriving as a
+  plugin, years before girihelix makes SVG its native output.
+- **Indentation is converted from tabs to four spaces** throughout, which is
+  worth knowing when diffing the two trees by hand.
 
 What this means for the imperfections recorded above:
 
@@ -525,16 +548,18 @@ What this means for the imperfections recorded above:
 | `Rosette` parallel-segment `null` skip | **Still open** — FIXME and punt verbatim |
 | `FillRegion` gaps at the region edge | **Still open** — comment verbatim, client still expands |
 | `RenderInterlace` gap wrong by `sin θ` | **Still open** — FIXME still present |
-| `RenderInterlace` recursion / stack overflow | **Fixed** — rewritten around an explicit `Stack<Edge>`; the `-Xss10M` note is gone |
+| `RenderInterlace` recursion / stack overflow | **Fixed** — rewritten around an explicit `Stack<Edge>`, precisely the remedy the 2000 comment itself proposed; the `-Xss10M` note is gone |
 | `Intersect`'s dead `TOL = 1e-9` | **Fixed** — the unused constant was deleted |
 | `Loose` tolerances | **Extended** — `TOL`/`TOL2` unchanged, with `NEAR_TOL` and `near/2,3` added |
 
 Two consequences follow. Three of the degenerate cases are still unfixed more
 than fifteen years later, so they are not oversights awaiting a tidy-up; they are
 judgement calls about the design space, and should be treated as decisions rather
-than defects. And the newer release contains algorithms the 2000 source does not:
-starred, hourglass and rosetted inference, Girih tiles, and SVG export. Wanting
-any of those means choosing to derive from the GPLv2 code.
+than defects. And the newer release contains algorithms the 2000 source does not.
+Its UI corroborates the feature list directly: `ui/figure/` gains
+`ExplicitGirihEditor`, `ExplicitHourglassEditor` and `ExplicitIntersectEditor`
+alongside the star and rosette editors. Wanting any of that means choosing to
+derive from GPL code.
 
 ### Licensing consequence
 
