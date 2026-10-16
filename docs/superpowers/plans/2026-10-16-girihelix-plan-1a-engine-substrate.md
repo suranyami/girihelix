@@ -32,9 +32,14 @@ quotes what you need but the notes are more complete.
   `lib/girihelix/engine/`. No engine file may reference `Ash`, `Phoenix`,
   `Phoenix.LiveView` or `GirihelixWeb`. A guard test enforces this and is written
   in Task 1, before any geometry exists.
-- **Every algorithm is a step sequence.** The public shape is always a `steps/…`
-  function returning `[Step.t()]`, plus a plain function built from
-  `Steps.run!/2` and `Steps.final/1`. A test pins the two together.
+- **Every algorithm with internal stages is a step sequence.** The public shape is
+  a `steps/…` function returning `[Step.t()]`, plus a plain function built from
+  `Steps.run!/2` and `Steps.final/1`, with a test pinning the two together. Value
+  types and single-operation primitives are exempt: the five modules in this plan
+  expose no `steps/…`, because a sequence wrapping them would be a list of
+  one-line delegations and `final(steps) == plain` would be a tautology. The first
+  real subjects are Plan 1b's `Map.merge_map`, `Faces.extract_faces` and
+  `FillRegion.fill`, then Plan 3's figure builders.
 - **Port from Taprats 1.1.12.** `reference/1.1.12/src/` is the source of truth.
   Never port from `reference/0.3/`; it is a comparison baseline only.
 - **Constants verbatim, dead code omitted.** `Loose.TOL = 1e-7`,

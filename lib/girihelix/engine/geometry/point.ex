@@ -8,8 +8,9 @@ defmodule Girihelix.Engine.Geometry.Point do
 
   Note that `Point`'s tolerance is **not** `Loose`'s. `Point.equals/2` tests a
   squared distance below `tolerance2/0` (`1e-14`), while `Loose.equals/2` tests
-  `1e-10`. Both spell "equals" and they differ by two orders of magnitude in
-  squared terms, so a caller must know which one it wants.
+  `1e-10`. Both spell "equals" and they differ by four orders of magnitude in
+  squared terms — two in linear terms, a factor of a hundred — so a caller must
+  know which one it wants.
   """
 
   @tolerance 1.0e-7

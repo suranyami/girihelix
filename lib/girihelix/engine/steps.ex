@@ -2,10 +2,17 @@ defmodule Girihelix.Engine.Steps do
   @moduledoc """
   Runs a labelled sequence of pure steps over a state, retaining every frame.
 
-  Every algorithm in the engine is authored as such a sequence, which gives it
-  two entry points over one implementation: a `steps/…` function returning the
-  sequence, and a plain function that runs it and takes the last state. The
-  workbench renders the frames; nothing else needs them.
+  Every engine algorithm that has internal stages is authored as such a sequence,
+  which gives it two entry points over one implementation: a `steps/…` function
+  returning the sequence, and a plain function that runs it and takes the last
+  state. The workbench renders the frames; nothing else needs them.
+
+  Value types and single-operation primitives are deliberately exempt — `Loose`,
+  `Point`, `Transform`, `Intersect` and `Polygon` expose no `steps/…`. A sequence
+  wrapping them would be a list of one-line delegations to functions that already
+  *are* the whole implementation, and `final(steps) == plain` would be a
+  tautology. The first real subjects are `Map.merge_map`, `Faces.extract_faces`
+  and `FillRegion.fill`, then the figure builders.
   """
 
   defmodule Step do

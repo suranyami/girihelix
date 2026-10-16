@@ -704,7 +704,7 @@ property worth knowing before porting it.
 | Taprats | girihelix | Note |
 | --- | --- | --- |
 | `Loose` | a tolerance module | `TOL = 1e-7`, `TOL2 = 1e-10`; the `near/2` and `near/3` overloads take an explicit tolerance and are what `Infer` relies on. `NEAR_TOL = 1e-4` is declared but never referenced anywhere in the tree, as are `lessThan` and `greaterThan` — dead surface, not worth porting |
-| `Point`'s tolerances | two constants, not one | `TOLERANCE = 1e-7` and `TOLERANCE2 = 1e-14`, used by `Point.equals`; `Loose.equals( Point, Point )` tests `TOL2 = 1e-10` instead. The two "equal points" tests therefore differ by four orders of magnitude in linear terms, and different callers use each — so a port must decide which one it means at every call site |
+| `Point`'s tolerances | two constants, not one | `TOLERANCE = 1e-7` and `TOLERANCE2 = 1e-14`, used by `Point.equals`; `Loose.equals( Point, Point )` tests `TOL2 = 1e-10` instead. The two "equal points" tests therefore differ by four orders of magnitude in **squared** terms — two in linear terms, a factor of a hundred — and different callers use each, so a port must decide which one it means at every call site |
 | `Point`, `Transform`, `Map`, `Vertex`, `Edge`, `Polygon` | immutable structs | Every mutating call becomes a returned value |
 | `Figure`, `RadialFigure` | behaviour plus implementations | `build_unit/1` returning a map; the c_n replication in one shared helper |
 | `Prototype.construct` | a pure function over a region | Four nested instancing passes; maps onto `Enum` and `Stream` |

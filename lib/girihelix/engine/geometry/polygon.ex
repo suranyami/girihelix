@@ -111,6 +111,12 @@ defmodule Girihelix.Engine.Geometry.Polygon do
 
   Returns `false` for an empty polygon: it contains nothing, and the Java's
   out-of-bounds index is not a more useful answer.
+
+  A point exactly **on** the boundary is not reported reliably either way, and the
+  asymmetry is inherited from the source: the lower and left edges of the unit
+  square count as inside while the upper and right edges do not, and three of its
+  four corners report as outside. Pin it in a test before relying on it — see
+  `point_in_poly/2`.
   """
   @spec contains_point?(t(), Point.t()) :: boolean()
   def contains_point?(%__MODULE__{points: []}, %Point{}), do: false
@@ -128,6 +134,13 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   Despite the Java's variable being named `outside`, the result is **true for
   inside** — a ray crosses a closed polygon an odd number of times exactly when
   the point is within it.
+
+  **A point exactly on the boundary is not reliably classified, and the answer is
+  asymmetric.** The straddle test is half-open in x, so the lower and left edges of
+  a shape count as inside while the upper and right edges do not, and three of the
+  unit square's four corners report as outside the square. This is faithful to the
+  source and is reachable — `Infer` asks this question of intersection points that
+  can land on a boundary — so it is tested rather than left to be discovered.
 
   The Java also accepts a `start`/`end` slice, and its index arithmetic wraps
   against the slice length rather than the array, so any `start > 0` reads the

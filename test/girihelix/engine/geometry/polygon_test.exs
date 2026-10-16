@@ -106,4 +106,28 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     assert Polygon.point_in_poly(points, Point.new(0.5, 0.5))
     refute Polygon.point_in_poly(points, Point.new(1.5, 0.5))
   end
+
+  # Review Focus 5's boundary case, pinned because it is reachable and
+  # asymmetric: the half-open straddle test means a point exactly on an edge is
+  # reported inside on one side and outside on the other, and three of the unit
+  # square's four corners report *outside* the square. Faithful to the Java —
+  # Infer asks this question of intersection points that can land on a boundary —
+  # so the asymmetry is documented and tested rather than discovered later.
+  test "point_in_poly/2 is asymmetric on the boundary" do
+    square = unit_square()
+
+    # the lower and left edges count as inside ...
+    assert Polygon.contains_point?(square, Point.new(0.5, 0.0))
+    assert Polygon.contains_point?(square, Point.new(0.0, 0.5))
+
+    # ... the upper and right edges do not
+    refute Polygon.contains_point?(square, Point.new(0.5, 1.0))
+    refute Polygon.contains_point?(square, Point.new(1.0, 0.5))
+
+    # and only one of the four corners is inside
+    assert Polygon.contains_point?(square, Point.new(0.0, 0.0))
+    refute Polygon.contains_point?(square, Point.new(1.0, 0.0))
+    refute Polygon.contains_point?(square, Point.new(1.0, 1.0))
+    refute Polygon.contains_point?(square, Point.new(0.0, 1.0))
+  end
 end

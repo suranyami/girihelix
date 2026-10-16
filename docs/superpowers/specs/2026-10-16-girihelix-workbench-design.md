@@ -35,9 +35,12 @@ is a verification instrument as well as a teaching aid.
 1. A visitor can open `/workbench`, choose any component, set its parameters, step
    through its construction forward and backward, see the lines of code
    responsible for the current step, and copy a snippet reproducing that step.
-2. Every engine algorithm exposes its construction as steps, and a test guarantees
-   the stepped view and the plain function agree, so the debugger cannot drift
-   from the engine.
+2. Every engine algorithm that has internal stages — `Map.merge_map`,
+   `Faces.extract_faces`, `FillRegion.fill`, the figure builders and the instancing
+   pass — exposes its construction as steps, and a test guarantees the stepped view
+   and the plain function agree, so the debugger cannot drift from the engine. Value
+   types and single-operation primitives are exempt: a sequence wrapping them would
+   be a list of one-line delegations, and the agreement test would be a tautology.
 3. `/studio` satisfies the domain spec's success criterion 1.
 4. The engine stays pure: no Ash, no Phoenix, no LiveView, no web modules.
 5. Adding a component to the workbench is adding one file, with no change to the

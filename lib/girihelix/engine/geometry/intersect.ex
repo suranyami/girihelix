@@ -69,8 +69,13 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   Keeps a parameter pair only if both parameters are within `0.2` of `[0, 1]`.
 
   A hard-coded parameter-space slack, not a distance, so it is scale invariant —
-  unlike the determinant test in `get_intersection_params/4`. It is what the newer
-  inference strategies reach for when no tidy crossing exists.
+  unlike the determinant test in `get_intersection_params/4`.
+
+  Nothing in the reference tree calls this or `get_near_intersection/4`. The only
+  entry points the figures and `Infer` use are `get_intersection/4` and
+  `get_true_intersection/4`. The near variant is ported because it is part of the
+  source's public surface and the six inference strategies outside v1 are its
+  intended consumers, not because any v1 caller needs it.
   """
   @spec stay_near_segments({float(), float()} | nil) :: {float(), float()} | nil
   def stay_near_segments(nil), do: nil
