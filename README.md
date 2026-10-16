@@ -16,18 +16,18 @@ drives the port.
 girihelix is a from-scratch reimplementation of the computational core of
 **Taprats** — Craig S. Kaplan's Java design tool for computer-generated
 Islamic patterns. Two versions of the original Java source are preserved under
-[`reference/`](reference/). Neither is compiled or executed by this project; they
-exist so the port can be checked against the original algorithms, line by line
-where necessary.
+[`reference/`](reference/). Both are git-ignored, so neither is published.
+Neither is compiled or executed by this project; they exist so the port can be
+checked against the original algorithms, line by line where necessary.
 
 - **`reference/1.1.12/`** — Taprats 1.1.12, the current maintained release by
-  Kaplan and Pierre Baillargeon, vendored here under the GNU General Public
-  License. This is the version to port from, and it is the only one in the
-  repository.
-- **`reference/0.3/`** — the original 2000 release. It is deliberately *not* in
-  the repository: its licence reserves all rights and forbids redistribution, so
-  it is git-ignored and kept locally only, as a second opinion on the older
-  algorithms.
+  Kaplan and Pierre Baillargeon, at changeset `b6c172`. This is the version to
+  port from. It is GPL, so it could be redistributed, but it is deliberately kept
+  out of the repository as well, keeping third-party source out of the published
+  tree.
+- **`reference/0.3/`** — the original 2000 release, kept as a second opinion on
+  the older algorithms. Its licence reserves all rights and forbids
+  redistribution outright.
 
 Where the two disagree, 1.1.12 is authoritative except where a difference is
 noted in the analysis document.

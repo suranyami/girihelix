@@ -3,10 +3,10 @@
 This document is the porting specification for **girihelix**, an Elixir
 reimplementation of Taprats — Craig S. Kaplan's 2000 Java design tool for
 Islamic star patterns. It is derived directly from the Java source preserved
-under [`reference/`](../reference/). The analysis below is of
-`reference/0.3/`, the original 2000 release, which is kept locally and not
-committed; `reference/1.1.12/` is the current maintained release and is vendored
-in the repository. Neither is compiled by this project.
+under [`reference/`](../reference/). The analysis below is of `reference/0.3/`,
+the original 2000 release; `reference/1.1.12/` is the current maintained release,
+at changeset `b6c172`. Both are kept locally and git-ignored, so neither is
+committed, and neither is compiled by this project.
 
 The subject is the computational core: tilings, figures, the contact-inference
 pass, the planar map, and the interlace renderer. The Swing/AWT user interface
