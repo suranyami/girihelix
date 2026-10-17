@@ -2,20 +2,11 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   @moduledoc """
   A polygon: a closed list of points, with area, length and containment.
 
-  Ported from `geometry/Polygon.java`. It is a **value**: equality is structural
-  and order-sensitive, with no identity semantics. That is the opposite of the
-  graph nodes in `Map`, which are identities.
+  Equality is structural and order-sensitive, with no identity semantics.
 
-  The Java's growable-array machinery — a backing array, a `size` cursor, a `grow`
-  policy and an `ensureSize/1` that reallocates on every insert — is not ported.
-  A list is already growable, so three of the five Java constructors have no
-  counterpart here, and `addVertex`/`setVertex` are replaced by building a new
-  polygon from a list.
+  That is the opposite of the graph nodes in `Map`, which are identities.
 
-  **Failures are data.** `area/1`, `arc_length/2` and `vertex/2` return
-  `{:ok, result} | {:error, reason}` where the Java threw. `contains_point?/2` and
-  `point_in_poly/2` cannot fail and return booleans. The closing edge is implicit:
-  do not repeat the first vertex as the last.
+  The closing edge is implicit: do not repeat the first vertex as the last.
   """
 
   alias Girihelix.Engine.Geometry.Point
@@ -47,10 +38,6 @@ defmodule Girihelix.Engine.Geometry.Polygon do
 
   @doc """
   The vertex at `index`, or `{:error, :out_of_range}`.
-
-  The Java's `getVertex` does not check against its `size`, so it can read a spare
-  array slot and return `null` — a caller that trusts it can be handed nothing
-  rather than data it can match.
   """
   @spec vertex(t(), non_neg_integer()) :: {:ok, Point.t()} | {:error, :out_of_range}
   def vertex(%__MODULE__{points: points}, index) do

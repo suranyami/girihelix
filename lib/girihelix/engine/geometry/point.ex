@@ -2,10 +2,6 @@ defmodule Girihelix.Engine.Geometry.Point do
   @moduledoc """
   A point in the plane: a pure value with tolerant equality.
 
-  Ported from `geometry/Point.java`. The Java exists in pure and in-place
-  flavours, every in-place one suffixed `D`; the `D` forms are dropped here and
-  every operation returns a new value.
-
   Note that `Point`'s tolerance is **not** `Loose`'s. `Point.equals/2` tests a
   squared distance below `tolerance2/0` (`1e-14`), while `Loose.equals/2` tests
   `1e-10`. Both spell "equals" and they differ by four orders of magnitude in
@@ -160,7 +156,7 @@ defmodule Girihelix.Engine.Geometry.Point do
   The angle swept from `from` to `to` about `vertex`, in `[0, 2pi)`.
 
   Normalised by adding `2pi` until positive rather than by taking a remainder,
-  so a very negative angle iterates — faithful to the Java, and only reachable
+  so a very negative angle iterates — only reachable
   if a caller passes angles differing by many turns.
   """
   @spec sweep(t(), t(), t()) :: float()

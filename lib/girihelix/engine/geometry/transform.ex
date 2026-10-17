@@ -17,16 +17,13 @@ defmodule Girihelix.Engine.Geometry.Transform do
   is kept deliberately, so the factory bodies could be transcribed rather than
   re-derived, and it is documented here and tested.
 
-  Three names differ from the Java, to stay clear of Elixir's `Kernel`:
-  `apply/2` is `apply_to/2`, `apply(double, double)` is `apply_coords/3`, and
-  `translate(Point)` is `translate_point/1`.
-
   **Failures are data.** The functions that can fail — `invert/1`,
   `reflect_through_line/2`, `match_two_segments/4` and
   `dist_from_inverted_zero/2` — return `{:ok, result} | {:error, reason}`, and
-  callers thread them with `with`. `invert!/1` is the bang escape hatch for a
-  caller that has already established invertibility; the Java's
-  `IllegalArgumentException` maps to `{:error, :non_invertible}`.
+  callers thread them with `with`.
+
+  `invert!/1` is the bang variant of `invert/1` for a
+  caller that has already established invertibility;.
   """
 
   alias Girihelix.Engine.Geometry.Point
@@ -59,8 +56,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
   The all-zero matrix, which collapses everything to the origin.
 
   It is **not** a null transform: its determinant is zero, so `invert/1` reports
-  `{:error, :non_invertible}` on it. The Java exposes this as the shared mutable
-  constant `ZERO`; here it is a function, so no caller can corrupt it for another.
+  `{:error, :non_invertible}` on it.
   """
   @spec zero() :: t()
   def zero, do: scale(0.0)
@@ -77,7 +73,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @spec translate(number(), number()) :: t()
   def translate(x, y), do: new(1.0, 0.0, x, 0.0, 1.0, y)
 
-  @doc "Translation by a point's coordinates. The point is read, not kept."
+  @doc "Translation by a point's coordinates."
   @spec translate_point(Point.t()) :: t()
   def translate_point(%Point{x: x, y: y}), do: translate(x, y)
 
@@ -158,10 +154,11 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   The inverse transform, or `{:error, :non_invertible}`.
 
-  The Java tests the determinant for **exact** equality with `0.0`, not against a
+  Tests the determinant for **exact** equality with `0.0`, not against a
   tolerance, so a matrix with a determinant of `1e-300` inverts to enormous values
-  rather than failing. That behaviour is kept: the test here is `determinant == 0.0`
-  too. Use `invert!/1` when the caller already knows the transform is invertible.
+  rather than failing. The test here is `determinant == 0.0`.
+
+  Use `invert!/1` when the caller already knows the transform is invertible.
   """
   @spec invert(t()) :: {:ok, t()} | {:error, :non_invertible}
   def invert(%__MODULE__{} = transform), do: inverted(transform, determinant(transform))
@@ -182,9 +179,6 @@ defmodule Girihelix.Engine.Geometry.Transform do
 
   @doc """
   `invert/1` for a caller that has established invertibility, raising otherwise.
-
-  The bang variant is the sanctioned escape hatch: a bang function raising is
-  Elixir's own convention, not an inherited Java idiom.
   """
   @spec invert!(t()) :: t()
   def invert!(transform) do
@@ -228,9 +222,12 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   The distance between the images of `(v, 0)` and `(0, 0)`.
 
-  A renderer utility in the Java, used to scale stroke widths with zoom. The
-  geometry core does not need it, but the SVG emitter will. Measures through the
-  inverse, so it reports `{:error, :non_invertible}` for a singular transform.
+  A renderer utility used to scale stroke widths with zoom.
+
+  The geometry core does not need it, but the SVG emitter will.
+
+  Measures through the inverse, so it reports
+  `{:error, :non_invertible}` for a singular transform.
   """
   @spec dist_from_zero(t(), number()) :: float()
   def dist_from_zero(transform, v) do
@@ -243,8 +240,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   `dist_from_zero/2` measured through the inverse.
 
-  Returns `{:error, :non_invertible}` for a singular transform, since the Java's
-  `distFromInvertedZero` inverts without checking.
+  Returns `{:error, :non_invertible}` for a singular transform.
   """
   @spec dist_from_inverted_zero(t(), number()) :: {:ok, float()} | {:error, :non_invertible}
   def dist_from_inverted_zero(transform, v) do
