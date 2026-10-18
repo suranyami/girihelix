@@ -17,16 +17,19 @@ defmodule Girihelix.Engine.Geometry.Transform do
   is kept deliberately, so the factory bodies could be transcribed rather than
   re-derived, and it is documented here and tested.
 
-  **Failures are data.** The functions that can fail — `invert/1`,
-  `reflect_through_line/2`, `match_two_segments/4` and
-  `dist_from_inverted_zero/2` — return `{:ok, result} | {:error, reason}`, and
-  callers thread them with `with`.
+  **Failures are data.** Only `invert/1` and `dist_from_inverted_zero/2` can
+  fail, because a singular transform is representable and has no inverse. They
+  return `{:ok, result} | {:error, :non_invertible}`, and callers thread them
+  with `with`. `invert!/1` is the bang variant for a caller that has already
+  established invertibility.
 
-  `invert!/1` is the bang variant of `invert/1` for a
-  caller that has already established invertibility;.
+  The constructors built from segments — `reflect_through_line/1` and
+  `match_two_segments/2` — are total: a `Segment`'s endpoints are distinct, so
+  the transform they invert always has an inverse.
   """
 
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Segment
 
   @enforce_keys [:a, :b, :c, :d, :e, :f]
   defstruct [:a, :b, :c, :d, :e, :f]
@@ -40,7 +43,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
           f: float()
         }
 
-  @type reason :: :non_invertible | :degenerate_line
+  @type reason :: :non_invertible
 
   @doc "Builds a transform from its six scalars."
   @spec new(number(), number(), number(), number(), number(), number()) :: t()
@@ -100,22 +103,18 @@ defmodule Girihelix.Engine.Geometry.Transform do
   end
 
   @doc """
-  Reflection in the line through `p` and `q`.
+  Reflection in the line through `segment`.
 
-  Maps the line onto the unit x interval, flips y, and maps back. Returns
-  `{:error, :degenerate_line}` when the two points coincide, because the line is
-  then undefined — one of the few places the Java validates anything, and it does
-  so by throwing.
+  Maps the line onto the unit x interval, flips y, and maps back. Total: the
+  segment's endpoints are distinct, so the line always exists.
   """
-  @spec reflect_through_line(Point.t(), Point.t()) :: {:ok, t()} | {:error, :degenerate_line}
-  def reflect_through_line(p, q) when p === q, do: {:error, :degenerate_line}
+  @spec reflect_through_line(Segment.t()) :: t()
+  def reflect_through_line(segment) do
+    onto_line = match_line_segment(Segment.from(segment), Segment.to(segment))
 
-  def reflect_through_line(p, q) do
-    onto_line = match_line_segment(p, q)
-
-    with {:ok, inverse} <- invert(onto_line) do
-      {:ok, compose(onto_line, compose(scale(1.0, -1.0), inverse))}
-    end
+    # The determinant of `onto_line` is the segment's squared length, which a
+    # Segment guarantees is positive, so this inverse always exists.
+    compose(onto_line, compose(scale(1.0, -1.0), invert!(onto_line)))
   end
 
   @doc """
@@ -205,18 +204,19 @@ defmodule Girihelix.Engine.Geometry.Transform do
   end
 
   @doc """
-  The transform carrying the segment `p1`-`q1` onto `p2`-`q2`.
+  The transform carrying segment `source` onto segment `target`.
 
-  Maps `p1` to `p2` and `q1` to `q2`. Both factors are similarities parameterised
-  `p` to `q`, so the result never flips either. Reports
-  `{:error, :non_invertible}` when the source segment has no length.
+  Maps the start of `source` to the start of `target`, and its end to the end of
+  `target`. Both factors are similarities, so the result never flips. Total: the
+  source segment has positive length, so its matching transform is invertible.
   """
-  @spec match_two_segments(Point.t(), Point.t(), Point.t(), Point.t()) ::
-          {:ok, t()} | {:error, :non_invertible}
-  def match_two_segments(p1, q1, p2, q2) do
-    with {:ok, inverse} <- p1 |> match_line_segment(q1) |> invert() do
-      {:ok, compose(match_line_segment(p2, q2), inverse)}
-    end
+  @spec match_two_segments(Segment.t(), Segment.t()) :: t()
+  def match_two_segments(source, target) do
+    # The determinant is the source segment's squared length, which a Segment
+    # guarantees is positive, so this inverse always exists.
+    inverse = source |> Segment.from() |> match_line_segment(Segment.to(source)) |> invert!()
+
+    compose(match_line_segment(Segment.from(target), Segment.to(target)), inverse)
   end
 
   @doc """
@@ -224,10 +224,8 @@ defmodule Girihelix.Engine.Geometry.Transform do
 
   A renderer utility used to scale stroke widths with zoom.
 
-  The geometry core does not need it, but the SVG emitter will.
-
-  Measures through the inverse, so it reports
-  `{:error, :non_invertible}` for a singular transform.
+  The geometry core does not need it, but the SVG emitter will. Total: it
+  measures through the transform itself, not its inverse.
   """
   @spec dist_from_zero(t(), number()) :: float()
   def dist_from_zero(transform, v) do

@@ -2,6 +2,7 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
   use ExUnit.Case, async: true
 
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Segment
   alias Girihelix.Engine.Geometry.Transform
 
   test "identity/0 leaves a point alone" do
@@ -54,9 +55,9 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert_in_delta rotated.y, centre.y, 1.0e-12
   end
 
-  test "reflect_through_line/2 fixes the line and reverses either side of it" do
-    assert {:ok, transform} =
-             Transform.reflect_through_line(Point.new(0.0, 0.0), Point.new(1.0, 0.0))
+  test "reflect_through_line/1 fixes the line and reverses either side of it" do
+    transform =
+      Transform.reflect_through_line(Segment.new!(Point.new(0.0, 0.0), Point.new(1.0, 0.0)))
 
     on_line = Transform.apply_to(transform, Point.new(7.0, 0.0))
     assert_in_delta on_line.x, 7.0, 1.0e-12
@@ -70,12 +71,13 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert Transform.flips(transform)
   end
 
-  # A reflection needs the line to exist, so coincident points are an expected
-  # failure and are reported as data rather than raised.
-  test "reflect_through_line/2 reports coincident points as data" do
-    same = Point.new(2.0, 2.0)
+  # Review Focus 2: the shortest segments Segment accepts must still reflect,
+  # because their squared length is the determinant the reflection inverts.
+  test "reflect_through_line/1 is total on a very short segment" do
+    segment = Segment.new!(Point.origin(), Point.new(1.0e-150, 0.0))
+    reflection = Transform.reflect_through_line(segment)
 
-    assert Transform.reflect_through_line(same, same) == {:error, :degenerate_line}
+    assert Transform.apply_to(reflection, Point.new(0.0, 1.0)) == Point.new(0.0, -1.0)
   end
 
   test "invert/1 undoes a transform" do
@@ -127,14 +129,12 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert backwards.a * backwards.e - backwards.b * backwards.d == 25.0
   end
 
-  test "match_two_segments/4 carries one segment onto another" do
-    assert {:ok, transform} =
-             Transform.match_two_segments(
-               Point.new(1.0, 1.0),
-               Point.new(2.0, 1.0),
-               Point.new(0.0, 0.0),
-               Point.new(0.0, 4.0)
-             )
+  test "match_two_segments/2 carries one segment onto another" do
+    transform =
+      Transform.match_two_segments(
+        Segment.new!(Point.new(1.0, 1.0), Point.new(2.0, 1.0)),
+        Segment.new!(Point.new(0.0, 0.0), Point.new(0.0, 4.0))
+      )
 
     start = Transform.apply_to(transform, Point.new(1.0, 1.0))
     finish = Transform.apply_to(transform, Point.new(2.0, 1.0))
@@ -145,11 +145,11 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert_in_delta finish.y, 4.0, 1.0e-12
   end
 
-  test "match_two_segments/4 reports a zero-length source segment as data" do
-    same = Point.new(1.0, 1.0)
+  test "match_two_segments/2 never flips orientation" do
+    source = Segment.new!(Point.new(0.0, 0.0), Point.new(1.0, 0.0))
+    target = Segment.new!(Point.new(5.0, 5.0), Point.new(5.0, 7.0))
 
-    assert Transform.match_two_segments(same, same, Point.new(0.0, 0.0), Point.new(1.0, 0.0)) ==
-             {:error, :non_invertible}
+    refute Transform.flips(Transform.match_two_segments(source, target))
   end
 
   test "equality is exact on all six doubles, with no tolerance" do
