@@ -44,9 +44,10 @@ quotes what you need but the notes are more complete.
   Never port from `reference/0.3/`; it is a comparison baseline only.
 - **Constants verbatim, dead code omitted.** `Loose.TOL = 1e-7`,
   `Loose.TOL2 = 1e-10`; `Point.TOLERANCE = 1.0e-7`,
-  `Point.TOLERANCE2 = TOLERANCE * TOLERANCE` (= 1e-14), `Point.TRUNC = 1.0e7`.
+  `Point.TOLERANCE2 = TOLERANCE * TOLERANCE` (= 1e-14).
   `Loose.NEAR_TOL`, `Loose.lessThan/2` and `Loose.greaterThan/2` are declared in
-  Java and referenced nowhere — do not port them.
+  Java and referenced nowhere — do not port them. Nor `Point.TRUNC`: its only
+  consumer is the hash function, which the port replaces.
 - **Immutability.** The Java mutates in place; every `D`-suffixed method
   (`addD`, `scaleD`, `normalizeD`, `perpD`, `convexSumD`, `applyD`, `composeD`,
   `invertD`) is dropped. Every operation returns a new value.

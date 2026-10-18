@@ -174,12 +174,14 @@ defmodule Girihelix.MixProject do
       # on every commit.
       #
       # It earns its place because it checks the half the compiler does not. The
-      # compiler already checks *call sites* against a callee's `@spec`, so a
-      # caller passing a malformed argument is a warning — and an error, under
-      # `--warnings-as-errors`. It does **not** check a function body against its
-      # own return spec, so a spec can lie about what it returns and nothing
-      # complains. Dialyzer catches that, which is what makes types load-bearing
-      # rather than decorative. Run it alone with `mix dialyzer`.
+      # compiler checks *call sites*, but against the types it infers from the
+      # callee's patterns, guards and body — a `@spec` alone constrains nothing
+      # at compile time (measured 2026-10-19). A malformed argument to a function
+      # whose head rules it out is a warning, and an error under
+      # `--warnings-as-errors`. The compiler does **not** check a body against its
+      # own spec, nor enforce `@opaque`. Dialyzer does both, which is what makes
+      # types load-bearing rather than decorative. Run it alone with
+      # `mix dialyzer`.
       #
       # Measured 2026-10-17 on Elixir 1.20.3 / OTP 29: a cold PLT build is ~57s
       # and a warm analysis ~3s, with zero errors. The PLT lives under `_build/`

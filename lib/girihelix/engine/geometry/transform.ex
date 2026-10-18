@@ -10,12 +10,10 @@ defmodule Girihelix.Engine.Geometry.Transform do
   `(a, b, d, e)` is the linear part and `(c, f)` the translation, so the mapping
   is `x' = a*x + b*y + c` and `y' = d*x + e*y + f`.
 
-  **Composition order.** `compose(a, b)` applies `b` **first**, then `a`. The Java
-  computes `self x other`, which means every nested composition there reads
-  outermost-first in the source and innermost-first at run time — the reason
-  `rotateAroundPoint` and `reflectThroughLine` look "backwards". The convention
-  is kept deliberately, so the factory bodies could be transcribed rather than
-  re-derived, and it is documented here and tested.
+  **Composition order.** `compose(a, b)` applies `b` **first**, then `a`, so a
+  nested composition reads outermost-first but runs innermost-first — the reason
+  `rotate_around_point/2` and `reflect_through_line/1` look "backwards". The
+  convention is deliberate, documented here and tested.
 
   **Failures are data.** Only `invert/1` and `dist_from_inverted_zero/2` can
   fail, because a singular transform is representable and has no inverse. They

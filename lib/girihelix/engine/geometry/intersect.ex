@@ -2,22 +2,22 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   @moduledoc """
   Segment-to-segment crossing. Stateless.
 
-  Ported from `geometry/Intersect.java`. Three things about it are deliberate in
-  the source and must not be "improved" without recording the change.
+  Three things about it are deliberate and must not be "improved" without
+  recording the change.
 
   **A crossing is a parameter pair, not a position.** `get_intersection_params/2`
-  returns `{s, t}`, the fractions along each segment. The Java packs those into a
-  `Point`, where they are not a location at all.
+  returns `{s, t}`, the fractions along each segment — never a `Point`, because
+  they are not a location.
 
   **Failure is `nil`, and the reasons are indistinguishable.** Parallel segments
   and a crossing outside the segment both give `nil`, so no caller can tell which
   happened. A zero-length segment cannot occur: every entry point takes
-  `Segment`s, whose endpoints are distinct. An error tuple would invent a distinction the
-  source deliberately does not make, so `nil` stays — and it is data the caller
-  matches, not an exception.
+  `Segment`s, whose endpoints are distinct. An error tuple would invent a
+  distinction the algorithm deliberately does not make, so `nil` stays — and it
+  is data the caller matches, not an exception.
 
   **Overlapping collinear segments and endpoint-touching pairs are not handled.**
-  The source says so and stops there. Callers that need those cases handle them
+  Callers that need those cases handle them
   themselves, which is exactly what the `nil` match in `Rosette` is for.
   """
 
@@ -37,9 +37,9 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   return `nil`.
 
   The parallel test is an **absolute** `1e-7` on a quantity with units of length
-  squared, which is the source's `Loose.zero(det)`. It is therefore scale
+  squared, through `Loose.zero/1`. It is therefore scale
   dependent: a map scaled up by 1000 will have near-parallel edges declared
-  intersecting. Kept as-is, because it is the source's behaviour.
+  intersecting. Kept deliberately.
   """
   @spec get_intersection_params(Segment.t(), Segment.t()) :: {float(), float()} | nil
   def get_intersection_params(first, second) do

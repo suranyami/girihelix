@@ -96,7 +96,7 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   Cannot fail, so it returns a boolean rather than a tuple.
 
   A point exactly **on** the boundary is not reported reliably either way, and the
-  asymmetry is inherited from the source: the lower and left edges of the unit
+  asymmetry is deliberate: the lower and left edges of the unit
   square count as inside while the upper and right edges do not, and three of its
   four corners report as outside. Pin it in a test before relying on it — see
   `point_in_poly/2`.
@@ -107,27 +107,22 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   @doc """
   The even-odd containment test, over a **closed** list of points.
 
-  From Bob Stein's *A Point about Polygons*, as the Java's comment records. A
-  crossing ray is counted with a half-open straddle test in x, which is what makes
+  From Bob Stein's *A Point about Polygons*. A crossing ray is counted with a half-open straddle test in x, which is what makes
   a ray passing exactly through a vertex count once rather than twice, and the
   crossing test itself uses no division.
 
-  Despite the Java's variable being named `outside`, the result is **true for
-  inside** — a ray crosses a closed polygon an odd number of times exactly when
-  the point is within it.
+  The result is **true for inside** — a ray crosses a closed polygon an odd number
+  of times exactly when the point is within it.
 
   **A point exactly on the boundary is not reliably classified, and the answer is
   asymmetric.** The straddle test is half-open in x, so the lower and left edges of
   a shape count as inside while the upper and right edges do not, and three of the
-  unit square's four corners report as outside the square. This is faithful to the
-  source and is reachable — `Infer` asks this question of intersection points that
-  can land on a boundary — so it is tested rather than left to be discovered.
+  unit square's four corners report as outside the square. This is deliberate and
+  reachable — `Infer` asks this question of intersection points that can land on a
+  boundary — so it is tested rather than left to be discovered.
 
-  The Java also accepts a `start`/`end` slice, and its index arithmetic wraps
-  against the slice length rather than the array, so any `start > 0` reads the
-  wrong vertices. That form is not exposed here: every call site in the reference
-  tree passes `start = 0`, and a port that reproduced the bug would be
-  reproducing something no caller ever asked for.
+  There is no form taking a `start`/`end` slice of the list: no caller needs one.
+  See `docs/algorithm-analysis.md` for why the slice was dropped.
   """
   @spec point_in_poly([Point.t()], Point.t()) :: boolean()
   def point_in_poly([], %Point{}), do: false

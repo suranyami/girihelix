@@ -33,9 +33,6 @@ defmodule Girihelix.Engine.Geometry.Point do
   @doc "The squared tolerance used by `equals/2`, `1e-14`."
   def tolerance2, do: @tolerance2
 
-  # The Java exposes ORIGIN, UNIT_X and UNIT_Y as shared mutable singletons, which
-  # any caller could corrupt through setX/setY. They are functions here.
-
   @doc "The origin."
   def origin, do: new(0.0, 0.0)
 
@@ -97,8 +94,8 @@ defmodule Girihelix.Engine.Geometry.Point do
   The unit vector in this direction.
 
   Returns the point **itself** when the magnitude is exactly zero — an exact
-  comparison, not a tolerant one, matching the Java. Never fails, so it returns a
-  point rather than a tuple.
+  comparison, not a tolerant one. Never fails, so it returns a point rather than a
+  tuple.
   """
   @spec normalize(t()) :: t()
   def normalize(p), do: normalized(p, mag(p))
@@ -135,7 +132,7 @@ defmodule Girihelix.Engine.Geometry.Point do
 
   The band makes the relation non-transitive: `a` can compare equal to `b`, and
   `b` to `c`, while `a` compares less than `c`. Sorting through this comparator
-  is therefore unstable, which is faithful to the Java and is pinned by a test.
+  is therefore unstable. That is deliberate, and pinned by a test.
   Note that `Enum.sort/2` wants a boolean predicate, so this comparator is not a
   drop-in for it; see the test file for the conversion.
   """
@@ -173,12 +170,9 @@ defmodule Girihelix.Engine.Geometry.Point do
   The squared distance from `p` to the **segment** `a`-`b`, not to the infinite
   line through them.
 
-  A point beyond an endpoint gets its distance to that endpoint. A zero-length
-  segment is guarded rather than divided through: Java's division yields `NaN`,
-  every comparison against `NaN` is false, and the clamp falls through to the
-  second endpoint. This returns that same value explicitly — Elixir's `/` raises
-  on a zero divisor, so the guard is required to reproduce it. Always returns a
-  distance, so it is not a tuple.
+  A point beyond an endpoint gets its distance to that endpoint. When `a` and `b`
+  coincide, the result is the squared distance to `b`. Always returns a distance,
+  so it is not a tuple.
   """
   @spec dist2_to_line(t(), t(), t()) :: float()
   def dist2_to_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
@@ -186,7 +180,7 @@ defmodule Girihelix.Engine.Geometry.Point do
     to_segment(p, a, b, delta, dot(delta, delta))
   end
 
-  # A degenerate segment: reproduce the Java's NaN fall-through to `b`.
+  # A degenerate segment: the distance to `b`, rather than a division by zero.
   defp to_segment(p, _a, b, _delta, squared_length) when squared_length == 0.0, do: dist2(b, p)
   defp to_segment(p, a, b, delta, squared_length), do: project(p, a, b, delta, squared_length)
 
@@ -237,8 +231,7 @@ defmodule Girihelix.Engine.Geometry.Point do
   @doc """
   Subtracts `center` from each non-nil point, leaving nils in place.
 
-  Returns a new list. The Java returns its input array unchanged when the centre
-  is null, which aliases the caller's data; that case cannot arise here.
+  Returns a new list; the input is never shared with the result.
   """
   @spec recenter([t() | nil], t()) :: [t() | nil]
   def recenter(points, center) do

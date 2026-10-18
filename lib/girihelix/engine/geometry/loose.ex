@@ -2,17 +2,14 @@ defmodule Girihelix.Engine.Geometry.Loose do
   @moduledoc """
   Fuzzy comparisons — the tolerance surface of the port.
 
-  Ported from `general/Loose.java`. Two constants, and one fact worth
-  internalising before using either: **`near/3` applies its tolerance to a
-  squared distance**, while `near/2` applies it to a difference. The Java reuses
-  a single tolerance value for both, so in `Infer`'s escalating loop the `1e-12`
-  floor is a linear radius of `1e-6`, and its `5.0` ceiling is a radius of about
-  `2.24`.
+  Two constants, and one fact worth internalising before using either:
+  **`near/3` applies its tolerance to a squared distance**, while `near/2` applies
+  it to a difference. A caller passing one tolerance value to both gets two
+  different radii: in `Infer`'s escalating loop the `1e-12` floor is a linear
+  radius of `1e-6`, and its `5.0` ceiling is a radius of about `2.24`.
 
-  Three members of the Java class are deliberately omitted, because no code
-  anywhere in the reference tree references them: `NEAR_TOL`, `lessThan/2` and
-  `greaterThan/2`. Porting dead surface as though it were live invites someone to
-  build on it. See `docs/algorithm-analysis.md`.
+  There is no `less_than/2` or `greater_than/2`, and no separate "near"
+  tolerance constant: nothing needs them. See `docs/algorithm-analysis.md`.
   """
 
   alias Girihelix.Engine.Geometry.Point
@@ -27,8 +24,8 @@ defmodule Girihelix.Engine.Geometry.Loose do
   @doc """
   The squared tolerance, `1e-10`.
 
-  Note this is a **literal in the Java, not `tol * tol`**, which would be
-  `1e-14`. That is the whole reason this module and `Point` disagree.
+  Note this is **not `tol * tol`**, which would be `1e-14`. That is the whole
+  reason this module and `Point` disagree.
   """
   @spec tol2() :: float()
   def tol2, do: @tol2
@@ -36,8 +33,7 @@ defmodule Girihelix.Engine.Geometry.Loose do
   @doc """
   Equality to within `tol/0`.
 
-  Two clauses because the Java overloads on type, and they are not the same
-  predicate: numbers have their difference compared against `tol/0`, points have
+  Two clauses, and they are not the same predicate: numbers have their difference compared against `tol/0`, points have
   a **squared** distance compared against `tol2/0`. Those thresholds sit 100x
   apart in linear terms, so a caller must know which it is asking for.
   """
