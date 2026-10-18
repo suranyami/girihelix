@@ -3,6 +3,13 @@
     "tidewave": {
       "type": "http",
       "url": "http://localhost:4000/tidewave/mcp"
+    },
+    "aide-memory": {
+      "command": "node",
+      "args": [
+        "/Users/djp/.local/share/mise/installs/node/26.8.1/lib/node_modules/aide-memory/dist/memory/cli.js",
+        "/Users/djp/development/projects/girihelix"
+      ]
     }
   }
 }
