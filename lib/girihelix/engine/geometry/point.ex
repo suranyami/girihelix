@@ -8,10 +8,12 @@ defmodule Girihelix.Engine.Geometry.Point do
   squared terms — two in linear terms, a factor of a hundred — so a caller must
   know which one it wants.
 
-  The two functions that can fail, `parameterization_on_line/3` and `center/1`,
-  return `{:ok, result} | {:error, reason}` rather than raising, so a caller
-  pattern-matches instead of rescuing.
+  No function here can fail. Where an argument could be degenerate, the type
+  rules it out instead: `parameterization_on_line/2` takes a `Segment`, whose
+  endpoints are guaranteed distinct, and `center/1` takes a non-empty list.
   """
+
+  alias Girihelix.Engine.Geometry.Segment
 
   @tolerance 1.0e-7
   @tolerance2 @tolerance * @tolerance
@@ -181,15 +183,14 @@ defmodule Girihelix.Engine.Geometry.Point do
   @spec dist2_to_line(t(), t(), t()) :: float()
   def dist2_to_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
     delta = subtract(b, a)
-    to_segment(p, a, b, dot(delta, delta))
+    to_segment(p, a, b, delta, dot(delta, delta))
   end
 
   # A degenerate segment: reproduce the Java's NaN fall-through to `b`.
-  defp to_segment(p, _a, b, squared_length) when squared_length == 0.0, do: dist2(b, p)
-  defp to_segment(p, a, b, squared_length), do: project(p, a, b, squared_length)
+  defp to_segment(p, _a, b, _delta, squared_length) when squared_length == 0.0, do: dist2(b, p)
+  defp to_segment(p, a, b, delta, squared_length), do: project(p, a, b, delta, squared_length)
 
-  defp project(p, a, b, squared_length) do
-    delta = subtract(b, a)
+  defp project(p, a, b, delta, squared_length) do
     t = dot(subtract(p, a), delta) / squared_length
     nearest(p, a, b, t)
   end
@@ -206,46 +207,32 @@ defmodule Girihelix.Engine.Geometry.Point do
   def dist_to_line(p, a, b), do: :math.sqrt(dist2_to_line(p, a, b))
 
   @doc """
-  The unclamped parameter of `p` along the line through `a` and `b`.
+  The unclamped parameter of `p` along the line through `segment`.
 
-  `0.0` at `a`, `1.0` at `b`, negative before `a`, greater than `1.0` past `b`.
-  Returns `{:ok, parameter}`, or `{:error, :degenerate_segment}` for a segment
-  with no length. Java divides through and yields `NaN`, which every caller then
-  reads as "not on the segment"; an error tuple is a deliberate divergence,
-  because a parameter along a segment with no length is meaningless and a silent
-  `NaN` is worse than data the caller can match.
+  `0.0` at the segment's start, `1.0` at its end, negative before the start,
+  greater than `1.0` past the end. Total: a `Segment`'s endpoints are a positive
+  distance apart, so the divisor, its squared length, is never zero.
   """
-  @spec parameterization_on_line(t(), t(), t()) :: {:ok, float()} | {:error, :degenerate_segment}
-  def parameterization_on_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
-    delta = subtract(b, a)
-    parameterise(p, a, delta, dot(delta, delta))
+  @spec parameterization_on_line(t(), Segment.t()) :: float()
+  def parameterization_on_line(%__MODULE__{} = p, segment) do
+    a = Segment.from(segment)
+    delta = subtract(Segment.to(segment), a)
+    dot(subtract(p, a), delta) / dot(delta, delta)
   end
-
-  defp parameterise(_p, _a, _delta, squared_length) when squared_length == 0.0, do: {:error, :degenerate_segment}
-
-  defp parameterise(p, a, delta, squared_length), do: {:ok, dot(subtract(p, a), delta) / squared_length}
 
   @doc """
-  The mean of the non-nil points.
+  The mean of a non-empty list of points.
 
-  Returns `{:ok, point}`, or `{:error, :no_points}` when there is nothing to
-  average. The Java divides by a zero count and returns `Point(NaN, NaN)`, which
-  is a silent coordinate poison; an error tuple is a deliberate divergence so the
-  caller matches instead of rescuing.
+  The non-empty requirement is in the function head, so `center([])` is rejected
+  by the compiler where it is written. Every element must be a point: `nil` is
+  not skipped, and raises `FunctionClauseError`.
   """
-  @spec center([t() | nil]) :: {:ok, t()} | {:error, :no_points}
-  def center(points) do
-    {sum, count} =
-      Enum.reduce(points, {origin(), 0}, fn
-        nil, acc -> acc
-        %__MODULE__{} = point, {sum, n} -> {add(sum, point), n + 1}
-      end)
-
-    average(sum, count)
+  @spec center([t(), ...]) :: t()
+  def center([_ | _] = points) do
+    points
+    |> Enum.reduce(origin(), &add/2)
+    |> scale(1.0 / length(points))
   end
-
-  defp average(_sum, 0), do: {:error, :no_points}
-  defp average(sum, count), do: {:ok, scale(sum, 1.0 / count)}
 
   @doc """
   Subtracts `center` from each non-nil point, leaving nils in place.
