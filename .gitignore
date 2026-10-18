@@ -72,3 +72,6 @@ npm-debug.log
 .aide/recall-log.jsonl
 .aide/pending-memories.jsonl
 .cursor/rules/aide-memory.mdc
+
+# GSD session handoffs: this repo plans in docs/superpowers/, not .planning/
+.planning/
