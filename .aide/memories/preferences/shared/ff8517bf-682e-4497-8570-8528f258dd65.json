@@ -1,0 +1,22 @@
+{
+  "id": 5,
+  "uuid": "ff8517bf-682e-4497-8570-8528f258dd65",
+  "layer": "preferences",
+  "what": "The user merges girihelix PRs themselves on GitHub, and wants merged branches deleted afterwards, both locally and on origin. Small follow-up commits (e.g. aide memories) may go straight to main when the user says so. Before any push, check the branch's upstream: one feature branch once tracked origin/main.",
+  "why": "Observed across PR #1/#2 wrap-up on 2026-10-19/20.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "git",
+    "workflow",
+    "branches"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T22:05:54.799Z",
+  "updated_at": "2026-10-19T22:05:54.799Z"
+}
