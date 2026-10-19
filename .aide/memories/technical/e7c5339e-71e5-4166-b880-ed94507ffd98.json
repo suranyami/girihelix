@@ -1,0 +1,23 @@
+{
+  "id": 1,
+  "uuid": "e7c5339e-71e5-4166-b880-ed94507ffd98",
+  "layer": "technical",
+  "what": "In Elixir 1.20.3 a @spec alone does NOT constrain call sites: the compiler checks calls against types it infers from the callee's patterns, guards and body. A compile-time requirement must go in the function head (e.g. def center([_ | _] = points)). Dialyzer reads @spec and reports call_without_opaque when a forged %Mod{} literal reaches a function typed Mod.t(). Measured 2026-10-19.",
+  "why": "The engine-types spec originally claimed the opposite; tier-2 guarantees silently do nothing if written as specs only.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "elixir",
+    "types",
+    "dialyzer",
+    "compiler"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-18T23:55:46.450Z",
+  "updated_at": "2026-10-18T23:55:46.450Z"
+}

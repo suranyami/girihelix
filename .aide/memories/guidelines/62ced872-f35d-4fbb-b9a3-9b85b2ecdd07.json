@@ -1,0 +1,22 @@
+{
+  "id": 4,
+  "uuid": "62ced872-f35d-4fbb-b9a3-9b85b2ecdd07",
+  "layer": "guidelines",
+  "what": "When a girihelix plan strips source-language narration from docs, the exit grep must be wider than Java|Taprats|Ported from: also match ported, \"reference tree\", source's, and Java camelCase method names (e.g. mergeMap). And before deleting a behavioural fact from a module doc, record it in docs/algorithm-analysis.md, especially caller fallbacks the downstream ports depend on.",
+  "why": "The engine-types plan's narrow grep let four narration lines through, and deleting Intersect's zero-length note nearly lost the null-fallback that Infer/Rosette rely on; both caught only by the final review.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "homogenisation",
+    "docs",
+    "plans"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T00:00:36.256Z",
+  "updated_at": "2026-10-19T00:00:36.256Z"
+}
