@@ -111,9 +111,9 @@ defmodule Girihelix.Engine.Geometry.Polygon do
   @doc """
   The even-odd containment test, over a **closed** list of points.
 
-  From Bob Stein's *A Point about Polygons*. A crossing ray is counted with a half-open straddle test in x, which is what makes
-  a ray passing exactly through a vertex count once rather than twice, and the
-  crossing test itself uses no division.
+  From Bob Stein's *A Point about Polygons*. A crossing ray is counted with a half-open
+  straddle test in x, which is what makes a ray passing exactly through a vertex count
+  once rather than twice, and the crossing test itself uses no division.
 
   The result is **true for inside** — a ray crosses a closed polygon an odd number
   of times exactly when the point is within it.
