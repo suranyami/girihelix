@@ -515,7 +515,7 @@ along `p2 → q2`; `null` means no crossing. The determinant `d1x·d2y − d1y·
 identifies parallel segments, and the arithmetic is adapted from O'Rourke's
 *Computational Geometry in C*.
 
-Two behaviours are worth carrying over exactly:
+Three behaviours are worth carrying over exactly:
 
 - **Parallel returns `null`, and that is deliberate.** The comment concedes that
   endpoint contact and overlapping collinear segments are unhandled, concluding —
@@ -531,6 +531,15 @@ Two behaviours are worth carrying over exactly:
   `infer` uses so two contacts never pair at a shared vertex. The near variant is
   new in 1.1.12 and is what the added inference modes reach for when tidy
   intersections do not exist.
+- **A zero-length segment also returns `null`, and callers rely on it.** Its
+  direction vector is zero, so the determinant test reports it as parallel, and
+  the caller's `null` fallback covers it — `Infer.buildRosetteBranchPoints`, for
+  one, falls back to `up_outer.convexSum( ORIGIN, 0.5 )` and `ORIGIN`. In the
+  port, `Intersect` takes `Segment`s, which cannot have zero length, so the case
+  moves to construction: a caller building a `Segment` from computed points must
+  use `Segment.new/2` and send `{:error, :coincident_points}` down the same path
+  as a `nil` crossing. Reaching for `Segment.new!/2` there would raise where the
+  source quietly took its fallback.
 
 One trap, and it is a 0.3 trap that 1.1.12 removed: 0.3 declared
 `private static final double TOL = 1.0E-9` and never referenced it, with every
@@ -567,6 +576,51 @@ Seamless output in girihelix needs either that same expand-then-fill convention 
 a correct fill. `FillRegion` is otherwise **unchanged** between the releases: five
 lines of difference, all reformatting. So this is not an oversight that was later
 corrected.
+
+### Value types: behaviours the port pins
+
+The geometry value types are small, but several of their behaviours are easy to
+"fix" by accident. The port keeps each one deliberately and pins it in a test, or
+replaces it with a type that rules the case out. The module docs state the
+behaviour; this records where it comes from.
+
+- **`Point`'s shared constants are mutable in the source.** `ORIGIN`, `UNIT_X`
+  and `UNIT_Y` are public singletons that any caller could corrupt through
+  `setX`/`setY`. The port makes them functions returning fresh values.
+- **`Point.normalize` tests for an exactly zero magnitude**, not a tolerant one,
+  and returns the point itself in that case.
+- **`Point.compareTo` orders by squared magnitude with a `TOLERANCE2` band**, not
+  lexicographically. The band makes it non-transitive, so sorting through it is
+  unstable. Faithful, and pinned.
+- **`Point.distToLine` falls through to the second endpoint on a zero-length
+  segment.** The division yields `NaN`, every comparison against `NaN` is false,
+  and the clamp lands on `b`. The port reproduces that value with an explicit
+  guard, because Elixir's `/` raises on a zero divisor.
+- **`Point.parameterizationOnLine` and `Point.center` return `NaN` coordinates**
+  on a zero-length segment and an empty array respectively. The port rules both
+  inputs out by type instead: the first takes a `Segment`, whose endpoints are a
+  positive distance apart, and the second takes a non-empty list.
+- **`Point.recenter` returns its input array unchanged when the centre is
+  null**, aliasing the caller's data. The port always returns a new list, and
+  has no null centre.
+- **`Polygon.pointInPoly` is Bob Stein's even-odd test** (*A Point about
+  Polygons*), with a half-open straddle in x. Its result variable is named
+  `outside` but is true for *inside*. A point exactly on the boundary is
+  classified asymmetrically: the lower and left edges of a shape count as
+  inside, the upper and right edges do not, and three of the unit square's four
+  corners report as outside. `Infer` can reach that case, so it is pinned.
+- **`pointInPoly` also accepts a `start`/`end` slice whose index arithmetic
+  wraps against the slice length**, so any `start > 0` reads the wrong vertices.
+  Every call site passes `start = 0`; the port omits the slice rather than
+  reproduce the bug.
+- **`Polygon.area` divides by the vertex count**, so an empty polygon raises
+  `ArithmeticException`. The port requires at least three vertices instead.
+- **`Transform.compose` computes `self × other`**, so `compose(a, b)` applies `b`
+  first. Nested compositions in the factories therefore read outermost-first in
+  the source and innermost-first at run time. The port keeps the convention so
+  the factory bodies transcribe directly.
+- **`Intersect.getIntersectionParams` packs its parameter pair into a `Point`**,
+  where `(s, t)` is not a location. The port returns a `{s, t}` tuple.
 
 ---
 

@@ -148,6 +148,42 @@ architecture does not foreclose them.
 4. **Colour.** Historical palettes and systems, such as Sanzo Wada's.
 5. **Ornamentation.** Embedding, motifs from nature, traditional patterns.
 6. **Alternative geometries.** The hyperbolic plane and spheres.
+7. **Exact arithmetic, and what it would and would not buy.** The tolerances in
+   `Loose` look like a workaround for floating-point error, so the obvious
+   question is whether arbitrary-precision or exact real arithmetic could remove
+   the module entirely. It could not, and the reason is worth recording before
+   anyone spends a fortnight discovering it.
+
+   The thresholds are **behavioural specification, not numerical hygiene.** A
+   predicate here decides topology — whether two vertices are the same vertex,
+   whether two edges cross, whether a point lies on an edge — and a flipped
+   predicate does not make an answer slightly wrong, it changes how many vertices
+   a map has and which faces exist. Taprats' output defines correctness for this
+   port, so arithmetic that merged a different set of vertices would produce
+   different geometry and leave nothing to verify against.
+
+   Exactness is also unreachable on its own terms. Coordinates come from `cos`,
+   `sin`, `sqrt` and `atan2` — rotations by `2π/n`, `1/cos(π/n)`, normalised
+   vectors — so they are irrational for essentially every `n`. Exact rationals
+   cannot hold them; algebraic numbers can, at the price of equality between two
+   differently-derived expressions becoming an expensive algebraic comparison
+   across the merge's O(n²) intersection sweep.
+
+   The tractable version is narrower, and still post-v1 because both parts change
+   output versus Taprats and so invalidate the golden geometry until it is
+   regenerated:
+
+   - **A scale-invariant parallel test.** `Intersect` decides parallelism with an
+     absolute `|det| < 1e-7` on a quantity with units of length squared, so a map
+     scaled up by 1000 has near-parallel edges declared intersecting. Normalising
+     by the edge lengths fixes a real weakness.
+   - **Exact orientation predicates.** Shewchuk's adaptive-precision
+     `orient2d`/`incircle` make "which side of this line" exact while keeping
+     floats everywhere else — the standard answer in computational geometry. Note
+     this would **not** remove `Loose`: proximity ("are these two vertices the
+     same vertex") is a different question from orientation, and irrational
+     coordinates make a tolerance semantically necessary there rather than a
+     numerical crutch.
 
 ## Decisions taken during brainstorming
 

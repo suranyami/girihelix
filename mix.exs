@@ -168,11 +168,28 @@ defmodule Girihelix.MixProject do
         "format --check-formatted",
         "credo -a --strict"
       ],
-      # Full gate — what the `pre-push` hook runs. Adds sobelow and the suite
-      # under coverage. `dialyzer` is deliberately absent: it is slow and not yet
-      # clean, so it would be red on arrival. Run it by hand with `mix dialyzer`.
+      # Full gate — what the `pre-push` hook runs. Adds dialyzer, sobelow and the
+      # suite under coverage. Dialyzer is deliberately here rather than in
+      # `precommit.fast`: it builds and consults a PLT, which is too slow to pay
+      # on every commit.
+      #
+      # It earns its place because it checks the half the compiler does not. The
+      # compiler checks *call sites*, but against the types it infers from the
+      # callee's patterns, guards and body — a `@spec` alone constrains nothing
+      # at compile time (measured 2026-10-19). A malformed argument to a function
+      # whose head rules it out is a warning, and an error under
+      # `--warnings-as-errors`. The compiler does **not** check a body against its
+      # own spec, nor enforce `@opaque`. Dialyzer does both, which is what makes
+      # types load-bearing rather than decorative. Run it alone with
+      # `mix dialyzer`.
+      #
+      # Measured 2026-10-17 on Elixir 1.20.3 / OTP 29: a cold PLT build is ~57s
+      # and a warm analysis ~3s, with zero errors. The PLT lives under `_build/`
+      # (gitignored) and is keyed to the Erlang and Elixir versions, so a fresh
+      # clone or a version bump pays the 57s once.
       precommit: [
         "precommit.fast",
+        "dialyzer",
         "sobelow --skip",
         "coveralls"
       ]

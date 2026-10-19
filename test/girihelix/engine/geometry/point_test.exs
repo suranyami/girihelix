@@ -2,6 +2,7 @@ defmodule Girihelix.Engine.Geometry.PointTest do
   use ExUnit.Case, async: true
 
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Segment
 
   test "arithmetic is pure and returns new points" do
     a = Point.new(1.0, 2.0)
@@ -115,34 +116,53 @@ defmodule Girihelix.Engine.Geometry.PointTest do
              Point.dist2(degenerate, probe)
   end
 
-  test "parameterization_on_line/3 returns the parameter unclamped" do
-    a = Point.new(0.0, 0.0)
-    b = Point.new(4.0, 0.0)
+  test "parameterization_on_line/2 returns the parameter unclamped" do
+    segment = Segment.new!(Point.new(0.0, 0.0), Point.new(4.0, 0.0))
 
-    assert Point.parameterization_on_line(Point.new(2.0, 0.0), a, b) == {:ok, 0.5}
-    assert Point.parameterization_on_line(Point.new(-4.0, 0.0), a, b) == {:ok, -1.0}
+    assert Point.parameterization_on_line(Point.new(2.0, 0.0), segment) == 0.5
+    assert Point.parameterization_on_line(Point.new(-4.0, 0.0), segment) == -1.0
+    assert Point.parameterization_on_line(Point.new(8.0, 3.0), segment) == 2.0
   end
 
-  # An expected failure is returned as data, not raised, so the caller can
-  # pattern-match it rather than wrapping the call in a rescue.
-  test "parameterization_on_line/3 reports a zero-length segment as data" do
-    degenerate = Point.new(1.0, 1.0)
-
-    assert Point.parameterization_on_line(Point.new(4.0, 5.0), degenerate, degenerate) ==
-             {:error, :degenerate_segment}
+  test "center/1 averages a non-empty list" do
+    assert Point.center([Point.new(0.0, 0.0), Point.new(4.0, 2.0)]) == Point.new(2.0, 1.0)
   end
 
-  test "center/1 averages the non-nil entries" do
-    points = [Point.new(0.0, 0.0), nil, Point.new(4.0, 2.0)]
-    assert Point.center(points) == {:ok, Point.new(2.0, 1.0)}
+  # Review Focus 5: center/1 used to skip nils. It now takes points only, and a
+  # nil is a caller error rather than something to average around.
+  test "center/1 no longer accepts nil" do
+    assert_raise FunctionClauseError, fn -> Point.center([Point.origin(), nil]) end
   end
 
-  # Java returns Point(NaN, NaN) here, because 1.0/0.0 is Infinity and
-  # 0.0 * Infinity is NaN — a coordinate poison that propagates for ever. An
-  # error tuple is a deliberate divergence, and the caller pattern-matches it.
-  test "center/1 reports a list with no real points as data" do
-    assert Point.center([]) == {:error, :no_points}
-    assert Point.center([nil]) == {:error, :no_points}
+  # The non-empty requirement lives in the function head, so the compiler
+  # rejects an empty list where it is written. The second assertion is the
+  # control: a well-typed call must stay silent, or the first proves nothing.
+  test "center/1 rejects an empty list at the call site, not at run time" do
+    assert "Girihelix.Engine.Geometry.Point.center([])"
+           |> compile_diagnostics()
+           |> Enum.any?(
+             &(&1.message =~
+                 "incompatible types given to Girihelix.Engine.Geometry.Point.center/1")
+           )
+
+    assert compile_diagnostics("Girihelix.Engine.Geometry.Point.center([Girihelix.Engine.Geometry.Point.origin()])") ==
+             []
+  end
+
+  test "normalize/1 scales a non-unit vector to unit length" do
+    # Not `== Point.new(0.6, 0.8)`: 3.0 * (1.0 / 5.0) is 0.6000000000000001.
+    unit = Point.normalize(Point.new(3.0, 4.0))
+
+    assert_in_delta unit.x, 0.6, 1.0e-15
+    assert_in_delta unit.y, 0.8, 1.0e-15
+    assert Point.normalize(Point.new(0.0, 2.0)) == Point.new(0.0, 1.0)
+  end
+
+  test "the accessors return their documented values" do
+    assert Point.mag(Point.new(3.0, 4.0)) == 5.0
+    assert Point.unit_x() == Point.new(1.0, 0.0)
+    assert Point.unit_y() == Point.new(0.0, 1.0)
+    assert Point.tolerance() == 1.0e-7
   end
 
   test "recenter/2 subtracts the centre, leaving nils alone" do
@@ -150,5 +170,16 @@ defmodule Girihelix.Engine.Geometry.PointTest do
 
     assert Point.recenter(points, Point.new(1.0, 1.0)) ==
              [Point.new(0.0, 0.0), nil, Point.new(2.0, 2.0)]
+  end
+
+  defp compile_diagnostics(expression) do
+    module = "Girihelix.Engine.Geometry.PointTest.Probe#{System.unique_integer([:positive])}"
+
+    {_result, diagnostics} =
+      Code.with_diagnostics(fn ->
+        Code.compile_string("defmodule #{module} do\n  def run, do: #{expression}\nend\n")
+      end)
+
+    diagnostics
   end
 end

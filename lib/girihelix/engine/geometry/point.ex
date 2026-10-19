@@ -2,20 +2,18 @@ defmodule Girihelix.Engine.Geometry.Point do
   @moduledoc """
   A point in the plane: a pure value with tolerant equality.
 
-  Ported from `geometry/Point.java`. The Java exists in pure and in-place
-  flavours, every in-place one suffixed `D`; the `D` forms are dropped here and
-  every operation returns a new value.
-
   Note that `Point`'s tolerance is **not** `Loose`'s. `Point.equals/2` tests a
   squared distance below `tolerance2/0` (`1e-14`), while `Loose.equals/2` tests
   `1e-10`. Both spell "equals" and they differ by four orders of magnitude in
   squared terms — two in linear terms, a factor of a hundred — so a caller must
   know which one it wants.
 
-  The two functions that can fail, `parameterization_on_line/3` and `center/1`,
-  return `{:ok, result} | {:error, reason}` rather than raising, so a caller
-  pattern-matches instead of rescuing.
+  No function here can fail. Where an argument could be degenerate, the type
+  rules it out instead: `parameterization_on_line/2` takes a `Segment`, whose
+  endpoints are guaranteed distinct, and `center/1` takes a non-empty list.
   """
+
+  alias Girihelix.Engine.Geometry.Segment
 
   @tolerance 1.0e-7
   @tolerance2 @tolerance * @tolerance
@@ -34,9 +32,6 @@ defmodule Girihelix.Engine.Geometry.Point do
 
   @doc "The squared tolerance used by `equals/2`, `1e-14`."
   def tolerance2, do: @tolerance2
-
-  # The Java exposes ORIGIN, UNIT_X and UNIT_Y as shared mutable singletons, which
-  # any caller could corrupt through setX/setY. They are functions here.
 
   @doc "The origin."
   def origin, do: new(0.0, 0.0)
@@ -99,8 +94,8 @@ defmodule Girihelix.Engine.Geometry.Point do
   The unit vector in this direction.
 
   Returns the point **itself** when the magnitude is exactly zero — an exact
-  comparison, not a tolerant one, matching the Java. Never fails, so it returns a
-  point rather than a tuple.
+  comparison, not a tolerant one. Never fails, so it returns a point rather than a
+  tuple.
   """
   @spec normalize(t()) :: t()
   def normalize(p), do: normalized(p, mag(p))
@@ -137,7 +132,7 @@ defmodule Girihelix.Engine.Geometry.Point do
 
   The band makes the relation non-transitive: `a` can compare equal to `b`, and
   `b` to `c`, while `a` compares less than `c`. Sorting through this comparator
-  is therefore unstable, which is faithful to the Java and is pinned by a test.
+  is therefore unstable. That is deliberate, and pinned by a test.
   Note that `Enum.sort/2` wants a boolean predicate, so this comparator is not a
   drop-in for it; see the test file for the conversion.
   """
@@ -160,7 +155,7 @@ defmodule Girihelix.Engine.Geometry.Point do
   The angle swept from `from` to `to` about `vertex`, in `[0, 2pi)`.
 
   Normalised by adding `2pi` until positive rather than by taking a remainder,
-  so a very negative angle iterates — faithful to the Java, and only reachable
+  so a very negative angle iterates — only reachable
   if a caller passes angles differing by many turns.
   """
   @spec sweep(t(), t(), t()) :: float()
@@ -175,25 +170,21 @@ defmodule Girihelix.Engine.Geometry.Point do
   The squared distance from `p` to the **segment** `a`-`b`, not to the infinite
   line through them.
 
-  A point beyond an endpoint gets its distance to that endpoint. A zero-length
-  segment is guarded rather than divided through: Java's division yields `NaN`,
-  every comparison against `NaN` is false, and the clamp falls through to the
-  second endpoint. This returns that same value explicitly — Elixir's `/` raises
-  on a zero divisor, so the guard is required to reproduce it. Always returns a
-  distance, so it is not a tuple.
+  A point beyond an endpoint gets its distance to that endpoint. When `a` and `b`
+  coincide, the result is the squared distance to `b`. Always returns a distance,
+  so it is not a tuple.
   """
   @spec dist2_to_line(t(), t(), t()) :: float()
   def dist2_to_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
     delta = subtract(b, a)
-    to_segment(p, a, b, dot(delta, delta))
+    to_segment(p, a, b, delta, dot(delta, delta))
   end
 
-  # A degenerate segment: reproduce the Java's NaN fall-through to `b`.
-  defp to_segment(p, _a, b, squared_length) when squared_length == 0.0, do: dist2(b, p)
-  defp to_segment(p, a, b, squared_length), do: project(p, a, b, squared_length)
+  # A degenerate segment: the distance to `b`, rather than a division by zero.
+  defp to_segment(p, _a, b, _delta, squared_length) when squared_length == 0.0, do: dist2(b, p)
+  defp to_segment(p, a, b, delta, squared_length), do: project(p, a, b, delta, squared_length)
 
-  defp project(p, a, b, squared_length) do
-    delta = subtract(b, a)
+  defp project(p, a, b, delta, squared_length) do
     t = dot(subtract(p, a), delta) / squared_length
     nearest(p, a, b, t)
   end
@@ -210,52 +201,37 @@ defmodule Girihelix.Engine.Geometry.Point do
   def dist_to_line(p, a, b), do: :math.sqrt(dist2_to_line(p, a, b))
 
   @doc """
-  The unclamped parameter of `p` along the line through `a` and `b`.
+  The unclamped parameter of `p` along the line through `segment`.
 
-  `0.0` at `a`, `1.0` at `b`, negative before `a`, greater than `1.0` past `b`.
-  Returns `{:ok, parameter}`, or `{:error, :degenerate_segment}` for a segment
-  with no length. Java divides through and yields `NaN`, which every caller then
-  reads as "not on the segment"; an error tuple is a deliberate divergence,
-  because a parameter along a segment with no length is meaningless and a silent
-  `NaN` is worse than data the caller can match.
+  `0.0` at the segment's start, `1.0` at its end, negative before the start,
+  greater than `1.0` past the end. Total: a `Segment`'s endpoints are a positive
+  distance apart, so the divisor, its squared length, is never zero.
   """
-  @spec parameterization_on_line(t(), t(), t()) :: {:ok, float()} | {:error, :degenerate_segment}
-  def parameterization_on_line(%__MODULE__{} = p, %__MODULE__{} = a, %__MODULE__{} = b) do
-    delta = subtract(b, a)
-    parameterise(p, a, delta, dot(delta, delta))
+  @spec parameterization_on_line(t(), Segment.t()) :: float()
+  def parameterization_on_line(%__MODULE__{} = p, segment) do
+    a = Segment.from(segment)
+    delta = subtract(Segment.to(segment), a)
+    dot(subtract(p, a), delta) / dot(delta, delta)
   end
-
-  defp parameterise(_p, _a, _delta, squared_length) when squared_length == 0.0, do: {:error, :degenerate_segment}
-
-  defp parameterise(p, a, delta, squared_length), do: {:ok, dot(subtract(p, a), delta) / squared_length}
 
   @doc """
-  The mean of the non-nil points.
+  The mean of a non-empty list of points.
 
-  Returns `{:ok, point}`, or `{:error, :no_points}` when there is nothing to
-  average. The Java divides by a zero count and returns `Point(NaN, NaN)`, which
-  is a silent coordinate poison; an error tuple is a deliberate divergence so the
-  caller matches instead of rescuing.
+  The non-empty requirement is in the function head, so `center([])` is rejected
+  by the compiler where it is written. Every element must be a point: `nil` is
+  not skipped, and raises `FunctionClauseError`.
   """
-  @spec center([t() | nil]) :: {:ok, t()} | {:error, :no_points}
-  def center(points) do
-    {sum, count} =
-      Enum.reduce(points, {origin(), 0}, fn
-        nil, acc -> acc
-        %__MODULE__{} = point, {sum, n} -> {add(sum, point), n + 1}
-      end)
-
-    average(sum, count)
+  @spec center([t(), ...]) :: t()
+  def center([_ | _] = points) do
+    points
+    |> Enum.reduce(origin(), &add/2)
+    |> scale(1.0 / length(points))
   end
-
-  defp average(_sum, 0), do: {:error, :no_points}
-  defp average(sum, count), do: {:ok, scale(sum, 1.0 / count)}
 
   @doc """
   Subtracts `center` from each non-nil point, leaving nils in place.
 
-  Returns a new list. The Java returns its input array unchanged when the centre
-  is null, which aliases the caller's data; that case cannot arise here.
+  Returns a new list; the input is never shared with the result.
   """
   @spec recenter([t() | nil], t()) :: [t() | nil]
   def recenter(points, center) do

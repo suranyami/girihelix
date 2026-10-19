@@ -10,26 +10,24 @@ defmodule Girihelix.Engine.Geometry.Transform do
   `(a, b, d, e)` is the linear part and `(c, f)` the translation, so the mapping
   is `x' = a*x + b*y + c` and `y' = d*x + e*y + f`.
 
-  **Composition order.** `compose(a, b)` applies `b` **first**, then `a`. The Java
-  computes `self x other`, which means every nested composition there reads
-  outermost-first in the source and innermost-first at run time — the reason
-  `rotateAroundPoint` and `reflectThroughLine` look "backwards". The convention
-  is kept deliberately, so the factory bodies could be transcribed rather than
-  re-derived, and it is documented here and tested.
+  **Composition order.** `compose(a, b)` applies `b` **first**, then `a`, so a
+  nested composition reads outermost-first but runs innermost-first — the reason
+  `rotate_around_point/2` and `reflect_through_line/1` look "backwards". The
+  convention is deliberate, documented here and tested.
 
-  Three names differ from the Java, to stay clear of Elixir's `Kernel`:
-  `apply/2` is `apply_to/2`, `apply(double, double)` is `apply_coords/3`, and
-  `translate(Point)` is `translate_point/1`.
+  **Failures are data.** Only `invert/1` and `dist_from_inverted_zero/2` can
+  fail, because a singular transform is representable and has no inverse. They
+  return `{:ok, result} | {:error, :non_invertible}`, and callers thread them
+  with `with`. `invert!/1` is the bang variant for a caller that has already
+  established invertibility.
 
-  **Failures are data.** The functions that can fail — `invert/1`,
-  `reflect_through_line/2`, `match_two_segments/4` and
-  `dist_from_inverted_zero/2` — return `{:ok, result} | {:error, reason}`, and
-  callers thread them with `with`. `invert!/1` is the bang escape hatch for a
-  caller that has already established invertibility; the Java's
-  `IllegalArgumentException` maps to `{:error, :non_invertible}`.
+  The constructors built from segments — `reflect_through_line/1` and
+  `match_two_segments/2` — are total: a `Segment`'s endpoints are distinct, so
+  the transform they invert always has an inverse.
   """
 
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Segment
 
   @enforce_keys [:a, :b, :c, :d, :e, :f]
   defstruct [:a, :b, :c, :d, :e, :f]
@@ -43,7 +41,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
           f: float()
         }
 
-  @type reason :: :non_invertible | :degenerate_line
+  @type reason :: :non_invertible
 
   @doc "Builds a transform from its six scalars."
   @spec new(number(), number(), number(), number(), number(), number()) :: t()
@@ -59,8 +57,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
   The all-zero matrix, which collapses everything to the origin.
 
   It is **not** a null transform: its determinant is zero, so `invert/1` reports
-  `{:error, :non_invertible}` on it. The Java exposes this as the shared mutable
-  constant `ZERO`; here it is a function, so no caller can corrupt it for another.
+  `{:error, :non_invertible}` on it.
   """
   @spec zero() :: t()
   def zero, do: scale(0.0)
@@ -77,7 +74,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @spec translate(number(), number()) :: t()
   def translate(x, y), do: new(1.0, 0.0, x, 0.0, 1.0, y)
 
-  @doc "Translation by a point's coordinates. The point is read, not kept."
+  @doc "Translation by a point's coordinates."
   @spec translate_point(Point.t()) :: t()
   def translate_point(%Point{x: x, y: y}), do: translate(x, y)
 
@@ -104,22 +101,18 @@ defmodule Girihelix.Engine.Geometry.Transform do
   end
 
   @doc """
-  Reflection in the line through `p` and `q`.
+  Reflection in the line through `segment`.
 
-  Maps the line onto the unit x interval, flips y, and maps back. Returns
-  `{:error, :degenerate_line}` when the two points coincide, because the line is
-  then undefined — one of the few places the Java validates anything, and it does
-  so by throwing.
+  Maps the line onto the unit x interval, flips y, and maps back. Total: the
+  segment's endpoints are distinct, so the line always exists.
   """
-  @spec reflect_through_line(Point.t(), Point.t()) :: {:ok, t()} | {:error, :degenerate_line}
-  def reflect_through_line(p, q) when p === q, do: {:error, :degenerate_line}
+  @spec reflect_through_line(Segment.t()) :: t()
+  def reflect_through_line(segment) do
+    onto_line = match_line_segment(Segment.from(segment), Segment.to(segment))
 
-  def reflect_through_line(p, q) do
-    onto_line = match_line_segment(p, q)
-
-    with {:ok, inverse} <- invert(onto_line) do
-      {:ok, compose(onto_line, compose(scale(1.0, -1.0), inverse))}
-    end
+    # The determinant of `onto_line` is the segment's squared length, which a
+    # Segment guarantees is positive, so this inverse always exists.
+    compose(onto_line, compose(scale(1.0, -1.0), invert!(onto_line)))
   end
 
   @doc """
@@ -158,10 +151,11 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   The inverse transform, or `{:error, :non_invertible}`.
 
-  The Java tests the determinant for **exact** equality with `0.0`, not against a
+  Tests the determinant for **exact** equality with `0.0`, not against a
   tolerance, so a matrix with a determinant of `1e-300` inverts to enormous values
-  rather than failing. That behaviour is kept: the test here is `determinant == 0.0`
-  too. Use `invert!/1` when the caller already knows the transform is invertible.
+  rather than failing. The test here is `determinant == 0.0`.
+
+  Use `invert!/1` when the caller already knows the transform is invertible.
   """
   @spec invert(t()) :: {:ok, t()} | {:error, :non_invertible}
   def invert(%__MODULE__{} = transform), do: inverted(transform, determinant(transform))
@@ -182,9 +176,6 @@ defmodule Girihelix.Engine.Geometry.Transform do
 
   @doc """
   `invert/1` for a caller that has established invertibility, raising otherwise.
-
-  The bang variant is the sanctioned escape hatch: a bang function raising is
-  Elixir's own convention, not an inherited Java idiom.
   """
   @spec invert!(t()) :: t()
   def invert!(transform) do
@@ -211,26 +202,28 @@ defmodule Girihelix.Engine.Geometry.Transform do
   end
 
   @doc """
-  The transform carrying the segment `p1`-`q1` onto `p2`-`q2`.
+  The transform carrying segment `source` onto segment `target`.
 
-  Maps `p1` to `p2` and `q1` to `q2`. Both factors are similarities parameterised
-  `p` to `q`, so the result never flips either. Reports
-  `{:error, :non_invertible}` when the source segment has no length.
+  Maps the start of `source` to the start of `target`, and its end to the end of
+  `target`. Both factors are similarities, so the result never flips. Total: the
+  source segment has positive length, so its matching transform is invertible.
   """
-  @spec match_two_segments(Point.t(), Point.t(), Point.t(), Point.t()) ::
-          {:ok, t()} | {:error, :non_invertible}
-  def match_two_segments(p1, q1, p2, q2) do
-    with {:ok, inverse} <- p1 |> match_line_segment(q1) |> invert() do
-      {:ok, compose(match_line_segment(p2, q2), inverse)}
-    end
+  @spec match_two_segments(Segment.t(), Segment.t()) :: t()
+  def match_two_segments(source, target) do
+    # The determinant is the source segment's squared length, which a Segment
+    # guarantees is positive, so this inverse always exists.
+    inverse = source |> Segment.from() |> match_line_segment(Segment.to(source)) |> invert!()
+
+    compose(match_line_segment(Segment.from(target), Segment.to(target)), inverse)
   end
 
   @doc """
   The distance between the images of `(v, 0)` and `(0, 0)`.
 
-  A renderer utility in the Java, used to scale stroke widths with zoom. The
-  geometry core does not need it, but the SVG emitter will. Measures through the
-  inverse, so it reports `{:error, :non_invertible}` for a singular transform.
+  A renderer utility used to scale stroke widths with zoom.
+
+  The geometry core does not need it, but the SVG emitter will. Total: it
+  measures through the transform itself, not its inverse.
   """
   @spec dist_from_zero(t(), number()) :: float()
   def dist_from_zero(transform, v) do
@@ -243,8 +236,7 @@ defmodule Girihelix.Engine.Geometry.Transform do
   @doc """
   `dist_from_zero/2` measured through the inverse.
 
-  Returns `{:error, :non_invertible}` for a singular transform, since the Java's
-  `distFromInvertedZero` inverts without checking.
+  Returns `{:error, :non_invertible}` for a singular transform.
   """
   @spec dist_from_inverted_zero(t(), number()) :: {:ok, float()} | {:error, :non_invertible}
   def dist_from_inverted_zero(transform, v) do
