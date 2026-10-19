@@ -76,6 +76,13 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     assert {:ok, _triangle} = Polygon.new([Point.origin(), Point.unit_x(), Point.unit_y()])
   end
 
+  # A recentered list can carry nils; the constructor must refuse it rather than
+  # hand back a polygon whose measures then crash.
+  test "new/1 refuses a list containing anything but points" do
+    assert Polygon.new([Point.origin(), Point.unit_x(), nil]) == {:error, :not_points}
+    assert Polygon.new([1, 2, 3]) == {:error, :not_points}
+  end
+
   test "new!/1 raises on fewer than three vertices" do
     assert_raise ArgumentError, ~r/too_few_vertices/, fn -> Polygon.new!([Point.origin()]) end
   end
@@ -88,6 +95,7 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
 
     assert Polygon.area(collapsed) == 0.0
     assert Polygon.arc_length(collapsed, true) == 0.0
+    assert Polygon.arc_length(collapsed, false) == 0.0
     refute Polygon.contains_point?(collapsed, point)
   end
 

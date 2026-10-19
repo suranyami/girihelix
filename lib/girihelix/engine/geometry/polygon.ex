@@ -20,20 +20,24 @@ defmodule Girihelix.Engine.Geometry.Polygon do
 
   @opaque t :: %__MODULE__{points: [Point.t(), ...]}
 
-  @type reason :: :too_few_vertices | :out_of_range
+  @type reason :: :too_few_vertices | :not_points | :out_of_range
 
   @doc """
-  Builds a polygon from its vertices, in order, or reports
-  `{:error, :too_few_vertices}` for fewer than three.
+  Builds a polygon from its vertices, in order. Reports
+  `{:error, :too_few_vertices}` for fewer than three, and `{:error, :not_points}`
+  when any element is not a `Point` — a `nil` from `Point.recenter/2`, say.
 
   The polygon is closed implicitly — the edge from the last vertex back to the
   first is part of it — so the first vertex must not be repeated at the end.
   Distinctness of the vertices is not checked: deciding which points are "the
   same" needs a tolerance, and that choice belongs to the caller.
   """
-  @spec new([Point.t()]) :: {:ok, t()} | {:error, :too_few_vertices}
-  def new([_, _, _ | _] = points), do: {:ok, %__MODULE__{points: points}}
+  @spec new([Point.t()]) :: {:ok, t()} | {:error, :too_few_vertices | :not_points}
+  def new([_, _, _ | _] = points), do: checked(points, Enum.all?(points, &is_struct(&1, Point)))
   def new(points) when is_list(points), do: {:error, :too_few_vertices}
+
+  defp checked(points, true), do: {:ok, %__MODULE__{points: points}}
+  defp checked(_points, false), do: {:error, :not_points}
 
   @doc "`new/1` for a caller that knows it has three or more vertices, raising otherwise."
   @spec new!([Point.t()]) :: t()

@@ -81,11 +81,9 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   A hard-coded parameter-space slack, not a distance, so it is scale invariant —
   unlike the determinant test in `get_intersection_params/2`.
 
-  Nothing in the reference tree calls this or `get_near_intersection/2`. The only
-  entry points the figures and `Infer` use are `get_intersection/2` and
-  `get_true_intersection/2`. The near variant is ported because it is part of the
-  source's public surface and the six inference strategies outside v1 are its
-  intended consumers, not because any v1 caller needs it.
+  No v1 caller uses this or `get_near_intersection/2`: the figures and `Infer`
+  use `get_intersection/2` and `get_true_intersection/2`. The near variant exists
+  for the inference strategies outside v1, which are its intended consumers.
   """
   @spec stay_near_segments({float(), float()} | nil) :: {float(), float()} | nil
   def stay_near_segments(nil), do: nil
@@ -116,7 +114,8 @@ defmodule Girihelix.Engine.Geometry.Intersect do
   @doc """
   The crossing, excluding one that lands at the endpoints of **both** segments.
 
-  This is `mergeMap`'s variant. Two edges meeting at a shared vertex cross there,
+  This is the variant the planar map's weld uses. Two edges meeting at a shared
+  vertex cross there,
   with `s` and `t` both near `0` or both near `1`; discarding that case is what
   stops the shared vertex being split into two.
 
