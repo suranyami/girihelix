@@ -851,8 +851,8 @@ test "the default scenario colours two faces" do
   frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
   assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-  assert Enum.any?(ops, &match?({:polygon, _, :fill, [fill: "black" | _]}, &1))
-  assert Enum.any?(ops, &match?({:polygon, _, :fill, [fill: "white" | _]}, &1))
+  assert Enum.any?(ops, &match?({:polygon, _, :fill, [{:fill, "black"} | _]}, &1))
+  assert Enum.any?(ops, &match?({:polygon, _, :fill, [{:fill, "white"} | _]}, &1))
   assert {"black", "1"} in rows
   assert {"white", "1"} in rows
 end
