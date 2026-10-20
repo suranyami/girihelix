@@ -194,9 +194,9 @@ defmodule Girihelix.Engine.FillRegion do
 
   defp lower_first(%Point{x: fx, y: fy}, %Point{x: tx, y: ty}), do: {fx, fy, tx, ty}
 
-  # Java accumulates the running x one row at a time rather than evaluating
-  # `x0 + k * slope`, and the result is then floored, so the accumulation is
-  # reproduced exactly.
+  # The running x is accumulated one row at a time, not evaluated as
+  # `x0 + k * slope`: the two differ in the last bits, and the result is
+  # floored, so the accumulation is the faithful one.
   defp walk_rows(iy, iym, x, y, slope, {fx, fy, tx, ty}) do
     {rows, _last} =
       Enum.map_reduce(iy..iym, {x, y}, fn i, {x, y} ->

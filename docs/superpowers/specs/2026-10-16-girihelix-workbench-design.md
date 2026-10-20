@@ -352,7 +352,7 @@ seven plans, and two boundaries move.
 
 Plan 1's remainder, after `Steps` and the geometry value types, became Plans 1b
 (`PlanarMap` and the Taprats reference harness) and 1c (`Faces`, `FillRegion` and
-`Rect`).
+`Rect`). **Plan 1 is complete as of 2026-10-20.**
 
 `Steps` lands in Plan 1 rather than Plan 2 because it decides how Plan 1's
 algorithms are written; introducing it later would mean rewriting them. The SVG

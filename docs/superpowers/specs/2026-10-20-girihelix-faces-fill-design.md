@@ -1,9 +1,9 @@
 # Faces, fill region and rect — design (Plan 1c)
 
 **Date:** 2026-10-20
-**Status:** written, awaiting review. The user opted out of brainstorming
-questions, so every decision not inherited from earlier designs is marked
-"my call".
+**Status:** implemented 2026-10-20 (Plan 1c). The user opted out of
+brainstorming questions, so every decision not inherited from earlier designs
+is marked "my call".
 **Related:** [planar map design](2026-10-20-girihelix-planar-map-design.md) ·
 [engine types design](2026-10-17-girihelix-engine-types-design.md) ·
 [workbench design](2026-10-16-girihelix-workbench-design.md) ·
