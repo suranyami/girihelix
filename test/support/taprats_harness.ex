@@ -15,7 +15,9 @@ defmodule Girihelix.TapratsHarness do
   to return an error tuple to.
   """
 
+  alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
+  alias Girihelix.Engine.PlanarMap
 
   @tolerance 1.0e-12
   @fixtures_dir "reference/oracle/fixtures"
@@ -45,6 +47,64 @@ defmodule Girihelix.TapratsHarness do
     dump = @fixtures_dir |> Path.join(name <> ".dump") |> File.read!() |> parse_dump()
     {ops, dump}
   end
+
+  # -- running a script -------------------------------------------------------
+
+  @doc """
+  Runs a parsed script against `Girihelix.Engine.PlanarMap` and returns the dump
+  of the map named by the final `dump` op. Per-map vertex indices refer to the
+  results of that map's `vertex` ops, in order. Only `vertex`, `edge` and `dump`
+  are supported so far; any other op raises `ArgumentError`.
+  """
+  @spec run_script([op()]) :: dump()
+  def run_script(ops), do: run(ops, %{})
+
+  defp run([{:dump, name}], state), do: state |> state_of(name) |> Map.fetch!(:map) |> dump()
+  defp run([op | rest], state), do: run(rest, step(op, state))
+
+  defp step({:vertex, name, x, y}, state) do
+    %{map: map, handles: handles} = state_of(state, name)
+    {map, vertex} = PlanarMap.insert_vertex(map, Point.new(x, y))
+    Map.put(state, name, %{map: map, handles: handles ++ [vertex]})
+  end
+
+  defp step({:edge, name, i, j}, state) do
+    %{map: map, handles: handles} = state_of(state, name)
+    map = PlanarMap.insert_edge!(map, Enum.fetch!(handles, i), Enum.fetch!(handles, j))
+    Map.put(state, name, %{map: map, handles: handles})
+  end
+
+  defp step(op, _state), do: raise(ArgumentError, "script op not yet supported: #{inspect(op)}")
+
+  defp state_of(state, name), do: Map.get(state, name, %{map: PlanarMap.new(), handles: []})
+
+  @doc """
+  The dump of a map: vertices and edges in the map's order, edges as vertex-order
+  indices, rings as edge-order indices from each ring's head. `verify` is
+  `:unchecked`.
+  """
+  @spec dump(PlanarMap.t()) :: dump()
+  def dump(map) do
+    vertices = PlanarMap.vertices(map)
+    vertex_index = index_of(vertices)
+    edge_index = index_of(PlanarMap.edges(map))
+
+    %{
+      vertices: Enum.map(vertices, &(map |> PlanarMap.position!(&1) |> then(fn p -> {p.x, p.y} end))),
+      edges:
+        Enum.map(PlanarMap.edges(map), fn edge ->
+          {v1, v2} = PlanarMap.endpoints!(map, edge)
+          {Map.fetch!(vertex_index, v1), Map.fetch!(vertex_index, v2)}
+        end),
+      rings:
+        Enum.map(vertices, fn v ->
+          map |> PlanarMap.ring!(v) |> Enum.map(&Map.fetch!(edge_index, &1))
+        end),
+      verify: :unchecked
+    }
+  end
+
+  defp index_of(handles), do: handles |> Enum.with_index() |> Map.new()
 
   # -- script parsing ---------------------------------------------------------
 

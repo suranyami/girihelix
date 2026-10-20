@@ -1,0 +1,209 @@
+defmodule Girihelix.Engine.PlanarMap do
+  @moduledoc """
+  A planar straight-line graph: vertices at points, edges between them, and for
+  every vertex a ring of its edges in counter-clockwise order.
+
+  A vertex or an edge is a `non_neg_integer()` handle. Handles are never reused
+  within a map, and only the map holds the state behind them: a caller keeps
+  handles, never positions or rings. Every function that takes a handle returns
+  `{:ok, result}` or `{:error, :unknown_vertex | :unknown_edge}`, and has a `!`
+  twin that raises `ArgumentError` naming the reason.
+
+  The type is opaque, and only this module builds, matches or updates it.
+
+  The map's invariant is that no two edges cross and no vertex lies on an edge it
+  does not end. Keeping it is the caller's precondition: `insert_edge/3` is
+  unchecked, so it accepts a crossing edge, a parallel edge, and an edge from a
+  vertex to itself (which appears twice in that vertex's ring, at angle `0.5`).
+
+  `vertices/1` and `edges/1` list handles in a fixed order: vertices
+  lexicographically by position, edges by minimum x. Both orders compare with a
+  `1.0e-7` tolerance, and a tolerance comparator is not transitive. Points are
+  the same vertex when both coordinate differences are under `1.0e-7`, a square
+  window. The shortcomings that follow from this and from the map's other
+  deliberate behaviours are recorded in `docs/algorithm-analysis.md`.
+  """
+
+  alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.PlanarMap.Order
+  alias Girihelix.Engine.PlanarMap.Ring
+
+  @enforce_keys [:vertices, :edges, :vertex_order, :edge_order, :next]
+  defstruct [:vertices, :edges, :vertex_order, :edge_order, :next]
+
+  @opaque t :: %__MODULE__{
+            vertices: %{vertex() => %{pos: Point.t(), ring: Ring.t()}},
+            edges: %{edge() => {vertex(), vertex()}},
+            vertex_order: [vertex()],
+            edge_order: [edge()],
+            next: non_neg_integer()
+          }
+
+  @type vertex :: non_neg_integer()
+  @type edge :: non_neg_integer()
+  @type reason :: :unknown_vertex | :unknown_edge
+
+  @doc "An empty map."
+  @spec new() :: t()
+  def new, do: %__MODULE__{vertices: %{}, edges: %{}, vertex_order: [], edge_order: [], next: 0}
+
+  # -- insertion --------------------------------------------------------------
+
+  @doc """
+  The vertex at `point`: the existing one when a vertex lies within the
+  `1.0e-7` square window of it, otherwise a new vertex.
+  """
+  @spec insert_vertex(t(), Point.t()) :: {t(), vertex()}
+  def insert_vertex(%__MODULE__{} = map, %Point{} = point) do
+    entries = Enum.map(map.vertex_order, &{&1, map.vertices[&1].pos})
+    place_vertex(Order.find_or_insert(entries, point), map, point)
+  end
+
+  defp place_vertex({:found, vertex}, map, _point), do: {map, vertex}
+
+  defp place_vertex({:insert_at, index}, map, point) do
+    vertex = map.next
+
+    {%{
+       map
+       | vertices: Map.put(map.vertices, vertex, %{pos: point, ring: []}),
+         vertex_order: List.insert_at(map.vertex_order, index, vertex),
+         next: vertex + 1
+     }, vertex}
+  end
+
+  @doc """
+  Adds an edge between two vertices, without any check of the result: it may
+  cross another edge, repeat one, or join a vertex to itself.
+  """
+  @spec insert_edge(t(), vertex(), vertex()) :: {:ok, t()} | {:error, :unknown_vertex}
+  def insert_edge(%__MODULE__{} = map, v1, v2) do
+    with {:ok, p1} <- position(map, v1),
+         {:ok, p2} <- position(map, v2) do
+      {:ok, add_edge(map, v1, p1, v2, p2)}
+    end
+  end
+
+  @doc "`insert_edge/3`, raising `ArgumentError` on an unknown vertex."
+  @spec insert_edge!(t(), vertex(), vertex()) :: t()
+  def insert_edge!(map, v1, v2), do: map |> insert_edge(v1, v2) |> unwrap!()
+
+  defp add_edge(map, v1, p1, v2, p2) do
+    edge = map.next
+    keys = Enum.map(map.edge_order, &min_x(map, &1))
+    index = Order.edge_insert_index(keys, min(p1.x, p2.x))
+
+    %{
+      map
+      | edges: Map.put(map.edges, edge, {v1, v2}),
+        edge_order: List.insert_at(map.edge_order, index, edge),
+        next: edge + 1
+    }
+    |> register(v1, {edge, Ring.angle(p1, p2)})
+    |> register(v2, {edge, Ring.angle(p2, p1)})
+  end
+
+  defp register(map, vertex, entry) do
+    %{
+      map
+      | vertices: Map.update!(map.vertices, vertex, &%{&1 | ring: Ring.insert(&1.ring, entry)})
+    }
+  end
+
+  defp min_x(map, edge) do
+    {v1, v2} = Map.fetch!(map.edges, edge)
+    min(map.vertices[v1].pos.x, map.vertices[v2].pos.x)
+  end
+
+  # -- queries ----------------------------------------------------------------
+
+  @doc "The number of vertices."
+  @spec num_vertices(t()) :: non_neg_integer()
+  def num_vertices(%__MODULE__{vertices: vertices}), do: map_size(vertices)
+
+  @doc "The number of edges."
+  @spec num_edges(t()) :: non_neg_integer()
+  def num_edges(%__MODULE__{edges: edges}), do: map_size(edges)
+
+  @doc "Every vertex, in the map's vertex order."
+  @spec vertices(t()) :: [vertex()]
+  def vertices(%__MODULE__{vertex_order: order}), do: order
+
+  @doc "Every edge, in the map's edge order."
+  @spec edges(t()) :: [edge()]
+  def edges(%__MODULE__{edge_order: order}), do: order
+
+  @doc "Where `vertex` lies."
+  @spec position(t(), vertex()) :: {:ok, Point.t()} | {:error, :unknown_vertex}
+  def position(map, vertex), do: map |> fetch_vertex(vertex) |> map_ok(fn %{pos: pos} -> pos end)
+
+  @doc "`position/2`, raising `ArgumentError` on an unknown vertex."
+  @spec position!(t(), vertex()) :: Point.t()
+  def position!(map, vertex), do: map |> position(vertex) |> unwrap!()
+
+  @doc "The two endpoints of `edge`, in the order it was inserted with."
+  @spec endpoints(t(), edge()) :: {:ok, {vertex(), vertex()}} | {:error, :unknown_edge}
+  def endpoints(%__MODULE__{edges: edges}, edge), do: edges |> Map.fetch(edge) |> tag_error(:unknown_edge)
+
+  @doc "`endpoints/2`, raising `ArgumentError` on an unknown edge."
+  @spec endpoints!(t(), edge()) :: {vertex(), vertex()}
+  def endpoints!(map, edge), do: map |> endpoints(edge) |> unwrap!()
+
+  @doc "The edges at `vertex` in counter-clockwise order, starting from the ring's head."
+  @spec ring(t(), vertex()) :: {:ok, [edge()]} | {:error, :unknown_vertex}
+  def ring(map, vertex), do: map |> fetch_vertex(vertex) |> map_ok(fn %{ring: ring} -> Ring.edges(ring) end)
+
+  @doc "`ring/2`, raising `ArgumentError` on an unknown vertex."
+  @spec ring!(t(), vertex()) :: [edge()]
+  def ring!(map, vertex), do: map |> ring(vertex) |> unwrap!()
+
+  @doc """
+  The first edge in `vertex`'s ring, from the head, whose far end is `other`, or
+  `nil` when there is none.
+  """
+  @spec neighbour(t(), vertex(), vertex()) :: {:ok, edge() | nil} | {:error, :unknown_vertex}
+  def neighbour(%__MODULE__{} = map, vertex, other) do
+    with {:ok, ring} <- ring(map, vertex) do
+      {:ok, Enum.find(ring, &(far_end(map.edges[&1], vertex) == other))}
+    end
+  end
+
+  @doc "`neighbour/3`, raising `ArgumentError` on an unknown vertex."
+  @spec neighbour!(t(), vertex(), vertex()) :: edge() | nil
+  def neighbour!(map, vertex, other), do: map |> neighbour(vertex, other) |> unwrap!()
+
+  defp far_end({vertex, other}, vertex), do: other
+  defp far_end({other, _second}, _vertex), do: other
+
+  @doc """
+  The edges either side of `edge` in `vertex`'s ring, as `{before, after}`, or
+  `nil` when the ring does not hold `edge`. In a ring of one or two edges both
+  sides are the same edge.
+  """
+  @spec before_and_after(t(), vertex(), edge()) ::
+          {:ok, {edge(), edge()} | nil} | {:error, reason()}
+  def before_and_after(%__MODULE__{} = map, vertex, edge) do
+    with {:ok, %{ring: ring}} <- fetch_vertex(map, vertex),
+         {:ok, _endpoints} <- endpoints(map, edge) do
+      {:ok, Ring.before_and_after(ring, edge)}
+    end
+  end
+
+  @doc "`before_and_after/3`, raising `ArgumentError` on an unknown handle."
+  @spec before_and_after!(t(), vertex(), edge()) :: {edge(), edge()} | nil
+  def before_and_after!(map, vertex, edge), do: map |> before_and_after(vertex, edge) |> unwrap!()
+
+  # -- helpers ----------------------------------------------------------------
+
+  defp fetch_vertex(%__MODULE__{vertices: vertices}, vertex),
+    do: vertices |> Map.fetch(vertex) |> tag_error(:unknown_vertex)
+
+  defp tag_error({:ok, _value} = ok, _reason), do: ok
+  defp tag_error(:error, reason), do: {:error, reason}
+
+  defp map_ok({:ok, value}, fun), do: {:ok, fun.(value)}
+  defp map_ok({:error, _reason} = error, _fun), do: error
+
+  defp unwrap!({:ok, value}), do: value
+  defp unwrap!({:error, reason}), do: raise(ArgumentError, "planar map: #{reason}")
+end
