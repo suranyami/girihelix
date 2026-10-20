@@ -14,11 +14,12 @@ defmodule GirihelixWeb.Workbench.Registry do
 
   alias GirihelixWeb.Workbench.Exhibits.Intersect
   alias GirihelixWeb.Workbench.Exhibits.Loose
+  alias GirihelixWeb.Workbench.Exhibits.PlanarMap
   alias GirihelixWeb.Workbench.Exhibits.Point
   alias GirihelixWeb.Workbench.Exhibits.Polygon
   alias GirihelixWeb.Workbench.Exhibits.Transform
 
-  @exhibits [Loose, Point, Transform, Intersect, Polygon]
+  @exhibits [Loose, Point, Transform, Intersect, Polygon, PlanarMap]
 
   @doc "Every registered exhibit, in display order."
   @spec exhibits() :: [module()]
