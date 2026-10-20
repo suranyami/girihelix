@@ -51,7 +51,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
 
   @impl true
   @spec slug() :: String.t()
-  def slug, do: "planar-map"
+  def slug, do: "map"
 
   @impl true
   @spec title() :: String.t()

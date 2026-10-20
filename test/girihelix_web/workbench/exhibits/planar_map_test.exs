@@ -26,7 +26,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMapTest do
   end
 
   test "identifies itself, declares a scenario and pins its viewport" do
-    assert Exhibit.slug() == "planar-map"
+    assert Exhibit.slug() == "map"
     assert Exhibit.category() == :geometry
     assert Exhibit.title() != ""
     assert Exhibit.summary() != ""
