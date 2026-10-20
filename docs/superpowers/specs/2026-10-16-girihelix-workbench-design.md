@@ -234,7 +234,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   def params do
     [
       %Param{name: :n, type: :integer, range: 3..24, default: 8, doc: "rotational order"},
-      %Param{name: :d, type: :float, range: 1.0..10.0, step: 0.1, default: 3.0, doc: "skip"},
+      %Param{name: :d, type: :float, range: 1..10, step: 0.1, default: 3.0, doc: "skip"},
       %Param{name: :s, type: :integer, range: 1..6, default: 2, doc: "steps out"}
     ]
   end

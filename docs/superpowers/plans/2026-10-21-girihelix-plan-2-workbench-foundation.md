@@ -327,7 +327,9 @@ Commit message: `feat: serialize draw ops to SVG`.
 
 - `#GirihelixWeb.Workbench.Param{}` with fields `:name` (atom), `:type`
   (`:integer | :float | :boolean | :enum`), `:default`, `:doc`, `:range`
-  (`Range.t()` of numbers or nil), `:step` (number or nil), `:options`
+  (an integer `Range.t()` or nil — Elixir 1.20.3 ranges reject float bounds,
+  so a `:float` param uses an integer range and a float `:step`, and its
+  decoded values are coerced to floats), `:step` (number or nil), `:options`
   (`[atom]` for `:enum`, nil otherwise).
 - `decode([Param.t()], map()) :: %{atom() => integer() | float() | boolean() | atom()}`
   — string-keyed input; unknown keys are ignored; missing or invalid values
@@ -342,7 +344,7 @@ Commit message: `feat: serialize draw ops to SVG`.
 ```elixir
 @params [
   %Param{name: :n, type: :integer, range: 3..24, default: 8, doc: "order"},
-  %Param{name: :d, type: :float, range: 1.0..10.0, step: 0.1, default: 3.0, doc: "skip"},
+  %Param{name: :d, type: :float, range: 1..10, step: 0.1, default: 3.0, doc: "skip"},
   %Param{name: :on, type: :boolean, default: true, doc: "toggle"},
   %Param{name: :shape, type: :enum, options: [:square, :triangle], default: :square, doc: "shape"}
 ]
@@ -512,7 +514,7 @@ Commit message: `feat: add the exhibit behaviour, registry and Loose exhibit`.
 
 **Interfaces:**
 
-- Params: `x` and `y`, floats in `-5.0..5.0`, step `0.1`, defaults `3.0` and
+- Params: `x` and `y`, floats in `-5..5`, step `0.1`, defaults `3.0` and
   `4.0`.
 - `initial/1` returns the params map; `steps/1` is one `:build` identity step.
 - `draw/2` is `{:both, ops, rows}`:
@@ -566,7 +568,7 @@ Commit message: `feat: add the Point workbench exhibit`.
 
 **Interfaces:**
 
-- Params: `a`, `b`, `c`, `d`, `e`, `f` (floats in `-2.0..2.0`, step `0.1`;
+- Params: `a`, `b`, `c`, `d`, `e`, `f` (floats in `-2..2`, step `0.1`;
   defaults `1.0, 0.0, 1.0, 0.0, 1.0, 0.0`) and `shape` (enum
   `[:square, :triangle]`, default `:square`).
 - The shape is the unit square `(0,0), (1,0), (1,1), (0,1)` or the triangle
@@ -619,7 +621,7 @@ Commit message: `feat: add the Transform workbench exhibit`.
 
 **Interfaces:**
 
-- Params: `x1, y1, x2, y2, x3, y3, x4, y4`, floats in `-5.0..5.0`, step `0.1`,
+- Params: `x1, y1, x2, y2, x3, y3, x4, y4`, floats in `-5..5`, step `0.1`,
   defaults `0.0, 0.0, 4.0, 0.0, 1.0, -2.0, 1.0, 2.0`.
 - `initial/1` is the params map. The single `:build` step calls
   `Segment.new!/2` for both segments (raising `ArgumentError` on coincident
@@ -679,7 +681,7 @@ Commit message: `feat: add the Intersect workbench exhibit`.
 **Interfaces:**
 
 - Params: `shape` (enum `[:square, :triangle, :star]`, default `:square`),
-  `probe_x` and `probe_y` (floats `-2.0..2.0`, step `0.1`, defaults `0.5`).
+  `probe_x` and `probe_y` (floats `-2..2`, step `0.1`, defaults `0.5`).
 - Shapes: unit square `(0,0), (1,0), (1,1), (0,1)`; triangle
   `(0,0), (1,0), (0,1)`; a five-point star centred at `(0.5, 0.5)` with outer
   radius `0.5` and inner radius `0.2` (generate the ten points with
@@ -875,8 +877,8 @@ Commit message: `feat: add the Faces workbench exhibit`.
 
 **Interfaces:**
 
-- Params: `width`, `height` (floats `1.0..10.0`, step `0.5`, defaults `4.0`
-  and `3.0`); `t1x`, `t1y`, `t2x`, `t2y` (floats `-2.0..2.0`, step `0.1`,
+- Params: `width`, `height` (floats `1..10`, step `0.5`, defaults `4.0`
+  and `3.0`); `t1x`, `t1y`, `t2x`, `t2y` (floats `-2..2`, step `0.1`,
   defaults `1.0, 0.0, 0.0, 1.0`).
 - The region is `(0,0), (width,0), (width,height), (0,height)`.
 - `initial/1` is `FillRegion.start(region, t1, t2)`; `steps/1` is
@@ -954,8 +956,8 @@ Commit message: `feat: add the FillRegion workbench exhibit`.
     `"next"`, `"last"`; a `type="range"` input named `"frame"` with
     `phx-change="go"`, `min="0"`, `max={count - 1}`, `value={index}`.
   - The current step's label and doc, or "Parameters" for frame zero.
-  - When `failure` is set, a banner with the failing step's label and the
-    exception message.
+  - When `failure` is set, a banner beginning `Step failed:` with the failing
+    step's label and the exception message.
 
 The component tests use `ExUnit.Case, async: true` and import
 `Phoenix.LiveViewTest` for `render_component/2`.
