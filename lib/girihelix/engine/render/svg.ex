@@ -73,11 +73,23 @@ defmodule Girihelix.Engine.Render.Svg do
   end
 
   defp element({:polygon, vertices, :fill, opts}, viewport) do
-    polygon(vertices, viewport, opts, Keyword.get(opts, :fill, @default_stroke), "none")
+    polygon(
+      vertices,
+      viewport,
+      opts,
+      Keyword.get(opts, :fill, @default_stroke),
+      Keyword.get(opts, :stroke, "none")
+    )
   end
 
   defp element({:polygon, vertices, :stroke, opts}, viewport) do
-    polygon(vertices, viewport, opts, "none", Keyword.get(opts, :stroke, @default_stroke))
+    polygon(
+      vertices,
+      viewport,
+      opts,
+      Keyword.get(opts, :fill, "none"),
+      Keyword.get(opts, :stroke, @default_stroke)
+    )
   end
 
   defp element({:point, at, radius, opts}, viewport) do

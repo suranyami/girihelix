@@ -48,6 +48,20 @@ defmodule Girihelix.Engine.Render.SvgTest do
     assert Svg.render([], vp, class: "w-full") =~ ~s(class="w-full")
   end
 
+  test "polygon :stroke mode uses the stroke defaults" do
+    vp = %Viewport{left: 0.0, top: 0.0, width: 1.0, scale: 1.0}
+    svg = Svg.render([{:polygon, [{0.0, 0.0}, {1.0, 0.0}], :stroke, []}], vp)
+
+    assert svg =~ ~s(fill="none" stroke="currentColor")
+  end
+
+  test "polygon honours an explicit override in the opposite mode" do
+    vp = %Viewport{left: 0.0, top: 0.0, width: 1.0, scale: 1.0}
+    svg = Svg.render([{:polygon, [{0.0, 0.0}, {1.0, 0.0}], :fill, stroke: "red"}], vp)
+
+    assert svg =~ ~s(fill="currentColor" stroke="red")
+  end
+
   test "an unknown op or option raises" do
     vp = %Viewport{left: 0.0, top: 0.0, width: 1.0, scale: 1.0}
 
