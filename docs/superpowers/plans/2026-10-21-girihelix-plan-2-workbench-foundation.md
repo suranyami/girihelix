@@ -525,7 +525,10 @@ Commit message: `feat: add the exhibit behaviour, registry and Loose exhibit`.
     the point `(x, y)` as a larger marker.
   - rows: `{"x", "3.0"}`, `{"y", "4.0"}`, `{"mag", "5.0"}`, `{"mag2", "25.0"}`,
     `{"angle", "0.9272952180016122"}`, `{"perp", "-4.0, 3.0"}`.
-- `reproduce/1` returns `"Point.new(3.0, 4.0)"` at the defaults.
+- `reproduce/1` returns the fully qualified, pasteable
+  `"Girihelix.Engine.Geometry.Point.new(3.0, 4.0)"` at the defaults. Every
+  exhibit's snippet is fully qualified for the same reason: a fresh
+  `iex -S mix` has no `Point` alias.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -535,11 +538,11 @@ test "at the defaults it draws the point and reports its measures" do
   frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
   assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-  assert {:point, {3.0, 4.0}, _radius, _opts} in ops
-  assert {:line, {0.0, 0.0}, {3.0, 4.0}, _opts} in ops
+  assert Enum.any?(ops, &match?({:point, {3.0, 4.0}, _, _}, &1))
+  assert Enum.any?(ops, &match?({:line, {0.0, 0.0}, {3.0, 4.0}, _}, &1))
   assert {"mag", "5.0"} in rows
   assert {"mag2", "25.0"} in rows
-  assert Exhibit.reproduce(values) == "Point.new(3.0, 4.0)"
+  assert Exhibit.reproduce(values) == "Girihelix.Engine.Geometry.Point.new(3.0, 4.0)"
 end
 ```
 
@@ -580,7 +583,8 @@ Commit message: `feat: add the Point workbench exhibit`.
   - ops: the source shape as `{:guide, …}` lines, the transformed shape as a
     `{:polygon, points, :stroke, []}`, and its vertices as point markers.
   - rows: the six scalars, `{"determinant", "1.0"}`, `{"flips", "false"}`.
-- `reproduce/1` returns `"Transform.new(1.0, 0.0, 1.0, 0.0, 1.0, 0.0)"`.
+- `reproduce/1` returns the fully qualified
+  `"Girihelix.Engine.Geometry.Transform.new(1.0, 0.0, 1.0, 0.0, 1.0, 0.0)"`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -590,7 +594,10 @@ test "at the defaults it translates the unit square" do
   frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
   assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-  assert {:polygon, [{1.0, 0.0}, {2.0, 0.0}, {2.0, 1.0}, {1.0, 1.0}], :stroke, _} in ops
+  assert Enum.any?(
+           ops,
+           &match?({:polygon, [{1.0, 0.0}, {2.0, 0.0}, {2.0, 1.0}, {1.0, 1.0}], :stroke, _}, &1)
+         )
   assert {"determinant", "1.0"} in rows
   assert {"flips", "false"} in rows
 end
@@ -635,8 +642,9 @@ Commit message: `feat: add the Transform workbench exhibit`.
     intersection as a larger point marker when present.
   - rows: `{"params", "{0.25, 0.5}"}`, `{"intersection", "1.0, 0.0"}`,
     `{"true intersection", "1.0, 0.0"}`.
-- `reproduce/1` returns a snippet naming `Segment.new` and
-  `Intersect.get_intersection`.
+- `reproduce/1` returns a fully qualified, pasteable snippet calling
+  `Girihelix.Engine.Geometry.Segment.new` and
+  `Girihelix.Engine.Geometry.Intersect.get_intersection`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -646,7 +654,7 @@ test "at the defaults the segments cross at (1.0, 0.0)" do
   frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
   assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-  assert {:point, {1.0, 0.0}, _r, _opts} in ops
+  assert Enum.any?(ops, &match?({:point, {1.0, 0.0}, _, _}, &1))
   assert {"params", "{0.25, 0.5}"} in rows
   assert {"intersection", "1.0, 0.0"} in rows
 end
@@ -693,7 +701,8 @@ Commit message: `feat: add the Intersect workbench exhibit`.
   fill: "currentColor", opacity: 0.15]}`, its vertices as points, the probe as a
   point marker; rows `{"vertices", "4"}`, `{"area", "1.0"}`,
   `{"arc length", "4.0"}`, `{"contains probe", "true"}`.
-- `reproduce/1` names `Polygon.new!`.
+- `reproduce/1` returns a fully qualified, pasteable snippet naming
+  `Girihelix.Engine.Geometry.Polygon.new!`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -703,7 +712,10 @@ test "the default unit square reports its measures" do
   frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
   assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-  assert {:polygon, [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}], :fill, _} in ops
+  assert Enum.any?(
+           ops,
+           &match?({:polygon, [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}], :fill, _}, &1)
+         )
   assert {"vertices", "4"} in rows
   assert {"area", "1.0"} in rows
   assert {"arc length", "4.0"} in rows
@@ -895,8 +907,9 @@ Commit message: `feat: add the Faces workbench exhibit`.
     `origin = t1 * T1 + t2 * T2` and the corners are `origin`, `origin + T1`,
     `origin + T1 + T2`, `origin + T2`.
   - rows: `{"rows", …}`, `{"cells", …}`, `{"failure", "none" | …"}`.
-- `reproduce/1` names `FillRegion.fill` with the four region corners and the
-  two vectors.
+- `reproduce/1` returns a fully qualified snippet calling
+  `Girihelix.Engine.FillRegion.fill` with the four region corners and the two
+  vectors.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1278,7 +1291,7 @@ test "an exhibit mounts with all four panes", %{conn: conn} do
   assert html =~ "Point"
   assert html =~ ~s(id="panel")
   assert html =~ ~s(id="reproduce")
-  assert html =~ "Point.new(3.0, 4.0)"
+  assert html =~ "Girihelix.Engine.Geometry.Point.new(3.0, 4.0)"
 end
 
 test "the default frame is the last one, and the transport moves through it", %{conn: conn} do
@@ -1307,7 +1320,7 @@ test "a parameter change resets to the last frame", %{conn: conn} do
   {:ok, view, _html} = live(conn, "/workbench/point")
 
   html = render_change(view, "params", %{"x" => "2.0", "y" => "4.0"})
-  assert html =~ "Point.new(2.0, 4.0)"
+  assert html =~ "Girihelix.Engine.Geometry.Point.new(2.0, 4.0)"
 end
 
 test "a raising step renders the failure", %{conn: conn} do
