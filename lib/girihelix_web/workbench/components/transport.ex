@@ -28,6 +28,7 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
     default: nil,
     doc: "The `%Steps.Failure{}` when a step raised, or `nil`."
 
+  @spec transport(map()) :: Phoenix.LiveView.Rendered.t()
   def transport(assigns) do
     ~H"""
     <div class="flex flex-col gap-4">

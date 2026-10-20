@@ -35,6 +35,7 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     default: @default_aspect,
     doc: "Height divided by width; pass the aspect the viewport was fitted with."
 
+  @spec canvas(map()) :: Phoenix.LiveView.Rendered.t()
   def canvas(%{drawing: {:canvas, ops}} = assigns) do
     assigns = assign(assigns, :ops, ops)
 
