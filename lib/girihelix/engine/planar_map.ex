@@ -24,11 +24,14 @@ defmodule Girihelix.Engine.PlanarMap do
   deliberate behaviours are recorded in `docs/algorithm-analysis.md`.
   """
 
+  import Girihelix.Engine.Steps, only: [step: 4]
+
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap.Order
   alias Girihelix.Engine.PlanarMap.Ring
   alias Girihelix.Engine.PlanarMap.Split
+  alias Girihelix.Engine.Steps
 
   @enforce_keys [:vertices, :edges, :vertex_order, :edge_order, :next]
   defstruct [:vertices, :edges, :vertex_order, :edge_order, :next]
@@ -222,15 +225,15 @@ defmodule Girihelix.Engine.PlanarMap do
   vertex by vertex against neighbours that may not have moved yet, so a later
   insertion can land where the true angles would not put it.
   """
+
   @spec transform(t(), Transform.t()) :: t()
   def transform(%__MODULE__{} = map, %Transform{} = transform) do
     moved = Enum.reduce(map.vertex_order, map, &move_vertex(&2, &1, transform))
 
-    %{
+    sort_edges(%{
       moved
-      | vertex_order: Order.sort(moved.vertex_order, &moved.vertices[&1].pos, &Order.compare_points/2),
-        edge_order: Order.sort(moved.edge_order, &min_x(moved, &1), &Order.compare_min_x/2)
-    }
+      | vertex_order: Order.sort(moved.vertex_order, &moved.vertices[&1].pos, &Order.compare_points/2)
+    })
   end
 
   defp move_vertex(map, vertex, transform) do
@@ -261,6 +264,90 @@ defmodule Girihelix.Engine.PlanarMap do
           end)
     }
   end
+
+  # -- replication ------------------------------------------------------------
+
+  @doc """
+  Copies `unit` into `receiver` once under each of `transforms`, and returns the
+  result. It is the last state of `replicate_steps/2`.
+
+  Each copy puts a vertex at the transformed position of every unit vertex,
+  reusing a receiver vertex within the `1.0e-7` window, and joins the copies by
+  an edge for every unit edge. Nothing is checked or split: a copied vertex that
+  lands on an edge splits nothing, and two unit vertices that land on one
+  receiver vertex give a self-edge. The unit is not changed.
+  """
+  @spec replicate(t(), t(), [Transform.t()]) :: t()
+  def replicate(%__MODULE__{} = receiver, %__MODULE__{} = unit, transforms) do
+    unit |> replicate_steps(transforms) |> Steps.run!(receiver) |> Steps.final()
+  end
+
+  @doc """
+  The stages of `replicate/3` as a step sequence over the receiver map: one
+  `:copy` step per transform, then one `:sort_edges` step. With no transforms
+  there is only the sort.
+  """
+  @spec replicate_steps(t(), [Transform.t()]) :: [Steps.Step.t()]
+  def replicate_steps(%__MODULE__{} = unit, transforms) do
+    copies =
+      transforms
+      |> Enum.with_index(1)
+      |> Enum.map(fn {transform, k} ->
+        step(
+          :copy,
+          "copy under transform #{k}",
+          "Puts a vertex at the transformed position of every unit vertex, reusing any receiver vertex already there, then appends an edge for every unit edge.",
+          &copy_unit(&1, unit, transform)
+        )
+      end)
+
+    copies ++
+      [
+        step(
+          :sort_edges,
+          "sort edges",
+          "Puts the appended edges in minimum-x order, keeping the order of edges that compare equal.",
+          &sort_edges/1
+        )
+      ]
+  end
+
+  defp copy_unit(map, unit, transform) do
+    {mapped, map} =
+      Enum.reduce(unit.vertex_order, {%{}, map}, fn vertex, {mapped, map} ->
+        {map, copy} =
+          find_or_create(map, Transform.apply_to(transform, unit.vertices[vertex].pos))
+
+        {Map.put(mapped, vertex, copy), map}
+      end)
+
+    Enum.reduce(unit.edge_order, map, fn edge, map ->
+      {v1, v2} = Map.fetch!(unit.edges, edge)
+      append_edge(map, Map.fetch!(mapped, v1), Map.fetch!(mapped, v2))
+    end)
+  end
+
+  defp find_or_create(map, point) do
+    entries = Enum.map(map.vertex_order, &{&1, map.vertices[&1].pos})
+    place_vertex(Order.find_or_insert(entries, point), map, point)
+  end
+
+  defp append_edge(map, v1, v2) do
+    edge = map.next
+    p1 = map.vertices[v1].pos
+    p2 = map.vertices[v2].pos
+
+    %{
+      map
+      | edges: Map.put(map.edges, edge, {v1, v2}),
+        edge_order: map.edge_order ++ [edge],
+        next: edge + 1
+    }
+    |> register(v1, {edge, Ring.angle(p1, p2)})
+    |> register(v2, {edge, Ring.angle(p2, p1)})
+  end
+
+  defp sort_edges(map), do: %{map | edge_order: Order.sort(map.edge_order, &min_x(map, &1), &Order.compare_min_x/2)}
 
   # -- queries ----------------------------------------------------------------
 

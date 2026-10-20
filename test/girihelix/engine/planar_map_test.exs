@@ -4,6 +4,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
+  alias Girihelix.Engine.Steps
 
   test "insert_vertex/2 reuses a vertex inside the 1e-7 square window" do
     {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(1.0, 1.0))
@@ -119,5 +120,30 @@ defmodule Girihelix.Engine.PlanarMapTest do
 
   test "transform/2 of an empty map is an empty map" do
     assert PlanarMap.vertices(PlanarMap.transform(PlanarMap.new(), Transform.rotate(1.0))) == []
+  end
+
+  test "replicate/3 is the final frame of replicate_steps/2" do
+    {unit, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {unit, b} = PlanarMap.insert_vertex(unit, Point.new(1.0, 0.0))
+    unit = PlanarMap.insert_edge!(unit, a, b)
+    transforms = Enum.map(0..5, &Transform.rotate(&1 * :math.pi() / 3.0))
+
+    frames = unit |> PlanarMap.replicate_steps(transforms) |> Steps.run!(PlanarMap.new())
+
+    assert length(frames) == 1 + 6 + 1
+    assert Steps.final(frames) == PlanarMap.replicate(PlanarMap.new(), unit, transforms)
+  end
+
+  # Flaw 7: two unit vertices landing on one receiver vertex make a self-edge.
+  test "replicate/3 coalesces coincident copies, even into a self-edge" do
+    {unit, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(-1.0, 0.0))
+    {unit, b} = PlanarMap.insert_vertex(unit, Point.new(1.0, 0.0))
+    unit = PlanarMap.insert_edge!(unit, a, b)
+
+    map = PlanarMap.replicate(PlanarMap.new(), unit, [Transform.zero()])
+    [v] = PlanarMap.vertices(map)
+    [e] = PlanarMap.edges(map)
+
+    assert PlanarMap.endpoints!(map, e) == {v, v}
   end
 end

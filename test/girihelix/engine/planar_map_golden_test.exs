@@ -11,7 +11,9 @@ defmodule Girihelix.Engine.PlanarMapGoldenTest do
   @scenarios ~w(basic-edge coincident-vertices hub-ring duplicate-angle self-edge
     split-on-edge split-two-edges split-repeat split-at-endpoint split-keeps-ring
     split-parallel-edges remove-hub remove-moves-head remove-last transform-rotate
-    transform-then-insert transform-empty scale-translate scale-negative sort-probe)
+    transform-then-insert transform-empty scale-translate scale-negative sort-probe
+    replicate-ladder replicate-coalesce replicate-no-split replicate-empty-unit
+    replicate-no-transforms sort-probe-replicate remove-self-edge)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do
