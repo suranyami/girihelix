@@ -75,14 +75,55 @@ defmodule Girihelix.Engine.PlanarMapTest do
   test "a removed vertex's handle is unknown everywhere" do
     {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
     {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
-    map = map |> PlanarMap.insert_edge!(a, b) |> PlanarMap.remove_vertex!(a)
+    map = PlanarMap.insert_edge!(map, a, b)
+    [e] = PlanarMap.edges(map)
+    map = PlanarMap.remove_vertex!(map, a)
 
     assert PlanarMap.position(map, a) == {:error, :unknown_vertex}
     assert PlanarMap.insert_edge(map, a, b) == {:error, :unknown_vertex}
+    assert PlanarMap.insert_edge_checked(map, a, b) == {:error, :unknown_vertex}
+    assert PlanarMap.insert_edge_checked(map, b, a) == {:error, :unknown_vertex}
     assert PlanarMap.remove_vertex(map, a) == {:error, :unknown_vertex}
+    assert PlanarMap.neighbour(map, a, b) == {:error, :unknown_vertex}
+    assert PlanarMap.neighbour(map, b, a) == {:error, :unknown_vertex}
+    assert PlanarMap.before_and_after(map, a, e) == {:error, :unknown_vertex}
+    assert PlanarMap.before_and_after(map, b, e) == {:error, :unknown_edge}
     assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.ring!(map, a) end
+    assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.neighbour!(map, a, b) end
+    assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.neighbour!(map, b, a) end
     assert PlanarMap.ring!(map, b) == []
     assert PlanarMap.num_edges(map) == 0
+  end
+
+  test "neighbour/3 rejects a handle that never existed in either position" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+
+    assert PlanarMap.neighbour(map, a, 999) == {:error, :unknown_vertex}
+    assert PlanarMap.neighbour(map, 999, a) == {:error, :unknown_vertex}
+    assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.neighbour!(map, a, 999) end
+  end
+
+  test "ring/2, endpoints/2 and before_and_after/3 report unknown handles, and their bangs raise" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+    map = PlanarMap.insert_edge!(map, a, b)
+    [e] = PlanarMap.edges(map)
+
+    assert PlanarMap.ring(map, 999) == {:error, :unknown_vertex}
+    assert PlanarMap.endpoints(map, 999) == {:error, :unknown_edge}
+    assert PlanarMap.before_and_after(map, 999, e) == {:error, :unknown_vertex}
+    assert PlanarMap.before_and_after(map, a, 999) == {:error, :unknown_edge}
+    assert PlanarMap.before_and_after(map, 999, 999) == {:error, :unknown_vertex}
+    assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.ring!(map, 999) end
+    assert_raise ArgumentError, ~r/unknown_edge/, fn -> PlanarMap.endpoints!(map, 999) end
+
+    assert_raise ArgumentError, ~r/unknown_vertex/, fn ->
+      PlanarMap.before_and_after!(map, 999, e)
+    end
+
+    assert_raise ArgumentError, ~r/unknown_edge/, fn ->
+      PlanarMap.before_and_after!(map, a, 999)
+    end
   end
 
   test "remove_vertex/2 of a self-edge's vertex removes the edge once" do
@@ -174,5 +215,63 @@ defmodule Girihelix.Engine.PlanarMapTest do
 
     assert mapping == %{a => a, b => b}
     assert PlanarMap.num_edges(welded) == 2
+  end
+
+  # The empty and degenerate cases, pinned without the golden fixtures.
+  describe "empty and degenerate inputs" do
+    defp one_edge_map do
+      {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+      {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+      {PlanarMap.insert_edge!(map, a, b), a, b}
+    end
+
+    test "weld/2 into an empty receiver copies the other map" do
+      {other, a, b} = one_edge_map()
+
+      {welded, mapping} = PlanarMap.weld(PlanarMap.new(), other)
+
+      assert PlanarMap.num_vertices(welded) == 2
+      assert PlanarMap.num_edges(welded) == 1
+      assert mapping |> Map.keys() |> Enum.sort() == Enum.sort([a, b])
+    end
+
+    test "weld/2 of an empty other map leaves the receiver as it was, with no mapping" do
+      {receiver, _a, _b} = one_edge_map()
+
+      {welded, mapping} = PlanarMap.weld(receiver, PlanarMap.new())
+
+      assert PlanarMap.num_vertices(welded) == 2
+      assert PlanarMap.num_edges(welded) == 1
+      assert mapping == %{}
+    end
+
+    test "replicate/3 with no transforms leaves the receiver as it was" do
+      {receiver, _a, _b} = one_edge_map()
+      {unit, _c, _d} = one_edge_map()
+
+      map = PlanarMap.replicate(receiver, unit, [])
+
+      assert PlanarMap.num_vertices(map) == 2
+      assert PlanarMap.num_edges(map) == 1
+    end
+
+    test "replicate/3 of an empty unit adds nothing" do
+      {receiver, _a, _b} = one_edge_map()
+
+      map = PlanarMap.replicate(receiver, PlanarMap.new(), [Transform.zero()])
+
+      assert PlanarMap.num_vertices(map) == 2
+      assert PlanarMap.num_edges(map) == 1
+    end
+
+    test "remove_vertex/2 of the last vertex gives an empty map" do
+      {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+
+      emptied = PlanarMap.remove_vertex!(map, a)
+
+      assert PlanarMap.num_vertices(emptied) == 0
+      assert PlanarMap.num_edges(emptied) == 0
+      assert PlanarMap.vertices(emptied) == []
+    end
   end
 end

@@ -11,6 +11,14 @@ defmodule Girihelix.Engine.PlanarMap do
 
   The type is opaque, and only this module builds, matches or updates it.
 
+  A handle belongs to no map in particular. A handle from a different map that
+  happens to exist in this one cannot be told apart: it resolves to this map's
+  vertex or edge of the same number.
+
+  Coordinates are assumed well below about `1.0e150` in magnitude. Beyond that a
+  squared distance overflows, and Erlang float arithmetic raises where an
+  infinity would carry on. Nothing guards against it.
+
   The map's invariant is that no two edges cross and no vertex lies on an edge it
   does not end. Keeping it is the caller's precondition: `insert_edge/3` is
   unchecked, so it accepts a crossing edge, a parallel edge, and an edge from a
@@ -561,11 +569,12 @@ defmodule Girihelix.Engine.PlanarMap do
 
   @doc """
   The first edge in `vertex`'s ring, from the head, whose far end is `other`, or
-  `nil` when there is none.
+  `nil` when there is none. Both vertices must exist.
   """
   @spec neighbour(t(), vertex(), vertex()) :: {:ok, edge() | nil} | {:error, :unknown_vertex}
   def neighbour(%__MODULE__{} = map, vertex, other) do
-    with {:ok, _ring} <- ring(map, vertex) do
+    with {:ok, _ring} <- ring(map, vertex),
+         {:ok, _position} <- position(map, other) do
       {:ok, find_neighbour(map, vertex, other)}
     end
   end
@@ -576,7 +585,7 @@ defmodule Girihelix.Engine.PlanarMap do
     |> Enum.find(&(far_end(map.edges[&1], vertex) == other))
   end
 
-  @doc "`neighbour/3`, raising `ArgumentError` on an unknown vertex."
+  @doc "`neighbour/3`, raising `ArgumentError` when either vertex is unknown."
   @spec neighbour!(t(), vertex(), vertex()) :: edge() | nil
   def neighbour!(map, vertex, other), do: map |> neighbour(vertex, other) |> unwrap!()
 

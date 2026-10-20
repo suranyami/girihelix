@@ -557,7 +557,7 @@ side by side shows it is a real improvement.
    land where the true angles would not put it. Decision: keep it. Pinned by the
    golden `transform-then-insert`.
 
-Three further decisions are not flaws but are recorded so they are not mistaken
+Further decisions are not flaws but are recorded so they are not mistaken
 for ones:
 
 - **`verify/1` is a test aid, not ported behaviour.** Taprats' own `verify` is
@@ -569,6 +569,16 @@ for ones:
   there; the port deliberately diverges on this unreachable input.
 - **Removing a vertex that has a self-edge** gives the same clean result as
   Taprats (golden `remove-self-edge`).
+- **Coordinates are assumed well below about `1e150` in magnitude.** Beyond that,
+  squared distances overflow and Erlang float arithmetic raises, where Taprats
+  would carry Infinity. No guard is added.
+- **Integer handles cannot detect a handle from a different map.** A handle that
+  happens to exist in this map resolves to this map's vertex or edge of the same
+  number. A tagged handle is a design change for a later plan.
+- **`replicate(m, m, ts)` is a deliberate divergence.** Taprats' `mergeSimpleMany`
+  walks the very list it is appending to, and did not terminate within two minutes
+  in the harness. The port's unit is an immutable value, so replicating a map into
+  itself gives a finite result.
 
 ### `Intersect`: segment crossings
 
