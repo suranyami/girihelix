@@ -526,8 +526,8 @@ side by side shows it is a real improvement.
    which reversed edges are re-sorted by `replicate/3`, diverged from Taprats in
    10 of 12 cases. The user chose to reproduce Java's sort, and `Order.sort/3`
    now does so through `JavaSort`, which makes Java's comparisons in Java's
-   order, raising where Java throws "Comparison method violates its general
-   contract!". Pinned by the twelve `sortfuzz-*` goldens.
+   order. Pinned by the twelve `sortfuzz-*` goldens. Where Java throws instead,
+   see flaw 9.
 2. **At most one edge split per `insert_vertex/2`.** A new vertex that lands on an
    edge splits it, but only the first such edge; a vertex on a second edge leaves
    that one unsplit. Decision: keep it. Pinned by the golden `split-two-edges` and
@@ -560,6 +560,16 @@ side by side shows it is a real improvement.
    that may not have moved yet. Ring order is unaffected, but a later insertion can
    land where the true angles would not put it. Decision: keep it. Pinned by the
    golden `transform-then-insert`.
+9. **The sort can throw.** Java's list sort throws "Comparison method violates
+   its general contract!" when a merge finds the non-transitive comparator
+   inconsistent, and Taprats crashes. Near-coincident edges whose keys are
+   flipped by a negative scale, then sorted, are enough to reach it. Taprats
+   crashes; the port reports `{:error, :inconsistent_order}` from
+   `transform/2`, `replicate/3` and `weld/2`, whose bang twins raise it. The
+   step sequences record the failure in the final state, whose receiver keeps
+   the edges in appended order. Decision: keep the throw point, report it as
+   data. Pinned by the "sort contract" tests in `planar_map_test.exs` and the
+   error tests in `java_sort_test.exs`.
 
 Further decisions are not flaws but are recorded so they are not mistaken
 for ones:

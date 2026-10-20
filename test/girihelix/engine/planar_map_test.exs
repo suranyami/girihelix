@@ -160,19 +160,24 @@ defmodule Girihelix.Engine.PlanarMapTest do
   end
 
   test "transform/2 of an empty map is an empty map" do
-    assert PlanarMap.vertices(PlanarMap.transform(PlanarMap.new(), Transform.rotate(1.0))) == []
+    assert PlanarMap.vertices(PlanarMap.transform!(PlanarMap.new(), Transform.rotate(1.0))) == []
   end
 
-  test "replicate/3 is the final frame of replicate_steps/2" do
+  test "replicate/3 is the outcome of the final frame of replicate_steps/2" do
     {unit, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
     {unit, b} = PlanarMap.insert_vertex(unit, Point.new(1.0, 0.0))
     unit = PlanarMap.insert_edge!(unit, a, b)
     transforms = Enum.map(0..5, &Transform.rotate(&1 * :math.pi() / 3.0))
 
-    frames = unit |> PlanarMap.replicate_steps(transforms) |> Steps.run!(PlanarMap.new())
+    frames =
+      unit
+      |> PlanarMap.replicate_steps(transforms)
+      |> Steps.run!(PlanarMap.replicate_start(PlanarMap.new()))
 
     assert length(frames) == 1 + 6 + 1
-    assert Steps.final(frames) == PlanarMap.replicate(PlanarMap.new(), unit, transforms)
+
+    assert PlanarMap.replicate_result(Steps.final(frames)) ==
+             PlanarMap.replicate(PlanarMap.new(), unit, transforms)
   end
 
   # Flaw 7: two unit vertices landing on one receiver vertex make a self-edge.
@@ -181,7 +186,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     {unit, b} = PlanarMap.insert_vertex(unit, Point.new(1.0, 0.0))
     unit = PlanarMap.insert_edge!(unit, a, b)
 
-    map = PlanarMap.replicate(PlanarMap.new(), unit, [Transform.zero()])
+    map = PlanarMap.replicate!(PlanarMap.new(), unit, [Transform.zero()])
     [v] = PlanarMap.vertices(map)
     [e] = PlanarMap.edges(map)
 
@@ -196,10 +201,10 @@ defmodule Girihelix.Engine.PlanarMapTest do
     {other, o2} = PlanarMap.insert_vertex(other, Point.new(2.0, 0.0))
     other = PlanarMap.insert_edge!(other, o1, o2)
 
-    {welded, mapping} = PlanarMap.weld(receiver, other)
+    {welded, mapping} = PlanarMap.weld!(receiver, other)
 
     frames = Steps.run!(PlanarMap.weld_steps(), PlanarMap.weld_start(receiver, other))
-    assert PlanarMap.weld_result(Steps.final(frames)) == {welded, mapping}
+    assert PlanarMap.weld_result(Steps.final(frames)) == {:ok, {welded, mapping}}
     assert mapping |> Map.keys() |> Enum.sort() == Enum.sort([o1, o2])
     assert PlanarMap.num_vertices(welded) == 5
     assert PlanarMap.num_edges(welded) == 4
@@ -211,10 +216,71 @@ defmodule Girihelix.Engine.PlanarMapTest do
     {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
     map = PlanarMap.insert_edge!(map, a, b)
 
-    {welded, mapping} = PlanarMap.weld(map, map)
+    {welded, mapping} = PlanarMap.weld!(map, map)
 
     assert mapping == %{a => a, b => b}
     assert PlanarMap.num_edges(welded) == 2
+  end
+
+  # Flaw 9: where Java's sort would throw "Comparison method violates its
+  # general contract!", and Taprats would crash, the port reports the error.
+  # 64 vertical edges on a 1e-8 grid, scaled by -1 so their keys flip without
+  # re-sorting; every operation that sorts them then meets the broken contract.
+  describe "the sort contract" do
+    @contract_keys [56, 8, 33, 2, 6, 14, 1, 44, 49, 24, 4, 35, 21, 14, 55, 46] ++
+                     [26, 4, 32, 51, 38, 38, 20, 8, 19, 54, 53, 59, 44, 16, 6, 41] ++
+                     [20, 2, 52, 33, 54, 11, 58, 46, 5, 7, 1, 43, 52, 22, 9, 22] ++
+                     [52, 30, 40, 8, 7, 44, 32, 47, 58, 55, 33, 36, 28, 51, 51, 47]
+
+    defp flipped_edges do
+      @contract_keys
+      |> Enum.with_index()
+      |> Enum.reduce(PlanarMap.new(), fn {key, i}, map ->
+        {map, a} = PlanarMap.insert_vertex(map, Point.new(key * 1.0e-8, 2.0 * i))
+        {map, b} = PlanarMap.insert_vertex(map, Point.new(key * 1.0e-8, 2.0 * i + 1.0))
+        PlanarMap.insert_edge!(map, a, b)
+      end)
+      |> PlanarMap.scale(-1.0)
+    end
+
+    test "transform/2 reports an inconsistent order, and transform!/2 raises" do
+      map = flipped_edges()
+
+      assert PlanarMap.transform(map, Transform.identity()) == {:error, :inconsistent_order}
+
+      assert_raise ArgumentError, ~r/inconsistent_order/, fn ->
+        PlanarMap.transform!(map, Transform.identity())
+      end
+    end
+
+    test "replicate/3 reports an inconsistent order, and replicate!/3 raises" do
+      unit = flipped_edges()
+
+      assert PlanarMap.replicate(PlanarMap.new(), unit, [Transform.identity()]) ==
+               {:error, :inconsistent_order}
+
+      frames =
+        unit
+        |> PlanarMap.replicate_steps([Transform.identity()])
+        |> Steps.run!(PlanarMap.replicate_start(PlanarMap.new()))
+
+      assert %{failure: :inconsistent_order, receiver: last} = Steps.final(frames)
+      assert PlanarMap.num_edges(last) == 64
+
+      assert_raise ArgumentError, ~r/inconsistent_order/, fn ->
+        PlanarMap.replicate!(PlanarMap.new(), unit, [Transform.identity()])
+      end
+    end
+
+    test "weld/2 reports an inconsistent order, and weld!/2 raises" do
+      other = flipped_edges()
+
+      assert PlanarMap.weld(PlanarMap.new(), other) == {:error, :inconsistent_order}
+
+      assert_raise ArgumentError, ~r/inconsistent_order/, fn ->
+        PlanarMap.weld!(PlanarMap.new(), other)
+      end
+    end
   end
 
   # The empty and degenerate cases, pinned without the golden fixtures.
@@ -228,7 +294,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     test "weld/2 into an empty receiver copies the other map" do
       {other, a, b} = one_edge_map()
 
-      {welded, mapping} = PlanarMap.weld(PlanarMap.new(), other)
+      {welded, mapping} = PlanarMap.weld!(PlanarMap.new(), other)
 
       assert PlanarMap.num_vertices(welded) == 2
       assert PlanarMap.num_edges(welded) == 1
@@ -238,7 +304,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     test "weld/2 of an empty other map leaves the receiver as it was, with no mapping" do
       {receiver, _a, _b} = one_edge_map()
 
-      {welded, mapping} = PlanarMap.weld(receiver, PlanarMap.new())
+      {welded, mapping} = PlanarMap.weld!(receiver, PlanarMap.new())
 
       assert PlanarMap.num_vertices(welded) == 2
       assert PlanarMap.num_edges(welded) == 1
@@ -249,7 +315,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
       {receiver, _a, _b} = one_edge_map()
       {unit, _c, _d} = one_edge_map()
 
-      map = PlanarMap.replicate(receiver, unit, [])
+      map = PlanarMap.replicate!(receiver, unit, [])
 
       assert PlanarMap.num_vertices(map) == 2
       assert PlanarMap.num_edges(map) == 1
@@ -258,7 +324,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     test "replicate/3 of an empty unit adds nothing" do
       {receiver, _a, _b} = one_edge_map()
 
-      map = PlanarMap.replicate(receiver, PlanarMap.new(), [Transform.zero()])
+      map = PlanarMap.replicate!(receiver, PlanarMap.new(), [Transform.zero()])
 
       assert PlanarMap.num_vertices(map) == 2
       assert PlanarMap.num_edges(map) == 1

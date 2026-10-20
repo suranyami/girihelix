@@ -9,6 +9,12 @@ defmodule Girihelix.Engine.PlanarMap do
   `{:ok, result}` or `{:error, :unknown_vertex | :unknown_edge}`, and has a `!`
   twin that raises `ArgumentError` naming the reason.
 
+  `transform/2`, `replicate/3` and `weld/2` sort the vertex or edge order with
+  Java's list sort, as Taprats does. Where Java would throw because the
+  tolerance comparator broke its contract, and Taprats would crash, they return
+  `{:error, :inconsistent_order}`; their `!` twins raise it. `scale/2` and
+  `translate/3` never sort, and return the map bare.
+
   The type is opaque, and only this module builds, matches or updates it.
 
   A handle belongs to no map in particular. A handle from a different map that
@@ -57,7 +63,7 @@ defmodule Girihelix.Engine.PlanarMap do
 
   @type vertex :: non_neg_integer()
   @type edge :: non_neg_integer()
-  @type reason :: :unknown_vertex | :unknown_edge
+  @type reason :: :unknown_vertex | :unknown_edge | :inconsistent_order
 
   @doc "An empty map."
   @spec new() :: t()
@@ -266,16 +272,23 @@ defmodule Girihelix.Engine.PlanarMap do
   every ring in its old rotational order, undetected. Angles are recomputed
   vertex by vertex against neighbours that may not have moved yet, so a later
   insertion can land where the true angles would not put it.
+
+  Returns `{:error, :inconsistent_order}` where either sort meets a broken
+  comparator contract.
   """
-  @spec transform(t(), Transform.t()) :: t()
+  @spec transform(t(), Transform.t()) :: {:ok, t()} | {:error, :inconsistent_order}
   def transform(%__MODULE__{} = map, %Transform{} = transform) do
     moved = Enum.reduce(map.vertex_order, map, &move_vertex(&2, &1, transform))
 
-    sort_edges(%{
-      moved
-      | vertex_order: Order.sort(moved.vertex_order, &moved.vertices[&1].pos, &Order.compare_points/2)
-    })
+    with {:ok, order} <-
+           Order.sort(moved.vertex_order, &moved.vertices[&1].pos, &Order.compare_points/2) do
+      sort_edges(%{moved | vertex_order: order})
+    end
   end
+
+  @doc "As `transform/2`, but returns the bare map and raises `ArgumentError` naming the reason."
+  @spec transform!(t(), Transform.t()) :: t()
+  def transform!(map, transform), do: map |> transform(transform) |> unwrap!()
 
   defp move_vertex(map, vertex, transform) do
     pos = Transform.apply_to(transform, map.vertices[vertex].pos)
@@ -317,16 +330,44 @@ defmodule Girihelix.Engine.PlanarMap do
   an edge for every unit edge. Nothing is checked or split: a copied vertex that
   lands on an edge splits nothing, and two unit vertices that land on one
   receiver vertex give a self-edge. The unit is not changed.
+
+  Returns `{:error, :inconsistent_order}` where the final edge sort meets a
+  broken comparator contract.
   """
-  @spec replicate(t(), t(), [Transform.t()]) :: t()
+  @spec replicate(t(), t(), [Transform.t()]) :: {:ok, t()} | {:error, :inconsistent_order}
   def replicate(%__MODULE__{} = receiver, %__MODULE__{} = unit, transforms) do
-    unit |> replicate_steps(transforms) |> Steps.run!(receiver) |> Steps.final()
+    unit
+    |> replicate_steps(transforms)
+    |> Steps.run!(replicate_start(receiver))
+    |> Steps.final()
+    |> replicate_result()
   end
 
+  @doc "As `replicate/3`, but returns the bare map and raises `ArgumentError` naming the reason."
+  @spec replicate!(t(), t(), [Transform.t()]) :: t()
+  def replicate!(receiver, unit, transforms), do: receiver |> replicate(unit, transforms) |> unwrap!()
+
+  @typedoc """
+  The state `replicate_steps/2` runs over: the receiver map, and the failure of
+  the final sort, if it failed.
+  """
+  @type replicate_state :: %{receiver: t(), failure: nil | :inconsistent_order}
+
+  @doc "The state `replicate_steps/2` starts from."
+  @spec replicate_start(t()) :: replicate_state()
+  def replicate_start(%__MODULE__{} = receiver), do: %{receiver: receiver, failure: nil}
+
+  @doc "The outcome of a finished `t:replicate_state/0`."
+  @spec replicate_result(replicate_state()) :: {:ok, t()} | {:error, :inconsistent_order}
+  def replicate_result(%{failure: nil, receiver: receiver}), do: {:ok, receiver}
+  def replicate_result(%{failure: reason}), do: {:error, reason}
+
   @doc """
-  The stages of `replicate/3` as a step sequence over the receiver map: one
-  `:copy` step per transform, then one `:sort_edges` step. With no transforms
-  there is only the sort.
+  The stages of `replicate/3` as a step sequence over a `t:replicate_state/0`:
+  one `:copy` step per transform, then one `:sort_edges` step. With no
+  transforms there is only the sort. If the sort meets a broken comparator
+  contract, the last frame keeps the edges in appended order and records the
+  failure.
   """
   @spec replicate_steps(t(), [Transform.t()]) :: [Steps.Step.t()]
   def replicate_steps(%__MODULE__{} = unit, transforms) do
@@ -338,7 +379,7 @@ defmodule Girihelix.Engine.PlanarMap do
           :copy,
           "copy under transform #{k}",
           "Puts a vertex at the transformed position of every unit vertex, reusing any receiver vertex already there, then appends an edge for every unit edge.",
-          &copy_unit(&1, unit, transform)
+          &%{&1 | receiver: copy_unit(&1.receiver, unit, transform)}
         )
       end)
 
@@ -347,8 +388,8 @@ defmodule Girihelix.Engine.PlanarMap do
         step(
           :sort_edges,
           "sort edges",
-          "Puts the appended edges in minimum-x order, keeping the order of edges that compare equal.",
-          &sort_edges/1
+          "Puts the appended edges in minimum-x order with Java's list sort, recording a failure where Java would throw.",
+          &sort_receiver/1
         )
       ]
   end
@@ -388,21 +429,32 @@ defmodule Girihelix.Engine.PlanarMap do
     |> register(v2, {edge, Ring.angle(p2, p1)})
   end
 
-  defp sort_edges(map), do: %{map | edge_order: Order.sort(map.edge_order, &min_x(map, &1), &Order.compare_min_x/2)}
+  defp sort_edges(map), do: map.edge_order |> Order.sort(&min_x(map, &1), &Order.compare_min_x/2) |> with_edge_order(map)
+
+  defp with_edge_order({:ok, order}, map), do: {:ok, %{map | edge_order: order}}
+  defp with_edge_order({:error, _reason} = error, _map), do: error
+
+  # The final step of both sequences: the receiver sorted, or left in appended
+  # order with the failure recorded.
+  defp sort_receiver(%{receiver: receiver} = state), do: receiver |> sort_edges() |> record_sort(state)
+
+  defp record_sort({:ok, sorted}, state), do: %{state | receiver: sorted}
+  defp record_sort({:error, reason}, state), do: %{state | failure: reason}
 
   # -- welding ----------------------------------------------------------------
 
   @typedoc """
   The state `weld_steps/0` runs over: both maps, the other map's vertices as
-  they were before welding, the crossings found, and where each other-map
-  vertex went in the receiver.
+  they were before welding, the crossings found, where each other-map vertex
+  went in the receiver, and the failure of the final sort, if it failed.
   """
   @type weld_state :: %{
           receiver: t(),
           other: t(),
           originals: [vertex()],
           crossings: [Point.t()],
-          mapping: %{vertex() => vertex()}
+          mapping: %{vertex() => vertex()},
+          failure: nil | :inconsistent_order
         }
 
   @doc """
@@ -419,21 +471,37 @@ defmodule Girihelix.Engine.PlanarMap do
   the two vertex orders once, so of several `other` vertices within the window
   of one receiver vertex only the first is unified with it. `other` is not
   changed.
+
+  Returns `{:error, :inconsistent_order}` where the final edge sort meets a
+  broken comparator contract.
   """
-  @spec weld(t(), t()) :: {t(), %{vertex() => vertex()}}
+  @spec weld(t(), t()) :: {:ok, {t(), %{vertex() => vertex()}}} | {:error, :inconsistent_order}
   def weld(%__MODULE__{} = receiver, %__MODULE__{} = other) do
     weld_steps() |> Steps.run!(weld_start(receiver, other)) |> Steps.final() |> weld_result()
   end
 
+  @doc "As `weld/2`, but returns the bare result and raises `ArgumentError` naming the reason."
+  @spec weld!(t(), t()) :: {t(), %{vertex() => vertex()}}
+  def weld!(receiver, other), do: receiver |> weld(other) |> unwrap!()
+
   @doc "The state `weld_steps/0` starts from."
   @spec weld_start(t(), t()) :: weld_state()
   def weld_start(%__MODULE__{} = receiver, %__MODULE__{} = other) do
-    %{receiver: receiver, other: other, originals: vertices(other), crossings: [], mapping: %{}}
+    %{
+      receiver: receiver,
+      other: other,
+      originals: vertices(other),
+      crossings: [],
+      mapping: %{},
+      failure: nil
+    }
   end
 
   @doc """
   The stages of `weld/2` as a step sequence over a `t:weld_state/0`:
   `:find_crossings`, `:force_vertices`, `:unify_vertices` and `:copy_edges`.
+  If the final sort meets a broken comparator contract, the last frame keeps
+  the edges in appended order and records the failure.
   """
   @spec weld_steps() :: [Steps.Step.t()]
   def weld_steps do
@@ -459,19 +527,23 @@ defmodule Girihelix.Engine.PlanarMap do
       step(
         :copy_edges,
         "copy edges",
-        "Copies every edge of the other map between the receiver vertices its ends became, then puts the edges in minimum-x order.",
+        "Copies every edge of the other map between the receiver vertices its ends became, then puts the edges in minimum-x order with Java's list sort, recording a failure where Java would throw.",
         &copy_edges/1
       )
     ]
   end
 
   @doc """
-  The welded receiver and the mapping of a finished `t:weld_state/0`, the
-  mapping restricted to the other map's vertices from before welding.
+  The outcome of a finished `t:weld_state/0`: the welded receiver and the
+  mapping, restricted to the other map's vertices from before welding, or the
+  failure of the final sort.
   """
-  @spec weld_result(weld_state()) :: {t(), %{vertex() => vertex()}}
-  def weld_result(%{receiver: receiver, originals: originals, mapping: mapping}),
-    do: {receiver, Map.take(mapping, originals)}
+  @spec weld_result(weld_state()) ::
+          {:ok, {t(), %{vertex() => vertex()}}} | {:error, :inconsistent_order}
+  def weld_result(%{failure: nil, receiver: receiver, originals: originals, mapping: mapping}),
+    do: {:ok, {receiver, Map.take(mapping, originals)}}
+
+  def weld_result(%{failure: reason}), do: {:error, reason}
 
   defp find_crossings(%{receiver: receiver, other: other} = state),
     do: %{state | crossings: Weld.crossings(edge_ends(other), edge_ends(receiver))}
@@ -522,7 +594,7 @@ defmodule Girihelix.Engine.PlanarMap do
         append_edge(acc, Map.fetch!(mapping, v1), Map.fetch!(mapping, v2))
       end)
 
-    %{state | receiver: sort_edges(copied)}
+    sort_receiver(%{state | receiver: copied})
   end
 
   # -- queries ----------------------------------------------------------------

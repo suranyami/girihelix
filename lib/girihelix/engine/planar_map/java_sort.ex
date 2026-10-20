@@ -22,38 +22,54 @@ defmodule Girihelix.Engine.PlanarMap.JavaSort do
     from whichever end has the shorter run, switching into galloping mode
     after 7 consecutive wins, a threshold that adapts across the whole sort.
 
-  Java throws when a merge runs one side dry where a consistent comparator
-  could not. That is reproduced: this raises `ArgumentError` with Java's
-  message, since Taprats would stop at the same point.
+  Java throws "Comparison method violates its general contract!" when a merge
+  runs one side dry where a consistent comparator could not. Taprats crashes
+  there. This module stops at the same point and reports
+  `{:error, :inconsistent_order}` instead; `sort!/3` raises it.
   """
 
   import Bitwise
 
   @min_merge 32
   @min_gallop 7
-  @contract "Comparison method violates its general contract!"
 
   @type comparison :: :lt | :eq | :gt
 
   @doc """
   Sorts `list` by `key_fun` under `compare`, exactly as Java's list sort would.
+
+  Returns `{:error, :inconsistent_order}` where Java would throw because the
+  comparator broke its contract.
   """
-  @spec sort([a], (a -> key), (key, key -> comparison())) :: [a] when a: term(), key: term()
+  @spec sort([a], (a -> key), (key, key -> comparison())) ::
+          {:ok, [a]} | {:error, :inconsistent_order}
+        when a: term(), key: term()
   def sort(list, key_fun, compare), do: sort_list(list, length(list), key_fun, compare)
 
-  defp sort_list(list, n, _key_fun, _compare) when n < 2, do: list
+  @doc "As `sort/3`, but returns the bare list and raises `ArgumentError` naming the reason."
+  @spec sort!([a], (a -> key), (key, key -> comparison())) :: [a] when a: term(), key: term()
+  def sort!(list, key_fun, compare), do: list |> sort(key_fun, compare) |> unwrap!()
+
+  defp unwrap!({:ok, sorted}), do: sorted
+  defp unwrap!({:error, reason}), do: raise(ArgumentError, "java sort: #{reason}")
+
+  defp sort_list(list, n, _key_fun, _compare) when n < 2, do: {:ok, list}
 
   defp sort_list(list, n, key_fun, compare) do
     state = %{
       a: list |> Enum.map(&{key_fun.(&1), &1}) |> :array.from_list(),
       c: fn {ka, _}, {kb, _} -> compare.(ka, kb) end,
       mg: @min_gallop,
-      runs: []
+      runs: [],
+      failure: nil
     }
 
-    %{a: sorted} = sort_array(state, n)
-    sorted |> :array.to_list() |> Enum.map(&elem(&1, 1))
+    state |> sort_array(n) |> outcome()
   end
+
+  defp outcome(%{failure: nil, a: sorted}), do: {:ok, sorted |> :array.to_list() |> Enum.map(&elem(&1, 1))}
+
+  defp outcome(%{failure: reason}), do: {:error, reason}
 
   defp sort_array(state, n) when n < @min_merge do
     {state, run_len} = count_run(state, 0, n)
@@ -117,6 +133,8 @@ defmodule Girihelix.Engine.PlanarMap.JavaSort do
   defp min_run(n, r) when n >= @min_merge, do: min_run(n >>> 1, r ||| (n &&& 1))
   defp min_run(n, r), do: n + r
 
+  # A failed merge stops the sort where Java would throw.
+  defp collect_runs(%{failure: :inconsistent_order} = state, _lo, _remaining, _min_run), do: state
   defp collect_runs(state, _lo, 0, _min_run), do: state
 
   defp collect_runs(state, lo, remaining, min_run) do
@@ -132,6 +150,7 @@ defmodule Girihelix.Engine.PlanarMap.JavaSort do
   defp pad_run(state, _lo, run_len, _min_run, _force), do: {state, run_len}
 
   # The stack is held top first: the newest run, then the one below it.
+  defp merge_collapse(%{failure: :inconsistent_order} = state), do: state
   defp merge_collapse(%{runs: runs} = state), do: collapse(collapse_choice(runs), state)
 
   defp collapse(:none, state), do: state
@@ -148,6 +167,7 @@ defmodule Girihelix.Engine.PlanarMap.JavaSort do
   defp deeper_pair(third, top) when third < top, do: :below
   defp deeper_pair(_third, _top), do: :top
 
+  defp force_collapse(%{failure: :inconsistent_order} = state), do: state
   defp force_collapse(%{runs: runs} = state), do: force(force_choice(runs), state)
 
   defp force(:none, state), do: state
@@ -270,7 +290,7 @@ defmodule Girihelix.Engine.PlanarMap.JavaSort do
   defp lo_finish(m, state), do: lo_tail(m, %{state | mg: max(m.mg, 1)})
 
   defp lo_tail(%{len1: 1} = m, state), do: %{state | a: lo_last(m)}
-  defp lo_tail(%{len1: 0}, _state), do: raise(ArgumentError, @contract)
+  defp lo_tail(%{len1: 0}, state), do: %{state | failure: :inconsistent_order}
   defp lo_tail(m, state), do: %{state | a: copy(m.a, m.dest, m.tmp, m.c1, m.len1)}
 
   # -- Merging from the high end: the second run is copied out to `tmp`
@@ -365,7 +385,7 @@ defmodule Girihelix.Engine.PlanarMap.JavaSort do
   defp hi_finish(m, state), do: hi_tail(m, %{state | mg: max(m.mg, 1)})
 
   defp hi_tail(%{len2: 1} = m, state), do: %{state | a: hi_last(m)}
-  defp hi_tail(%{len2: 0}, _state), do: raise(ArgumentError, @contract)
+  defp hi_tail(%{len2: 0}, state), do: %{state | failure: :inconsistent_order}
   defp hi_tail(m, state), do: %{state | a: hi_rest(m)}
 
   # -- Galloping: an exponential search from `hint`, then a binary search

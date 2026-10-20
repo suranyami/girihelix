@@ -37,7 +37,7 @@ defmodule Girihelix.Engine.PlanarMap.VerifyTest do
   test "verify/1 reports the parallel edges a self-weld makes" do
     {map, [a, b]} = path([{0.0, 0.0}, {1.0, 0.0}])
     map = PlanarMap.insert_edge!(map, a, b)
-    {welded, _} = PlanarMap.weld(map, map)
+    {welded, _} = PlanarMap.weld!(map, map)
 
     assert {:error, problems} = PlanarMap.verify(welded)
     assert Enum.any?(problems, &match?({:parallel_edge, _}, &1))

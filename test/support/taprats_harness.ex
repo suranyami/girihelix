@@ -82,15 +82,15 @@ defmodule Girihelix.TapratsHarness do
 
   defp step({:replicate, name, other, transforms}, state) do
     %{map: unit} = state_of(state, other)
-    update_map(state, name, &PlanarMap.replicate(&1, unit, transforms))
+    update_map(state, name, &PlanarMap.replicate!(&1, unit, transforms))
   end
 
   defp step({:weld, name, other}, state) do
     %{map: other_map} = state_of(state, other)
-    update_map(state, name, &(&1 |> PlanarMap.weld(other_map) |> elem(0)))
+    update_map(state, name, &(&1 |> PlanarMap.weld!(other_map) |> elem(0)))
   end
 
-  defp step({:transform, name, transform}, state), do: update_map(state, name, &PlanarMap.transform(&1, transform))
+  defp step({:transform, name, transform}, state), do: update_map(state, name, &PlanarMap.transform!(&1, transform))
 
   defp step({:scale, name, r}, state), do: update_map(state, name, &PlanarMap.scale(&1, r))
 

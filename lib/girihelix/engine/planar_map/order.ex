@@ -77,9 +77,13 @@ defmodule Girihelix.Engine.PlanarMap.Order do
   @doc """
   Sorts `list` by `key_fun` under `compare`, giving the order Java's list sort
   gives Taprats. The comparators are not transitive, so only the same sequence
-  of comparisons reproduces that order; see `JavaSort`.
+  of comparisons reproduces that order; see `JavaSort`. Returns
+  `{:error, :inconsistent_order}` where Java would throw because the comparator
+  broke its contract, which crashes Taprats.
   """
-  @spec sort([a], (a -> key), (key, key -> comparison())) :: [a] when a: term(), key: term()
+  @spec sort([a], (a -> key), (key, key -> comparison())) ::
+          {:ok, [a]} | {:error, :inconsistent_order}
+        when a: term(), key: term()
   def sort(list, key_fun, compare), do: JavaSort.sort(list, key_fun, compare)
 
   defp compare_points_by(:eq, dy), do: order(dy)

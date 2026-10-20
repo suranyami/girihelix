@@ -40,6 +40,6 @@ defmodule Girihelix.Engine.PlanarMap.OrderTest do
              &elem(&1, 1),
              &Order.compare_min_x/2
            ) ==
-             [{:y, 0.0}, {:x, 1.0}, {:z, 1.0 + 1.0e-9}]
+             {:ok, [{:y, 0.0}, {:x, 1.0}, {:z, 1.0 + 1.0e-9}]}
   end
 end

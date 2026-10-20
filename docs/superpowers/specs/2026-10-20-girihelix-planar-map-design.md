@@ -37,7 +37,10 @@ golden probe (`sort-probe-replicate`) agreed with Elixir's stable sort, but only
 by chance: a fuzz of reversed edge keys in overlapping `1e-7` windows diverged
 from Taprats in 10 of 12 cases. The user chose to reproduce Java's sort.
 `Order.sort/3` now does so, through `JavaSort` (binary insertion below 32
-elements, `TimSort` above), pinned by the twelve `sortfuzz-*` goldens.
+elements, `TimSort` above), pinned by the twelve `sortfuzz-*` goldens. Where
+Java's sort throws on a broken comparator contract, which crashes Taprats, the
+port reports `{:error, :inconsistent_order}` (flaw 9 in the analysis), and
+`transform/2`, `replicate/3` and `weld/2` gained bang twins.
 
 ## Intent
 
@@ -179,10 +182,10 @@ bare value.
 | `insert_edge/3` → `{:ok, map}` | `insertEdge` | figures, `Infer` |
 | `insert_edge_checked/3` → `{:ok, map} \| {:error, :crosses}` | none | callers who want the check |
 | `remove_vertex/2` → `{:ok, map}` | `removeVertex` | `ConnectFigure` |
-| `transform/2` | `transformMap` | `Infer`, `ConnectFigure` |
+| `transform/2` → `{:ok, map} \| {:error, :inconsistent_order}` | `transformMap` | `Infer`, `ConnectFigure` |
 | `scale/2`, `translate/3` | `scale`, `translate` | `Prototype`, `Infer`, figures |
-| `replicate/3` | `mergeSimpleMany` | `Prototype`, `RadialFigure` |
-| `weld/2` → `{map, mapping}` | `mergeMap` | `Prototype`, `Infer` |
+| `replicate/3` → `{:ok, map} \| {:error, :inconsistent_order}` | `mergeSimpleMany` | `Prototype`, `RadialFigure` |
+| `weld/2` → `{:ok, {map, mapping}} \| {:error, :inconsistent_order}` | `mergeMap` | `Prototype`, `Infer` |
 | `verify/1` → `:ok \| {:error, problems}` | `verify` | `Prototype`, `ConnectFigure`, `Infer` (debug) |
 
 Three details, each my call:
@@ -260,6 +263,10 @@ corrected sibling can be added beside it:
 5. **Duplicate angles in a neighbour ring** take whichever slot is met first.
 6. to 8. Added by ruling 3 above: flips leave rings reversed, `replicate/3` never
    splits, and `transform/2` reangles against partly-moved neighbours.
+
+Flaw 9, added with the sort port: **Java's sort can throw** on the
+non-transitive comparator, crashing Taprats. The port reports
+`{:error, :inconsistent_order}` instead.
 
 **The `TimSort` risk.** Java's `Collections.sort` is stable and can throw on a
 non-transitive comparator. Elixir's `Enum.sort/2` is stable and never throws.
