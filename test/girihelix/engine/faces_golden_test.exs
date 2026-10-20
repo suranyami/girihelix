@@ -8,7 +8,9 @@ defmodule Girihelix.Engine.FacesGoldenTest do
 
   @moduletag :taprats
 
-  @scenarios ~w()
+  @scenarios ~w(faces-square-diagonal faces-grid-3x3 faces-hub-hexagon
+    faces-replicate-ladder faces-dangling faces-figure-eight faces-conflict
+    faces-two-corner faces-no-faces faces-split-parallel)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do

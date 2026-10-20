@@ -15,6 +15,7 @@ defmodule Girihelix.TapratsHarness do
   to return an error tuple to.
   """
 
+  alias Girihelix.Engine.Faces
   alias Girihelix.Engine.FillRegion
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
@@ -70,11 +71,22 @@ defmodule Girihelix.TapratsHarness do
 
   defp run([{:dump, name}], state), do: state |> state_of(name) |> Map.fetch!(:map) |> dump()
 
-  defp run([{:faces, _name}], _state), do: raise(ArgumentError, "script op not yet supported: faces")
+  defp run([{:faces, name}], state) do
+    state |> state_of(name) |> Map.fetch!(:map) |> Faces.extract_faces() |> faces_dump()
+  end
 
   defp run([{:fill, region, t1, t2}], _state), do: region |> FillRegion.fill(t1, t2) |> fill_dump()
 
   defp run([op | rest], state), do: run(rest, step(op, state))
+
+  defp faces_dump({:ok, colouring}) do
+    %{faces: {:ok, %{black: face_corners(colouring.black), white: face_corners(colouring.white)}}}
+  end
+
+  defp faces_dump({:error, :filling_conflict}), do: %{faces: {:error, :filling}}
+  defp faces_dump({:error, :no_faces}), do: %{faces: {:error, :empty}}
+
+  defp face_corners(faces), do: Enum.map(faces, fn face -> Enum.map(face, fn %Point{x: x, y: y} -> {x, y} end) end)
 
   defp fill_dump({:ok, cells}), do: %{cells: {:ok, cells}}
   defp fill_dump({:error, :too_many_units}), do: %{cells: {:error, :too_many}}
