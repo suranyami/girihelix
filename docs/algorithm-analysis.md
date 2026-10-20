@@ -522,8 +522,12 @@ side by side shows it is a real improvement.
    algorithm. Decision: keep the comparators verbatim. Pinned by `order_test.exs`
    ("compare_min_x/2 is not transitive") and the golden `sort-probe-replicate`,
    which forces the final edge sort to reorder keys in overlapping `1e-7` windows.
-   Elixir's stable sort produced Taprats' order, so no port of Java's sort was
-   needed.
+   That single probe agreed with Elixir's stable sort by chance: a later fuzz, in
+   which reversed edges are re-sorted by `replicate/3`, diverged from Taprats in
+   10 of 12 cases. The user chose to reproduce Java's sort, and `Order.sort/3`
+   now does so through `JavaSort`, which makes Java's comparisons in Java's
+   order, raising where Java throws "Comparison method violates its general
+   contract!". Pinned by the twelve `sortfuzz-*` goldens.
 2. **At most one edge split per `insert_vertex/2`.** A new vertex that lands on an
    edge splits it, but only the first such edge; a vertex on a second edge leaves
    that one unsplit. Decision: keep it. Pinned by the golden `split-two-edges` and

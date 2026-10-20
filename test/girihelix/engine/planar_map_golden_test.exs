@@ -15,7 +15,9 @@ defmodule Girihelix.Engine.PlanarMapGoldenTest do
     replicate-ladder replicate-coalesce replicate-no-split replicate-empty-unit
     replicate-no-transforms sort-probe-replicate remove-self-edge weld-squares
     weld-shared-edge weld-cluster weld-collinear weld-self weld-empty-receiver
-    weld-empty-other)
+    weld-empty-other sortfuzz-12-1 sortfuzz-12-2 sortfuzz-12-3 sortfuzz-20-1
+    sortfuzz-20-2 sortfuzz-20-3 sortfuzz-40-1 sortfuzz-40-2 sortfuzz-40-3 sortfuzz-70-1
+    sortfuzz-70-2 sortfuzz-70-3)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do

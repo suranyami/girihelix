@@ -22,6 +22,7 @@ defmodule Girihelix.Engine.PlanarMap.Order do
 
   alias Girihelix.Engine.Geometry.Loose
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.PlanarMap.JavaSort
 
   @tol Loose.tol()
 
@@ -74,11 +75,12 @@ defmodule Girihelix.Engine.PlanarMap.Order do
   defp edge_step(_not_lt, rest, key, index), do: edge_insert_index(rest, key, index + 1)
 
   @doc """
-  Sorts `list` by `key_fun` under `compare`, keeping equal elements in their
-  original order.
+  Sorts `list` by `key_fun` under `compare`, giving the order Java's list sort
+  gives Taprats. The comparators are not transitive, so only the same sequence
+  of comparisons reproduces that order; see `JavaSort`.
   """
   @spec sort([a], (a -> key), (key, key -> comparison())) :: [a] when a: term(), key: term()
-  def sort(list, key_fun, compare), do: Enum.sort(list, fn a, b -> compare.(key_fun.(a), key_fun.(b)) != :gt end)
+  def sort(list, key_fun, compare), do: JavaSort.sort(list, key_fun, compare)
 
   defp compare_points_by(:eq, dy), do: order(dy)
   defp compare_points_by(other, _dy), do: other

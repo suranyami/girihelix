@@ -32,10 +32,12 @@ they differ.
      unaffected, but later insertions land where Taprats puts them, not where the
      true angles would.
 
-The `TimSort` risk described under the faithful flaws did not materialise: a
-golden probe (`sort-probe-replicate`) forced the final edge sort to reorder keys
-in overlapping `1e-7` windows, and Elixir's stable sort produced Taprats' order.
-No port of Java's sort was needed.
+The `TimSort` risk described under the faithful flaws materialised. A single
+golden probe (`sort-probe-replicate`) agreed with Elixir's stable sort, but only
+by chance: a fuzz of reversed edge keys in overlapping `1e-7` windows diverged
+from Taprats in 10 of 12 cases. The user chose to reproduce Java's sort.
+`Order.sort/3` now does so, through `JavaSort` (binary insertion below 32
+elements, `TimSort` above), pinned by the twelve `sortfuzz-*` goldens.
 
 ## Intent
 
