@@ -13,8 +13,9 @@ defmodule GirihelixWeb.Workbench.Registry do
   """
 
   alias GirihelixWeb.Workbench.Exhibits.Loose
+  alias GirihelixWeb.Workbench.Exhibits.Point
 
-  @exhibits [Loose]
+  @exhibits [Loose, Point]
 
   @doc "Every registered exhibit, in display order."
   @spec exhibits() :: [module()]
