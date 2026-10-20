@@ -146,4 +146,33 @@ defmodule Girihelix.Engine.PlanarMapTest do
 
     assert PlanarMap.endpoints!(map, e) == {v, v}
   end
+
+  test "weld/2 is the final frame of its steps, with the mapping over the other map's vertices" do
+    {receiver, r1} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {receiver, r2} = PlanarMap.insert_vertex(receiver, Point.new(2.0, 2.0))
+    receiver = PlanarMap.insert_edge!(receiver, r1, r2)
+    {other, o1} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 2.0))
+    {other, o2} = PlanarMap.insert_vertex(other, Point.new(2.0, 0.0))
+    other = PlanarMap.insert_edge!(other, o1, o2)
+
+    {welded, mapping} = PlanarMap.weld(receiver, other)
+
+    frames = Steps.run!(PlanarMap.weld_steps(), PlanarMap.weld_start(receiver, other))
+    assert PlanarMap.weld_result(Steps.final(frames)) == {welded, mapping}
+    assert mapping |> Map.keys() |> Enum.sort() == Enum.sort([o1, o2])
+    assert PlanarMap.num_vertices(welded) == 5
+    assert PlanarMap.num_edges(welded) == 4
+  end
+
+  # Review Focus 2: welding a map to itself doubles every edge, as Taprats does.
+  test "weld/2 of a map with itself unifies every vertex and doubles every edge" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+    map = PlanarMap.insert_edge!(map, a, b)
+
+    {welded, mapping} = PlanarMap.weld(map, map)
+
+    assert mapping == %{a => a, b => b}
+    assert PlanarMap.num_edges(welded) == 2
+  end
 end

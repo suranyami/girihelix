@@ -31,6 +31,7 @@ defmodule Girihelix.Engine.PlanarMap do
   alias Girihelix.Engine.PlanarMap.Order
   alias Girihelix.Engine.PlanarMap.Ring
   alias Girihelix.Engine.PlanarMap.Split
+  alias Girihelix.Engine.PlanarMap.Weld
   alias Girihelix.Engine.Steps
 
   @enforce_keys [:vertices, :edges, :vertex_order, :edge_order, :next]
@@ -348,6 +349,141 @@ defmodule Girihelix.Engine.PlanarMap do
   end
 
   defp sort_edges(map), do: %{map | edge_order: Order.sort(map.edge_order, &min_x(map, &1), &Order.compare_min_x/2)}
+
+  # -- welding ----------------------------------------------------------------
+
+  @typedoc """
+  The state `weld_steps/0` runs over: both maps, the other map's vertices as
+  they were before welding, the crossings found, and where each other-map
+  vertex went in the receiver.
+  """
+  @type weld_state :: %{
+          receiver: t(),
+          other: t(),
+          originals: [vertex()],
+          crossings: [Point.t()],
+          mapping: %{vertex() => vertex()}
+        }
+
+  @doc """
+  Welds `other` into `receiver`, and returns the result with a map from every
+  vertex of `other` to the receiver vertex it became. It is the last state of
+  `weld_steps/0`, run from `weld_start/2`.
+
+  Wherever an edge of `other` crosses an edge of `receiver`, both are split at a
+  new vertex. Vertices then unify where they compare equal within the `1.0e-7`
+  window, the receiver's vertex surviving, and every edge of `other` is copied
+  across. Only crossings between the two maps are found. Overlapping collinear
+  edges are neither split nor merged, so a shared side becomes two parallel
+  edges, and welding a map with itself doubles every edge. Unification walks
+  the two vertex orders once, so of several `other` vertices within the window
+  of one receiver vertex only the first is unified with it. `other` is not
+  changed.
+  """
+  @spec weld(t(), t()) :: {t(), %{vertex() => vertex()}}
+  def weld(%__MODULE__{} = receiver, %__MODULE__{} = other) do
+    weld_steps() |> Steps.run!(weld_start(receiver, other)) |> Steps.final() |> weld_result()
+  end
+
+  @doc "The state `weld_steps/0` starts from."
+  @spec weld_start(t(), t()) :: weld_state()
+  def weld_start(%__MODULE__{} = receiver, %__MODULE__{} = other) do
+    %{receiver: receiver, other: other, originals: vertices(other), crossings: [], mapping: %{}}
+  end
+
+  @doc """
+  The stages of `weld/2` as a step sequence over a `t:weld_state/0`:
+  `:find_crossings`, `:force_vertices`, `:unify_vertices` and `:copy_edges`.
+  """
+  @spec weld_steps() :: [Steps.Step.t()]
+  def weld_steps do
+    [
+      step(
+        :find_crossings,
+        "find crossings",
+        "Finds every point where an edge of the other map crosses an edge of the receiver.",
+        &find_crossings/1
+      ),
+      step(
+        :force_vertices,
+        "force vertices",
+        "Puts a vertex at every crossing in the receiver and then in the other map, splitting the edges there.",
+        &force_vertices/1
+      ),
+      step(
+        :unify_vertices,
+        "unify vertices",
+        "Merges the two vertex orders: a vertex of the other map equal to the receiver vertex reached becomes that vertex, and any other becomes a new receiver vertex.",
+        &unify_vertices/1
+      ),
+      step(
+        :copy_edges,
+        "copy edges",
+        "Copies every edge of the other map between the receiver vertices its ends became, then puts the edges in minimum-x order.",
+        &copy_edges/1
+      )
+    ]
+  end
+
+  @doc """
+  The welded receiver and the mapping of a finished `t:weld_state/0`, the
+  mapping restricted to the other map's vertices from before welding.
+  """
+  @spec weld_result(weld_state()) :: {t(), %{vertex() => vertex()}}
+  def weld_result(%{receiver: receiver, originals: originals, mapping: mapping}),
+    do: {receiver, Map.take(mapping, originals)}
+
+  defp find_crossings(%{receiver: receiver, other: other} = state),
+    do: %{state | crossings: Weld.crossings(edge_ends(other), edge_ends(receiver))}
+
+  defp edge_ends(map) do
+    Enum.map(map.edge_order, fn edge ->
+      {v1, v2} = Map.fetch!(map.edges, edge)
+      {map.vertices[v1].pos, map.vertices[v2].pos}
+    end)
+  end
+
+  defp force_vertices(%{crossings: crossings} = state) do
+    Enum.reduce(crossings, state, fn point, %{receiver: receiver, other: other} = acc ->
+      {receiver, _vertex} = insert_vertex(receiver, point)
+      {other, _vertex} = insert_vertex(other, point)
+      %{acc | receiver: receiver, other: other}
+    end)
+  end
+
+  defp unify_vertices(%{receiver: receiver, other: other} = state) do
+    plan = Weld.merge_plan(positioned(receiver), positioned(other))
+    {order, receiver, mapping} = Enum.reduce(plan, {[], receiver, %{}}, &unify(&1, &2, other))
+    %{state | receiver: %{receiver | vertex_order: Enum.reverse(order)}, mapping: mapping}
+  end
+
+  defp positioned(map), do: Enum.map(map.vertex_order, &{&1, map.vertices[&1].pos})
+
+  defp unify({:mine, m}, {order, receiver, mapping}, _other), do: {[m | order], receiver, mapping}
+
+  defp unify({:same, m, y}, {order, receiver, mapping}, _other), do: {[m | order], receiver, Map.put(mapping, y, m)}
+
+  defp unify({:yours, y}, {order, receiver, mapping}, other) do
+    vertex = receiver.next
+
+    receiver = %{
+      receiver
+      | vertices: Map.put(receiver.vertices, vertex, %{pos: other.vertices[y].pos, ring: []}),
+        next: vertex + 1
+    }
+
+    {[vertex | order], receiver, Map.put(mapping, y, vertex)}
+  end
+
+  defp copy_edges(%{receiver: receiver, other: other, mapping: mapping} = state) do
+    copied =
+      Enum.reduce(other.edge_order, receiver, fn edge, acc ->
+        {v1, v2} = Map.fetch!(other.edges, edge)
+        append_edge(acc, Map.fetch!(mapping, v1), Map.fetch!(mapping, v2))
+      end)
+
+    %{state | receiver: sort_edges(copied)}
+  end
 
   # -- queries ----------------------------------------------------------------
 

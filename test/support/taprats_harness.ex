@@ -53,8 +53,8 @@ defmodule Girihelix.TapratsHarness do
   @doc """
   Runs a parsed script against `Girihelix.Engine.PlanarMap` and returns the dump
   of the map named by the final `dump` op. Per-map vertex indices refer to the
-  results of that map's `vertex` ops, in order. Op `weld` is not supported yet and
-  raises `ArgumentError`.
+  results of that map's `vertex` ops, in order. An unknown op raises
+  `ArgumentError`.
   """
   @spec run_script([op()]) :: dump()
   def run_script(ops), do: run(ops, %{})
@@ -83,6 +83,11 @@ defmodule Girihelix.TapratsHarness do
   defp step({:replicate, name, other, transforms}, state) do
     %{map: unit} = state_of(state, other)
     update_map(state, name, &PlanarMap.replicate(&1, unit, transforms))
+  end
+
+  defp step({:weld, name, other}, state) do
+    %{map: other_map} = state_of(state, other)
+    update_map(state, name, &(&1 |> PlanarMap.weld(other_map) |> elem(0)))
   end
 
   defp step({:transform, name, transform}, state), do: update_map(state, name, &PlanarMap.transform(&1, transform))
