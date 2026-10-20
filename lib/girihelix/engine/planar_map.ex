@@ -28,9 +28,11 @@ defmodule Girihelix.Engine.PlanarMap do
 
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
+  alias Girihelix.Engine.PlanarMap.Check
   alias Girihelix.Engine.PlanarMap.Order
   alias Girihelix.Engine.PlanarMap.Ring
   alias Girihelix.Engine.PlanarMap.Split
+  alias Girihelix.Engine.PlanarMap.Verify
   alias Girihelix.Engine.PlanarMap.Weld
   alias Girihelix.Engine.Steps
 
@@ -147,6 +149,37 @@ defmodule Girihelix.Engine.PlanarMap do
   @doc "`insert_edge/3`, raising `ArgumentError` on an unknown vertex."
   @spec insert_edge!(t(), vertex(), vertex()) :: t()
   def insert_edge!(map, v1, v2), do: map |> insert_edge(v1, v2) |> unwrap!()
+
+  @doc """
+  Adds an edge like `insert_edge/3`, but refuses one that would meet the map
+  anywhere other than at its own two end vertices: a crossing, a T-junction, an
+  overlap, a repeat of an existing edge, a self-edge, or a pass through another
+  vertex.
+  """
+  @spec insert_edge_checked(t(), vertex(), vertex()) ::
+          {:ok, t()} | {:error, :unknown_vertex | :crosses}
+  def insert_edge_checked(%__MODULE__{} = map, v1, v2) do
+    with {:ok, grown} <- insert_edge(map, v1, v2) do
+      checked(Check.crosses?(map, v1, v2), grown)
+    end
+  end
+
+  defp checked(true, _grown), do: {:error, :crosses}
+  defp checked(false, grown), do: {:ok, grown}
+
+  @doc "`insert_edge_checked/3`, raising `ArgumentError` naming the reason."
+  @spec insert_edge_checked!(t(), vertex(), vertex()) :: t()
+  def insert_edge_checked!(map, v1, v2), do: map |> insert_edge_checked(v1, v2) |> unwrap!()
+
+  @doc """
+  Checks the map's structure, for tests. `:ok` when sound, else
+  `{:error, problems}`; see `Girihelix.Engine.PlanarMap.Verify` for the problems.
+  """
+  @spec verify(t()) :: :ok | {:error, [Verify.problem()]}
+  def verify(%__MODULE__{} = map), do: map |> Verify.problems() |> verdict()
+
+  defp verdict([]), do: :ok
+  defp verdict(problems), do: {:error, problems}
 
   defp add_edge(map, v1, p1, v2, p2) do
     edge = map.next

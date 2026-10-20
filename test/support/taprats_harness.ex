@@ -108,7 +108,7 @@ defmodule Girihelix.TapratsHarness do
   @doc """
   The dump of a map: vertices and edges in the map's order, edges as vertex-order
   indices, rings as edge-order indices from each ring's head. `verify` is
-  `:unchecked`.
+  whether `PlanarMap.verify/1` finds no problem.
   """
   @spec dump(PlanarMap.t()) :: dump()
   def dump(map) do
@@ -127,7 +127,7 @@ defmodule Girihelix.TapratsHarness do
         Enum.map(vertices, fn v ->
           map |> PlanarMap.ring!(v) |> Enum.map(&Map.fetch!(edge_index, &1))
         end),
-      verify: :unchecked
+      verify: PlanarMap.verify(map) == :ok
     }
   end
 
