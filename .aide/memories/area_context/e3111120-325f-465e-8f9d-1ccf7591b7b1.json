@@ -1,0 +1,23 @@
+{
+  "id": 10,
+  "uuid": "e3111120-325f-465e-8f9d-1ccf7591b7b1",
+  "layer": "area_context",
+  "what": "The Taprats oracle (agreed 2026-10-20):\n- **Build:** Taprats 1.1.12 compiles cleanly with the installed Java 21 (javac on src/ minus plugins/, no Batik needed) and runs headless (-Djava.awt.headless=true). Star(8, 3.0, 2).getMap() gives 24 vertices and 32 edges, and Faces gives 8 black and 1 white.\n- **Use:** golden fixtures come from small Java driver programs calling the geometry directly.\n- **Local only:** the driver code and the fixtures are NOT committed (user's call), the same as reference/.\n- **Comparison:** structure must match exactly, and coordinates to 1e-12, since Java and Erlang trig can differ in the last bit.",
+  "why": "This is the source of truth for golden tests, and later for side-by-side checks of fixes.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "oracle",
+    "golden-tests",
+    "taprats",
+    "plan-1b"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T23:52:07.091Z",
+  "updated_at": "2026-10-19T23:52:07.091Z"
+}

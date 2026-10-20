@@ -1,0 +1,23 @@
+{
+  "id": 16,
+  "uuid": "30e2a06f-1369-4de9-b8cc-cc4ba36c309a",
+  "layer": "area_context",
+  "what": "User decision (2026-10-20): girihelix ports Java's list sort into PlanarMap.Order.sort/3 so edge and vertex order match Taprats exactly under the non-transitive 1e-7 comparators. That means binary insertion below 32 elements (after the initial run detection, with a strictly descending run reversed) and TimSort above. It must reproduce Java's sequence of comparisons, because with a non-transitive comparator a different sort algorithm gives a different order. Write it from the published algorithm description, never from OpenJDK source: OpenJDK is GPLv2 with the Classpath Exception, which is incompatible with girihelix's GPLv3. Its correctness is judged by fuzz golden scenarios against real Taprats.",
+  "why": "The final review of Plan 1b found Elixir's stable sort diverged from Taprats in 10 of 12 fuzz cases; the user chose faithful reproduction.",
+  "scope": "lib/girihelix/engine/planar_map*",
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "sorting",
+    "timsort",
+    "plan-1b",
+    "licensing"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-20T02:55:42.899Z",
+  "updated_at": "2026-10-20T02:55:42.899Z"
+}

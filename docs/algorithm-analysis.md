@@ -459,9 +459,10 @@ result is mapped back with `ret.transformMap( pmain.T.invert() )`.
 
 ## The geometry engine
 
-### `Map`: the planar map
+### `PlanarMap`
 
-A `Map` is an undirected graph embedded in the plane so that no edge crosses a
+The planar map (Taprats' `Map`; `Map` is a built-in Elixir module, so ours is
+`PlanarMap`) is an undirected graph embedded in the plane so that no edge crosses a
 vertex or another edge. Kaplan is explicit that this is not the textbook
 construction: the correct structure is a doubly-connected edge list with
 half-edges and explicit faces, and he deliberately built something simpler —
@@ -474,17 +475,18 @@ colour has to reconstruct that information.
 Internally it is two `Vector`s, one of vertices and one of edges. The interface
 is where the meaning lives:
 
-| Method | Purpose |
+| `PlanarMap` function (Taprats method) | Purpose |
 | --- | --- |
-| `insertVertex`, `insertEdge` | Build the graph. Neither tests for crossings: the no-crossing invariant is a *caller* precondition, not something the map enforces |
-| `mergeSimpleMany( other, transforms )` | Replicate `other` once per transform, rebuilding edges between copies |
-| `mergeMap( other, consume )` | Slow merge that welds `other` in and unifies coincident vertices |
-| `transformMap`, `scale`, `translate` | Apply an affine transform to every vertex in place |
-| `verify` | Structural sanity check, used throughout as a debug assertion |
+| `insert_vertex/2`, `insert_edge/3` (`insertVertex`, `insertEdge`) | Build the graph. `insert_edge/3` does not test for crossings: the no-crossing invariant is a *caller* precondition, not something the map enforces. `insert_edge_checked/3` is the checking variant |
+| `replicate/3` (`mergeSimpleMany`) | Replicate a unit into the receiver once per transform, rebuilding edges between copies |
+| `weld/2` (`mergeMap`) | Slow merge that welds the other map in and unifies coincident vertices |
+| `transform/2`, `scale/2`, `translate/3` (`transformMap`, `scale`, `translate`) | Apply an affine transform to every vertex |
+| `remove_vertex/2` (`removeVertex`) | Remove a vertex and its edges |
+| `verify/1` (`verify`) | Structural sanity check; see the notes after the flaws below |
 
-The gap between the two merge paths carries real weight. `mergeSimpleMany` simply
-maps each source vertex to a copy at the transformed position and rebuilds the
-edges, then sorts; `mergeMap` does the expensive work of reconciling topology.
+The gap between the two merge paths carries real weight. `replicate/3` simply
+maps each unit vertex to a copy at the transformed position and rebuilds the
+edges, then sorts; `weld/2` does the expensive work of reconciling topology.
 `Prototype` uses the fast path for mass replication and the slow path only to weld
 the final pieces together.
 
@@ -504,6 +506,93 @@ Three 1.1.12 changes sit on top of that, none of which alter the merge semantics
   `clone`. It nulls the scratch `copy` pointer on every vertex, so stale state
   from a previous merge cannot leak into the next. Worth reproducing: it is cheap
   and it removes a whole class of bug.
+
+### `PlanarMap`: the faithful flaws
+
+`PlanarMap` reproduces Taprats' behaviour, flaws included. Fixing one would change
+the maps every later stage builds, so each is kept, recorded here, and pinned by
+a test or a golden scenario. Golden scenarios are run against real Taprats 1.1.12
+through the local reference harness; the unit tests live under
+`test/girihelix/engine/`. A fix is accepted only after rendering both versions
+side by side shows it is a real improvement.
+
+1. **Non-transitive comparators.** Taprats orders vertices and edges with
+   comparators that treat differences under `1e-7` as equal, so `a` can equal `b`
+   and `b` equal `c` while `a` and `c` differ. The sort result then depends on the
+   algorithm. Decision: keep the comparators verbatim. Pinned by `order_test.exs`
+   ("compare_min_x/2 is not transitive") and the golden `sort-probe-replicate`,
+   which forces the final edge sort to reorder keys in overlapping `1e-7` windows.
+   That single probe agreed with Elixir's stable sort by chance: a later fuzz, in
+   which reversed edges are re-sorted by `replicate/3`, diverged from Taprats in
+   10 of 12 cases. The user chose to reproduce Java's sort, and `Order.sort/3`
+   now does so through `JavaSort`, which makes Java's comparisons in Java's
+   order. Pinned by the twelve `sortfuzz-*` goldens. Where Java throws instead,
+   see flaw 9.
+2. **At most one edge split per `insert_vertex/2`.** A new vertex that lands on an
+   edge splits it, but only the first such edge; a vertex on a second edge leaves
+   that one unsplit. Decision: keep it. Pinned by the golden `split-two-edges` and
+   `split-repeat`.
+3. **The receiver wins ties in `weld/2`, and a near-coincident cluster partly
+   unifies.** The merge is a one-pass two-pointer walk, not clustering: with
+   several vertices within `1e-7` of each other, some unify and some do not, and
+   where two vertices coincide the receiver's survives. Decision: keep it. Pinned
+   by the golden `weld-cluster` and the `merge_plan` test in `weld_test.exs`.
+4. **Overlapping collinear edges are not welded.** `weld/2` finds proper crossings
+   only, so two edges that overlap along a line stay separate; a side shared by
+   both maps becomes two parallel edges. Decision: keep it. Pinned by the golden
+   `weld-collinear` and `weld-shared-edge`.
+5. **Equal angles in a ring take the first slot met.** Two edges at the same angle
+   around a vertex are ordered by insertion, with the new entry placed after the
+   first entry it equals. Decision: keep it. Pinned by `ring_test.exs`
+   ("insert/2 puts an equal angle after the first entry it equals") and the
+   golden `duplicate-angle`.
+6. **Flips leave rings in their old order.** `scale/2` with a negative factor, or
+   `transform/2` with a flipping transform, moves the vertices but leaves every
+   neighbour ring in its old rotational order, so the rings run the wrong way
+   round. The flip is not detected. Decision: keep it. Pinned by the negative-scale
+   test in `planar_map_test.exs` and the golden `scale-negative`.
+7. **`replicate/3` never splits.** It finds or creates vertices without splitting
+   edges, so two unit vertices landing on one receiver vertex make a self-edge.
+   Decision: keep it. Pinned by the coalesce test in `planar_map_test.exs` and the
+   golden `replicate-coalesce` and `replicate-no-split`.
+8. **`transform/2` reangles against partly-moved neighbours.** It visits vertices
+   in order, moving each and then recomputing its ring angles against neighbours
+   that may not have moved yet. Ring order is unaffected, but a later insertion can
+   land where the true angles would not put it. Decision: keep it. Pinned by the
+   golden `transform-then-insert`.
+9. **The sort can throw.** Java's list sort throws "Comparison method violates
+   its general contract!" when a merge finds the non-transitive comparator
+   inconsistent, and Taprats crashes. Near-coincident edges whose keys are
+   flipped by a negative scale, then sorted, are enough to reach it. Taprats
+   crashes; the port reports `{:error, :inconsistent_order}` from
+   `transform/2`, `replicate/3` and `weld/2`, whose bang twins raise it. The
+   step sequences record the failure in the final state, whose receiver keeps
+   the edges in appended order. Decision: keep the throw point, report it as
+   data. Pinned by the "sort contract" tests in `planar_map_test.exs` and the
+   error tests in `java_sort_test.exs`.
+
+Further decisions are not flaws but are recorded so they are not mistaken
+for ones:
+
+- **`verify/1` is a test aid, not ported behaviour.** Taprats' own `verify` is
+  unreachable from its application path, and throws a `NullPointerException` on
+  the very failure it was written to report. Ours reports the problem instead. On
+  the six golden maps Taprats calls broken, ours also reports problems.
+- **A split's ring swap that finds no entry leaves the ring unchanged.** This is
+  possible only in an inconsistent map. Taprats throws a `NullPointerException`
+  there; the port deliberately diverges on this unreachable input.
+- **Removing a vertex that has a self-edge** gives the same clean result as
+  Taprats (golden `remove-self-edge`).
+- **Coordinates are assumed well below about `1e150` in magnitude.** Beyond that,
+  squared distances overflow and Erlang float arithmetic raises, where Taprats
+  would carry Infinity. No guard is added.
+- **Integer handles cannot detect a handle from a different map.** A handle that
+  happens to exist in this map resolves to this map's vertex or edge of the same
+  number. A tagged handle is a design change for a later plan.
+- **`replicate(m, m, ts)` is a deliberate divergence.** Taprats' `mergeSimpleMany`
+  walks the very list it is appending to, and did not terminate within two minutes
+  in the harness. The port's unit is an immutable value, so replicating a map into
+  itself gives a finite result.
 
 ### `Intersect`: segment crossings
 

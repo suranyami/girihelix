@@ -1,0 +1,22 @@
+{
+  "id": 15,
+  "uuid": "5fb9ece1-777d-4ac4-a1f6-562624ce7be9",
+  "layer": "technical",
+  "what": "`mix format` in girihelix runs Styler, which can move an `import` above the aliases and displace `# --` section comments in a module. After formatting, check that section comments still sit where they belong.",
+  "why": "Hit by the Task 7 implementer in lib/girihelix/engine/planar_map.ex on 2026-10-20.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "formatter",
+    "styler",
+    "tooling"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-20T02:32:10.467Z",
+  "updated_at": "2026-10-20T02:32:10.467Z"
+}

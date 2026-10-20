@@ -14,13 +14,13 @@ defmodule Girihelix.Engine.Geometry.SegmentTest do
     assert Segment.new(Point.new(1.0, 2.0), Point.new(1.0, 2.0)) == {:error, :coincident_points}
   end
 
-  # Review Focus 1: 0.0 and -0.0 are not `===`, so a strict-equality guard would
+  # 0.0 and -0.0 are not `===`, so a strict-equality guard would
   # accept a segment of length zero.
   test "new/2 refuses points that differ only in the sign of zero" do
     assert Segment.new(Point.new(0.0, 0.0), Point.new(-0.0, 0.0)) == {:error, :coincident_points}
   end
 
-  # Review Focus 2: the points are distinct, but their squared distance is 0.0,
+  # The points are distinct, but their squared distance is 0.0,
   # which is the divisor every Segment consumer relies on being positive.
   test "new/2 refuses distinct points whose squared distance underflows" do
     assert Segment.new(Point.origin(), Point.new(1.0e-170, 0.0)) == {:error, :coincident_points}

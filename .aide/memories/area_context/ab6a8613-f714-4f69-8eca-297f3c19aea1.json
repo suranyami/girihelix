@@ -1,0 +1,22 @@
+{
+  "id": 12,
+  "uuid": "ab6a8613-f714-4f69-8eca-297f3c19aea1",
+  "layer": "area_context",
+  "what": "PlanarMap API shape (user decision 2026-10-20): every function taking a vertex or edge handle returns {:ok, …} or {:error, :unknown_vertex | :unknown_edge}, with a bang twin that raises ArgumentError. Code that just created its handles (figure builders) uses the bang twins so threading stays a plain pipe, e.g. map |> PlanarMap.insert_edge!(a, b). Functions taking only points or transforms (insert_vertex/2, transform/2, scale, translate, replicate, weld) return bare values.",
+  "why": "Handles go stale after remove_vertex, after weld, or across maps. That is caller-supplied input, so per AGENTS.md only bang functions may raise on it.",
+  "scope": "lib/girihelix/engine/**",
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "planar-map",
+    "plan-1b",
+    "api"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-20T00:04:20.775Z",
+  "updated_at": "2026-10-20T00:04:20.775Z"
+}

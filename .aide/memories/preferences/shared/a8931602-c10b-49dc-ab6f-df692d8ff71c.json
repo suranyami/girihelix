@@ -1,0 +1,21 @@
+{
+  "id": 11,
+  "uuid": "a8931602-c10b-49dc-ab6f-df692d8ff71c",
+  "layer": "preferences",
+  "what": "Explain or avoid unexplained jargon and unfamiliar names. In the same Plan 1b discussion (2026-10-20) the user had to ask what \"Batik\" (Apache's Java SVG library) and \"oracle\" (the trusted source of expected answers, here real Taprats) meant. Introduce a term with a one-line gloss on first use, or use a plainer name such as \"Taprats reference harness\".",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "communication",
+    "jargon"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T23:52:28.622Z",
+  "updated_at": "2026-10-19T23:52:28.622Z"
+}

@@ -350,6 +350,10 @@ seven plans, and two boundaries move.
 | 6 | Ash layer — resources, figure union type, migrations, catalogue seeding | A Design round-trips through Postgres | unchanged |
 | 7 | Studio — tiling picker, figure controls, style, preview, save and load | The domain spec's success criterion 1 | was the LiveView showcase |
 
+Plan 1's remainder, after `Steps` and the geometry value types, became Plans 1b
+(`PlanarMap` and the Taprats reference harness) and 1c (`Faces`, `FillRegion` and
+`Rect`).
+
 `Steps` lands in Plan 1 rather than Plan 2 because it decides how Plan 1's
 algorithms are written; introducing it later would mean rewriting them. The SVG
 substrate lands in Plan 2 rather than Plan 5 because the workbench needs it and

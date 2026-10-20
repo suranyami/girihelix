@@ -1,0 +1,22 @@
+{
+  "id": 6,
+  "uuid": "6f4a5a70-0b82-49a2-9065-ae751b0ce633",
+  "layer": "guidelines",
+  "what": "Port Taprats behaviour faithfully first, including known flaws (FillRegion edge gaps, transformVertex's skipped re-sort, the non-transitive edge comparator). Record each flaw. Fix them later, and only with evidence that each fix is a real fix, not a \"fix\" of something that wasn't broken.",
+  "why": "The user's direction at the start of Plan 1b brainstorming (2026-10-20): faithful output gives something to verify against.",
+  "scope": "lib/girihelix/engine/**",
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "fidelity",
+    "porting",
+    "taprats"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T22:09:02.791Z",
+  "updated_at": "2026-10-19T22:09:02.791Z"
+}

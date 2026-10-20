@@ -1,0 +1,22 @@
+{
+  "id": 8,
+  "uuid": "35fe480e-9bca-4d6d-8f2a-7b5eb18c47a1",
+  "layer": "area_context",
+  "what": "PlanarMap representation, agreed with the user 2026-10-20 (Plan 1b brainstorming): vertices and edges are integer handles, and only the PlanarMap holds their state. Every operation returns the new map, plus the created handle where useful (e.g. {map, vertex_id} = insert_vertex(map, point)). Callers thread the map through Enum.reduce rather than holding live references as Taprats' Star.buildUnit does.",
+  "why": "Taprats mutates Map, Edge and Vertex in place (splitEdgesByVertex touches five objects per call), so value snapshots held by callers would go stale.",
+  "scope": "lib/girihelix/engine/**",
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "planar-map",
+    "plan-1b",
+    "design"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T23:43:12.957Z",
+  "updated_at": "2026-10-19T23:43:12.957Z"
+}

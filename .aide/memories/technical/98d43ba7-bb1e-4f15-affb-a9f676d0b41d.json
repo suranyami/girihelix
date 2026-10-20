@@ -1,0 +1,22 @@
+{
+  "id": 13,
+  "uuid": "98d43ba7-bb1e-4f15-affb-a9f676d0b41d",
+  "layer": "technical",
+  "what": "The block-no-verify PreToolUse hook rejects any Bash command that contains the text \"git commit\" together with a token starting \"-n\" — even \"-nowarn\" inside a heredoc of plan text. To append such text to a file, write it with the Write tool to a scratchpad file, then `cat` it on in a command that has no \"git commit\" in it. Separately, the user preferred subagent-driven execution for the 10-task Plan 1b.",
+  "why": "Hit while writing the Plan 1b plan on 2026-10-20; the hook gives no hint that a false positive is the cause.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "hooks",
+    "tooling",
+    "git"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-20T02:00:16.951Z",
+  "updated_at": "2026-10-20T02:00:16.951Z"
+}

@@ -1,0 +1,22 @@
+{
+  "id": 7,
+  "uuid": "c4e80cfc-3210-471a-a7a3-1ea350e969f9",
+  "layer": "guidelines",
+  "what": "When porting Taprats algorithms, separate the \"algorithmic\" core (the geometric decision: which edge to split, where faces close, which crossings count) from the \"busy-work\" (iterating, index juggling, keeping vectors sorted, threading state). Express the busy-work with standard functional tools (Enum.reduce/map/reduce_while, threading the map through), and keep the algorithmic part in small named pure functions. Restructuring the Java's control flow to do this is expected.",
+  "why": "The user's direction during Plan 1b brainstorming (2026-10-20). Mutate-in-place code does not survive a literal port, and the separation also gives the workbench's step sequences their natural labels.",
+  "scope": "lib/girihelix/engine/**",
+  "context_label": null,
+  "contributor": "David Parry",
+  "tags": [
+    "porting",
+    "functional",
+    "structure"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-19T22:24:07.322Z",
+  "updated_at": "2026-10-19T22:24:07.322Z"
+}

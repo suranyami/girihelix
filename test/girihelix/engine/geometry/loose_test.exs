@@ -23,7 +23,7 @@ defmodule Girihelix.Engine.Geometry.LooseTest do
     refute Loose.equals(origin, Point.new(1.0e-4, 0.0))
   end
 
-  # Review Focus 2: two predicates both spelled "equals" that disagree by a
+  # Two predicates both spelled "equals" that disagree by a
   # factor of a hundred in linear terms. Pinned here so that any future
   # unification of them has to be a deliberate act.
   test "Point.equals/2 is stricter than Loose.equals/2" do
