@@ -2,6 +2,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
   use ExUnit.Case, async: true
 
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
 
   test "insert_vertex/2 reuses a vertex inside the 1e-7 square window" do
@@ -67,5 +68,56 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert PlanarMap.neighbour!(map, mid, a)
     assert PlanarMap.neighbour!(map, mid, b)
     assert PlanarMap.neighbour!(map, a, b) == nil
+  end
+
+  # Review Focus 1: a removed vertex's handle is unknown everywhere.
+  test "a removed vertex's handle is unknown everywhere" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+    map = map |> PlanarMap.insert_edge!(a, b) |> PlanarMap.remove_vertex!(a)
+
+    assert PlanarMap.position(map, a) == {:error, :unknown_vertex}
+    assert PlanarMap.insert_edge(map, a, b) == {:error, :unknown_vertex}
+    assert PlanarMap.remove_vertex(map, a) == {:error, :unknown_vertex}
+    assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.ring!(map, a) end
+    assert PlanarMap.ring!(map, b) == []
+    assert PlanarMap.num_edges(map) == 0
+  end
+
+  test "remove_vertex/2 of a self-edge's vertex removes the edge once" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+    map = map |> PlanarMap.insert_edge!(a, a) |> PlanarMap.insert_edge!(a, b)
+    map = PlanarMap.remove_vertex!(map, a)
+
+    assert PlanarMap.num_edges(map) == 0
+    assert PlanarMap.vertices(map) == [b]
+  end
+
+  # Review Focus 5 (flaw 6): a flip is not detected, so rings keep their old order.
+  test "scale/2 by a negative factor moves points but keeps every ring's order" do
+    {map, hub} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+
+    map =
+      Enum.reduce([{1.0, 0.0}, {0.0, 1.0}, {-1.0, -1.0}], map, fn {x, y}, map ->
+        {map, v} = PlanarMap.insert_vertex(map, Point.new(x, y))
+        PlanarMap.insert_edge!(map, hub, v)
+      end)
+
+    before = PlanarMap.ring!(map, hub)
+    flipped = PlanarMap.scale(map, -1.0)
+
+    assert PlanarMap.ring!(flipped, hub) == before
+    assert PlanarMap.position!(flipped, hub) == Point.new(0.0, 0.0)
+  end
+
+  test "translate/3 moves every vertex" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(1.0, 2.0))
+
+    assert PlanarMap.position!(PlanarMap.translate(map, 3.0, -1.0), a) == Point.new(4.0, 1.0)
+  end
+
+  test "transform/2 of an empty map is an empty map" do
+    assert PlanarMap.vertices(PlanarMap.transform(PlanarMap.new(), Transform.rotate(1.0))) == []
   end
 end

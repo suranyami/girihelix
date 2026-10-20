@@ -25,6 +25,7 @@ defmodule Girihelix.Engine.PlanarMap do
   """
 
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap.Order
   alias Girihelix.Engine.PlanarMap.Ring
   alias Girihelix.Engine.PlanarMap.Split
@@ -168,6 +169,97 @@ defmodule Girihelix.Engine.PlanarMap do
   defp min_x(map, edge) do
     {v1, v2} = Map.fetch!(map.edges, edge)
     min(map.vertices[v1].pos.x, map.vertices[v2].pos.x)
+  end
+
+  # -- removal and rigid motions -----------------------------------------------
+
+  @doc """
+  Removes `vertex` and every edge at it. The far end of each such edge loses it
+  from its ring, and a ring whose head was that edge takes the edge before it as
+  its new head. Every handle of the removed vertex and edges is unknown after.
+  """
+  @spec remove_vertex(t(), vertex()) :: {:ok, t()} | {:error, :unknown_vertex}
+  def remove_vertex(%__MODULE__{} = map, vertex) do
+    with {:ok, %{ring: ring}} <- fetch_vertex(map, vertex) do
+      removed =
+        ring |> Ring.edges() |> Enum.reduce(map, &remove_edge(&2, &1, vertex))
+
+      {:ok,
+       %{
+         removed
+         | vertices: Map.delete(removed.vertices, vertex),
+           vertex_order: List.delete(removed.vertex_order, vertex)
+       }}
+    end
+  end
+
+  @doc "`remove_vertex/2`, raising `ArgumentError` on an unknown vertex."
+  @spec remove_vertex!(t(), vertex()) :: t()
+  def remove_vertex!(map, vertex), do: map |> remove_vertex(vertex) |> unwrap!()
+
+  # An edge at a self-edge's vertex is listed twice in its ring; the second
+  # visit finds it already gone.
+  defp remove_edge(map, edge, vertex) do
+    remove_known_edge(map, edge, Map.fetch(map.edges, edge), vertex)
+  end
+
+  defp remove_known_edge(map, _edge, :error, _vertex), do: map
+
+  defp remove_known_edge(map, edge, {:ok, ends}, vertex) do
+    update_ring(
+      %{map | edges: Map.delete(map.edges, edge), edge_order: List.delete(map.edge_order, edge)},
+      far_end(ends, vertex),
+      &Ring.remove(&1, edge)
+    )
+  end
+
+  @doc """
+  Applies `transform` to every position, recomputes the ring angles, and puts
+  both orders back in sequence.
+
+  Rings keep their order. A transform that flips (negative determinant) leaves
+  every ring in its old rotational order, undetected. Angles are recomputed
+  vertex by vertex against neighbours that may not have moved yet, so a later
+  insertion can land where the true angles would not put it.
+  """
+  @spec transform(t(), Transform.t()) :: t()
+  def transform(%__MODULE__{} = map, %Transform{} = transform) do
+    moved = Enum.reduce(map.vertex_order, map, &move_vertex(&2, &1, transform))
+
+    %{
+      moved
+      | vertex_order: Order.sort(moved.vertex_order, &moved.vertices[&1].pos, &Order.compare_points/2),
+        edge_order: Order.sort(moved.edge_order, &min_x(moved, &1), &Order.compare_min_x/2)
+    }
+  end
+
+  defp move_vertex(map, vertex, transform) do
+    pos = Transform.apply_to(transform, map.vertices[vertex].pos)
+    moved = %{map | vertices: Map.update!(map.vertices, vertex, &%{&1 | pos: pos})}
+
+    update_ring(moved, vertex, fn ring ->
+      Ring.reangle(ring, fn edge ->
+        Ring.angle(pos, moved.vertices[far_end(moved.edges[edge], vertex)].pos)
+      end)
+    end)
+  end
+
+  @doc "Scales every position about the origin. No angle or order is recomputed."
+  @spec scale(t(), number()) :: t()
+  def scale(map, factor), do: move_all(map, Transform.scale(factor))
+
+  @doc "Translates every position. No angle or order is recomputed."
+  @spec translate(t(), number(), number()) :: t()
+  def translate(map, x, y), do: move_all(map, Transform.translate(x, y))
+
+  defp move_all(%__MODULE__{} = map, transform) do
+    %{
+      map
+      | vertices:
+          Map.new(map.vertices, fn {vertex, entry} ->
+            {vertex, %{entry | pos: Transform.apply_to(transform, entry.pos)}}
+          end)
+    }
   end
 
   # -- queries ----------------------------------------------------------------

@@ -53,8 +53,8 @@ defmodule Girihelix.TapratsHarness do
   @doc """
   Runs a parsed script against `Girihelix.Engine.PlanarMap` and returns the dump
   of the map named by the final `dump` op. Per-map vertex indices refer to the
-  results of that map's `vertex` ops, in order. Only `vertex`, `edge` and `dump`
-  are supported so far; any other op raises `ArgumentError`.
+  results of that map's `vertex` ops, in order. Ops `replicate` and `weld` are not
+  supported yet and raise `ArgumentError`.
   """
   @spec run_script([op()]) :: dump()
   def run_script(ops), do: run(ops, %{})
@@ -74,7 +74,24 @@ defmodule Girihelix.TapratsHarness do
     Map.put(state, name, %{map: map, handles: handles})
   end
 
+  defp step({:remove, name, i}, state) do
+    %{map: map, handles: handles} = state_of(state, name)
+    map = PlanarMap.remove_vertex!(map, Enum.fetch!(handles, i))
+    Map.put(state, name, %{map: map, handles: handles})
+  end
+
+  defp step({:transform, name, transform}, state), do: update_map(state, name, &PlanarMap.transform(&1, transform))
+
+  defp step({:scale, name, r}, state), do: update_map(state, name, &PlanarMap.scale(&1, r))
+
+  defp step({:translate, name, x, y}, state), do: update_map(state, name, &PlanarMap.translate(&1, x, y))
+
   defp step(op, _state), do: raise(ArgumentError, "script op not yet supported: #{inspect(op)}")
+
+  defp update_map(state, name, fun) do
+    entry = state_of(state, name)
+    Map.put(state, name, %{entry | map: fun.(entry.map)})
+  end
 
   defp state_of(state, name), do: Map.get(state, name, %{map: PlanarMap.new(), handles: []})
 
