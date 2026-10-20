@@ -27,6 +27,7 @@ defmodule Girihelix.Engine.PlanarMap do
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.PlanarMap.Order
   alias Girihelix.Engine.PlanarMap.Ring
+  alias Girihelix.Engine.PlanarMap.Split
 
   @enforce_keys [:vertices, :edges, :vertex_order, :edge_order, :next]
   defstruct [:vertices, :edges, :vertex_order, :edge_order, :next]
@@ -52,11 +53,65 @@ defmodule Girihelix.Engine.PlanarMap do
   @doc """
   The vertex at `point`: the existing one when a vertex lies within the
   `1.0e-7` square window of it, otherwise a new vertex.
+
+  Either way, when the vertex lies on an edge it does not end, that edge is split
+  at it into two. At most one edge is split per call: a vertex on two crossing
+  edges splits only the first in edge order.
   """
   @spec insert_vertex(t(), Point.t()) :: {t(), vertex()}
   def insert_vertex(%__MODULE__{} = map, %Point{} = point) do
     entries = Enum.map(map.vertex_order, &{&1, map.vertices[&1].pos})
-    place_vertex(Order.find_or_insert(entries, point), map, point)
+    {map, vertex} = place_vertex(Order.find_or_insert(entries, point), map, point)
+    {split_at(map, vertex), vertex}
+  end
+
+  defp split_at(map, vertex) do
+    point = map.vertices[vertex].pos
+
+    candidates =
+      Enum.map(map.edge_order, fn edge ->
+        {v1, v2} = Map.fetch!(map.edges, edge)
+        {edge, map.vertices[v1].pos, map.vertices[v2].pos}
+      end)
+
+    split_edge(Split.first_splittable(candidates, point), map, vertex)
+  end
+
+  defp split_edge(nil, map, _vertex), do: map
+
+  defp split_edge(edge, map, vertex) do
+    {v1, v2} = Map.fetch!(map.edges, edge)
+    new_edge = map.next
+    far_edge = find_neighbour(map, v2, v1)
+    vpos = map.vertices[vertex].pos
+
+    %{
+      map
+      | edges: map.edges |> Map.put(new_edge, {vertex, v2}) |> Map.put(edge, {v1, vertex}),
+        next: new_edge + 1
+    }
+    |> update_ring(v2, &Ring.swap(&1, far_edge, new_edge))
+    |> reorder_split(edge, new_edge)
+    |> register(vertex, {edge, Ring.angle(vpos, map.vertices[v1].pos)})
+    |> register(vertex, {new_edge, Ring.angle(vpos, map.vertices[v2].pos)})
+  end
+
+  defp update_ring(map, vertex, fun) do
+    %{map | vertices: Map.update!(map.vertices, vertex, &%{&1 | ring: fun.(&1.ring)})}
+  end
+
+  # The split edge leaves the edge order and both halves go back in by minimum x,
+  # the new far half first.
+  defp reorder_split(map, edge, new_edge) do
+    %{map | edge_order: List.delete(map.edge_order, edge)}
+    |> insert_in_order(new_edge)
+    |> insert_in_order(edge)
+  end
+
+  defp insert_in_order(map, edge) do
+    keys = Enum.map(map.edge_order, &min_x(map, &1))
+    index = Order.edge_insert_index(keys, min_x(map, edge))
+    %{map | edge_order: List.insert_at(map.edge_order, index, edge)}
   end
 
   defp place_vertex({:found, vertex}, map, _point), do: {map, vertex}
@@ -163,9 +218,15 @@ defmodule Girihelix.Engine.PlanarMap do
   """
   @spec neighbour(t(), vertex(), vertex()) :: {:ok, edge() | nil} | {:error, :unknown_vertex}
   def neighbour(%__MODULE__{} = map, vertex, other) do
-    with {:ok, ring} <- ring(map, vertex) do
-      {:ok, Enum.find(ring, &(far_end(map.edges[&1], vertex) == other))}
+    with {:ok, _ring} <- ring(map, vertex) do
+      {:ok, find_neighbour(map, vertex, other)}
     end
+  end
+
+  defp find_neighbour(map, vertex, other) do
+    map.vertices[vertex].ring
+    |> Ring.edges()
+    |> Enum.find(&(far_end(map.edges[&1], vertex) == other))
   end
 
   @doc "`neighbour/3`, raising `ArgumentError` on an unknown vertex."

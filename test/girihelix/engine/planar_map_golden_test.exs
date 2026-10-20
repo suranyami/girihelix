@@ -8,7 +8,8 @@ defmodule Girihelix.Engine.PlanarMapGoldenTest do
 
   @moduletag :taprats
 
-  @scenarios ~w(basic-edge coincident-vertices hub-ring duplicate-angle self-edge)
+  @scenarios ~w(basic-edge coincident-vertices hub-ring duplicate-angle self-edge
+    split-on-edge split-two-edges split-repeat split-at-endpoint split-keeps-ring)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do

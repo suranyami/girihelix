@@ -56,4 +56,16 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert PlanarMap.before_and_after!(map, hub, e_east) == {e_north, e_north}
     assert PlanarMap.before_and_after!(map, east, e_north) == nil
   end
+
+  test "insert_vertex/2 splits the edge it lands on into two" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {map, b} = PlanarMap.insert_vertex(map, Point.new(2.0, 0.0))
+    map = PlanarMap.insert_edge!(map, a, b)
+    {map, mid} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+
+    assert PlanarMap.num_edges(map) == 2
+    assert PlanarMap.neighbour!(map, mid, a)
+    assert PlanarMap.neighbour!(map, mid, b)
+    assert PlanarMap.neighbour!(map, a, b) == nil
+  end
 end
