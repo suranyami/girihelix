@@ -12,6 +12,7 @@ defmodule GirihelixWeb.Workbench.Registry do
   iteration order.
   """
 
+  alias GirihelixWeb.Workbench.Exhibits.Faces
   alias GirihelixWeb.Workbench.Exhibits.Intersect
   alias GirihelixWeb.Workbench.Exhibits.Loose
   alias GirihelixWeb.Workbench.Exhibits.PlanarMap
@@ -19,7 +20,7 @@ defmodule GirihelixWeb.Workbench.Registry do
   alias GirihelixWeb.Workbench.Exhibits.Polygon
   alias GirihelixWeb.Workbench.Exhibits.Transform
 
-  @exhibits [Loose, Point, Transform, Intersect, Polygon, PlanarMap]
+  @exhibits [Loose, Point, Transform, Intersect, Polygon, PlanarMap, Faces]
 
   @doc "Every registered exhibit, in display order."
   @spec exhibits() :: [module()]
