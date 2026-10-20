@@ -8,7 +8,8 @@ defmodule Girihelix.Engine.FillRegionGoldenTest do
 
   @moduletag :taprats
 
-  @scenarios ~w()
+  @scenarios ~w(fill-unit-square fill-skewed fill-rotated-region fill-edge-gaps
+    fill-cap-999 fill-cap-1000)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do

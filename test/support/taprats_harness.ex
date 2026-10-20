@@ -15,6 +15,7 @@ defmodule Girihelix.TapratsHarness do
   to return an error tuple to.
   """
 
+  alias Girihelix.Engine.FillRegion
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
@@ -71,9 +72,14 @@ defmodule Girihelix.TapratsHarness do
 
   defp run([{:faces, _name}], _state), do: raise(ArgumentError, "script op not yet supported: faces")
 
-  defp run([{:fill, _region, _t1, _t2}], _state), do: raise(ArgumentError, "script op not yet supported: fill")
+  defp run([{:fill, region, t1, t2}], _state), do: region |> FillRegion.fill(t1, t2) |> fill_dump()
 
   defp run([op | rest], state), do: run(rest, step(op, state))
+
+  defp fill_dump({:ok, cells}), do: %{cells: {:ok, cells}}
+  defp fill_dump({:error, :too_many_units}), do: %{cells: {:error, :too_many}}
+
+  defp fill_dump({:error, :degenerate_basis}), do: raise(ArgumentError, "a golden fill scenario has a degenerate basis")
 
   defp step({:vertex, name, x, y}, state) do
     %{map: map, handles: handles} = state_of(state, name)
