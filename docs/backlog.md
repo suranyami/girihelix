@@ -28,17 +28,6 @@ conversion or a `sorter/0` helper, and Plan 3 will need it, since the
 comparator's one caller is in `Infer`. A comparator is exactly the kind of thing
 a spec should pin down.
 
-### `Map` → `PlanarMap` (captured 2026-10-17)
-
-Triaged once (2026-10-19): carried to Plan 1b, where it is to be settled.
-
-Rename to `PlanarMap`, with `mergeSimpleMany` → `replicate/2` and `mergeMap` →
-`weld/2`. `Map` is a built-in Elixir module, so our module cannot refer to itself
-by that name and a caller aliasing it shadows `Map.new/2` and friends. Nothing is
-in code yet — `Map` exists only in the docs — so this is a naming decision with no
-migration cost. The Java-to-Elixir name mapping belongs in one table in
-`reference/porting-notes/`, not in each module's docs.
-
 ## Closed
 
 - **`Point.normalize/1`'s scaling branch unasserted** (Plan 1a review). Closed
@@ -70,3 +59,8 @@ migration cost. The Java-to-Elixir name mapping belongs in one table in
   unrepresentable by `Segment`.)
 - **`Polygon.new/1` did not say the closing edge is implicit** (Plan 1a review).
   Closed 2026-10-17: documented on `new/1` during the rework.
+- **`Map` → `PlanarMap`** (captured 2026-10-17). Closed 2026-10-20: the module is
+  `PlanarMap`, with `mergeSimpleMany` as `replicate/3` and `mergeMap` as `weld/2`,
+  in `53f656f` (`PlanarMap` with vertex and edge insertion), `9e7ff8c`
+  (`replicate/3`) and `c37cabf` (`weld/2`), with the flaws recorded in the
+  homogenisation commit (Plan 1b, Task 10).

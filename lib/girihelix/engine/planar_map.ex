@@ -259,7 +259,6 @@ defmodule Girihelix.Engine.PlanarMap do
   vertex by vertex against neighbours that may not have moved yet, so a later
   insertion can land where the true angles would not put it.
   """
-
   @spec transform(t(), Transform.t()) :: t()
   def transform(%__MODULE__{} = map, %Transform{} = transform) do
     moved = Enum.reduce(map.vertex_order, map, &move_vertex(&2, &1, transform))

@@ -38,7 +38,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert_raise ArgumentError, ~r/unknown_vertex/, fn -> PlanarMap.insert_edge!(map, 999, a) end
   end
 
-  # Review Focus 4: the unchecked insert accepts a self-edge, as Taprats does.
+  # The unchecked insert accepts a self-edge, as Taprats does.
   test "insert_edge!/3 from a vertex to itself puts the edge in its ring twice" do
     {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(1.0, 1.0))
     map = PlanarMap.insert_edge!(map, a, a)
@@ -71,7 +71,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert PlanarMap.neighbour!(map, a, b) == nil
   end
 
-  # Review Focus 1: a removed vertex's handle is unknown everywhere.
+  # A removed vertex's handle is unknown everywhere.
   test "a removed vertex's handle is unknown everywhere" do
     {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
     {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
@@ -95,7 +95,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert PlanarMap.vertices(map) == [b]
   end
 
-  # Review Focus 5 (flaw 6): a flip is not detected, so rings keep their old order.
+  # A flip is not detected, so rings keep their old order.
   test "scale/2 by a negative factor moves points but keeps every ring's order" do
     {map, hub} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
 
@@ -164,7 +164,7 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert PlanarMap.num_edges(welded) == 4
   end
 
-  # Review Focus 2: welding a map to itself doubles every edge, as Taprats does.
+  # Welding a map to itself doubles every edge, as Taprats does.
   test "weld/2 of a map with itself unifies every vertex and doubles every edge" do
     {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
     {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))

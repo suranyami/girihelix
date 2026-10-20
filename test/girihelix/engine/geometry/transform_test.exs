@@ -71,7 +71,7 @@ defmodule Girihelix.Engine.Geometry.TransformTest do
     assert Transform.flips(transform)
   end
 
-  # Review Focus 2: the shortest segments Segment accepts must still reflect,
+  # The shortest segments Segment accepts must still reflect,
   # because their squared length is the determinant the reflection inverts.
   test "reflect_through_line/1 is total on a very short segment" do
     segment = Segment.new!(Point.origin(), Point.new(1.0e-150, 0.0))

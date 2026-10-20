@@ -25,7 +25,7 @@ defmodule Girihelix.Engine.Geometry.IntersectTest do
            ) == nil
   end
 
-  # Review Focus 4: two quite different situations both produce nil, and the
+  # Two quite different situations both produce nil, and the
   # caller cannot tell them apart. Pinned so that no caller grows a dependency
   # on a distinction that does not exist.
   test "parallel and off-segment inputs are indistinguishable" do

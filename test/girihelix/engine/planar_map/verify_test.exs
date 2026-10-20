@@ -25,7 +25,6 @@ defmodule Girihelix.Engine.PlanarMap.VerifyTest do
     assert PlanarMap.verify(PlanarMap.new()) == :ok
   end
 
-  # Review Focus 4.
   test "verify/1 reports a self-edge as trivial" do
     {map, [a]} = path([{0.0, 0.0}])
     map = PlanarMap.insert_edge!(map, a, a)
@@ -35,7 +34,6 @@ defmodule Girihelix.Engine.PlanarMap.VerifyTest do
     assert {:trivial_edge, e} in problems
   end
 
-  # Review Focus 2.
   test "verify/1 reports the parallel edges a self-weld makes" do
     {map, [a, b]} = path([{0.0, 0.0}, {1.0, 0.0}])
     map = PlanarMap.insert_edge!(map, a, b)

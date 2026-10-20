@@ -11,7 +11,7 @@ defmodule Girihelix.Engine.Steps do
   `Point`, `Transform`, `Intersect` and `Polygon` expose no `steps/…`. A sequence
   wrapping them would be a list of one-line delegations to functions that already
   *are* the whole implementation, and `final(steps) == plain` would be a
-  tautology. The first real subjects are `Map.merge_map`, `Faces.extract_faces`
+  tautology. The first real subjects are `PlanarMap.weld/2`, `Faces.extract_faces`
   and `FillRegion.fill`, then the figure builders.
   """
 

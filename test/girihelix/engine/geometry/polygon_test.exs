@@ -87,7 +87,7 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     assert_raise ArgumentError, ~r/too_few_vertices/, fn -> Polygon.new!([Point.origin()]) end
   end
 
-  # Review Focus 3: distinctness is the caller's responsibility, so a polygon of
+  # Distinctness is the caller's responsibility, so a polygon of
   # three coincident vertices is representable and must measure as nothing.
   test "three coincident vertices make a polygon with no area or length" do
     point = Point.new(2.0, 3.0)
@@ -99,7 +99,7 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     refute Polygon.contains_point?(collapsed, point)
   end
 
-  # Review Focus 4: Enum.fetch/2 counts from the end on a negative index.
+  # Enum.fetch/2 counts from the end on a negative index.
   test "vertex/2 treats a negative index as out of range" do
     assert Polygon.vertex(unit_square(), -1) == {:error, :out_of_range}
   end
@@ -119,7 +119,7 @@ defmodule Girihelix.Engine.Geometry.PolygonTest do
     refute Polygon.point_in_poly(points, Point.new(1.5, 0.5))
   end
 
-  # Review Focus 5's boundary case, pinned because it is reachable and
+  # The boundary case, pinned because it is reachable and
   # asymmetric: the half-open straddle test means a point exactly on an edge is
   # reported inside on one side and outside on the other, and three of the unit
   # square's four corners report *outside* the square. Faithful to the Java —

@@ -59,7 +59,7 @@ defmodule Girihelix.Engine.Geometry.PointTest do
     assert Point.compare_to(near, near) == 0
   end
 
-  # Review Focus 3: the comparison band makes the ordering non-transitive. A
+  # The comparison band makes the ordering non-transitive. A
   # caller expecting a total order can get neither stability nor transitivity,
   # so the surprising behaviour is pinned here rather than discovered later.
   test "compare_to/2 is not transitive" do
@@ -104,7 +104,7 @@ defmodule Girihelix.Engine.Geometry.PointTest do
     assert Point.dist2_to_line(Point.new(7.0, 0.0), a, b) == 9.0
   end
 
-  # Review Focus 1: a zero-length segment makes the projection parameter NaN,
+  # A zero-length segment makes the projection parameter NaN,
   # and every comparison against NaN is false, so the clamp falls through to the
   # second endpoint. The call returns a plausible number that means nothing.
   test "dist2_to_line/3 silently falls through on a zero-length segment" do
@@ -128,7 +128,7 @@ defmodule Girihelix.Engine.Geometry.PointTest do
     assert Point.center([Point.new(0.0, 0.0), Point.new(4.0, 2.0)]) == Point.new(2.0, 1.0)
   end
 
-  # Review Focus 5: center/1 used to skip nils. It now takes points only, and a
+  # center/1 used to skip nils. It now takes points only, and a
   # nil is a caller error rather than something to average around.
   test "center/1 no longer accepts nil" do
     assert_raise FunctionClauseError, fn -> Point.center([Point.origin(), nil]) end

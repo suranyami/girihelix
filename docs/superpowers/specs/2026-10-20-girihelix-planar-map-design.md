@@ -1,11 +1,41 @@
 # Planar map and Taprats reference harness — design (Plan 1b)
 
 **Date:** 2026-10-20
-**Status:** approved 2026-10-20.
+**Status:** implemented 2026-10-20 (Plan 1b).
 **Related:** [engine types design](2026-10-17-girihelix-engine-types-design.md) ·
 [workbench design](2026-10-16-girihelix-workbench-design.md) ·
 [porting specification](../../algorithm-analysis.md) ·
 local only: `reference/porting-notes/geometry.md` sections 3–5 and 13–15
+
+## Rulings made during planning
+
+These were made while planning Plan 1b and supersede the design text below where
+they differ.
+
+1. **`replicate` takes three arguments:** `replicate(receiver, unit, transforms)`.
+   The design's "`replicate/2`" counted only Taprats' parameters, not the
+   receiver.
+2. **`verify/1` is a test aid, not ported behaviour.** Taprats' own `verify` is
+   unreachable from its application path, apart from one debug entry point. It
+   throws a `NullPointerException` on a missing ring entry, and that is not
+   reproduced: ours reports a problem instead. Golden comparison of `verify` is
+   made only where Taprats reports `true`.
+3. **Three more flaws join the five listed below.** All are reproduced and
+   recorded in `docs/algorithm-analysis.md`:
+   - **6, flips leave rings reversed.** `scale/2` with a negative factor, or
+     `transform/2` with a flipping transform, leaves every neighbour ring in its
+     old rotational order.
+   - **7, `replicate/3` never splits.** It finds or creates vertices without
+     splitting edges, so two unit vertices landing on one receiver vertex make a
+     self-edge.
+   - **8, `transform/2` reangles against partly-moved neighbours.** Ring order is
+     unaffected, but later insertions land where Taprats puts them, not where the
+     true angles would.
+
+The `TimSort` risk described under the faithful flaws did not materialise: a
+golden probe (`sort-probe-replicate`) forced the final edge sort to reorder keys
+in overlapping `1e-7` windows, and Elixir's stable sort produced Taprats' order.
+No port of Java's sort was needed.
 
 ## Intent
 
@@ -95,7 +125,7 @@ These would count as failure even if the tests passed:
 - **Renderer data in a side table**, keyed by handle (Plan 5).
 - **The comparators stay as Taprats has them**: `1e-7` windows, non-transitive,
   with the early-exit scans that depend on the sort order.
-- **Names:** `PlanarMap`; `replicate/2` for `mergeSimpleMany`; `weld/2` for
+- **Names:** `PlanarMap`; `replicate/3` for `mergeSimpleMany`; `weld/2` for
   `mergeMap`.
 - **The Taprats reference harness is local only.** Its driver code and fixtures are
   not committed.
@@ -149,7 +179,7 @@ bare value.
 | `remove_vertex/2` → `{:ok, map}` | `removeVertex` | `ConnectFigure` |
 | `transform/2` | `transformMap` | `Infer`, `ConnectFigure` |
 | `scale/2`, `translate/3` | `scale`, `translate` | `Prototype`, `Infer`, figures |
-| `replicate/2` | `mergeSimpleMany` | `Prototype`, `RadialFigure` |
+| `replicate/3` | `mergeSimpleMany` | `Prototype`, `RadialFigure` |
 | `weld/2` → `{map, mapping}` | `mergeMap` | `Prototype`, `Infer` |
 | `verify/1` → `:ok \| {:error, problems}` | `verify` | `Prototype`, `ConnectFigure`, `Infer` (debug) |
 
@@ -207,7 +237,7 @@ with a plain function built from it, pinned together by a test.
   2. force a vertex at each crossing, in both maps
   3. unify coincident vertices, receiver winning ties
   4. copy the other map's edges across
-- **`replicate/2` is my call:** one step per transform, labelled with the
+- **`replicate/3` is my call:** one step per transform, labelled with the
   transform.
 - `insert_vertex/2` and the rest are primitives with no `steps/…`. A
   one-step-per-call sequence would be a tautology.
@@ -226,6 +256,8 @@ corrected sibling can be added beside it:
 4. **Overlapping collinear edges are not welded**: `Intersect` reports parallel
    segments as no crossing.
 5. **Duplicate angles in a neighbour ring** take whichever slot is met first.
+6. to 8. Added by ruling 3 above: flips leave rings reversed, `replicate/3` never
+   splits, and `transform/2` reangles against partly-moved neighbours.
 
 **The `TimSort` risk.** Java's `Collections.sort` is stable and can throw on a
 non-transitive comparator. Elixir's `Enum.sort/2` is stable and never throws.
@@ -318,7 +350,7 @@ The scenarios cover each operation and each faithful flaw. At minimum:
 - the duplicate-angle ring
 - `remove_vertex/2`
 - `transform/2`, `scale/2` and `translate/3`
-- `replicate/2` of a small unit under a rotation ladder
+- `replicate/3` of a small unit under a rotation ladder
 - `weld/2` of two crossing squares
 - `weld/2` with a coincident cluster
 - `weld/2` with overlapping collinear edges
