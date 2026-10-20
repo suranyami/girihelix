@@ -38,4 +38,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.LooseTest do
     assert Enum.map(frames, &Loose.draw(&1, %{})) ==
              [{:panel, @rows}, {:panel, @rows}]
   end
+
+  test "rows/0 is the table and reproduce/1 is its pasteable call" do
+    assert Loose.rows() == @rows
+    assert Loose.reproduce(%{}) == "GirihelixWeb.Workbench.Exhibits.Loose.rows()"
+  end
 end
