@@ -37,6 +37,10 @@ topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
+// Copy a pane's snippet: the button carries it in data-copy and dispatches
+// phx:copy, which reaches this listener from the button itself.
+window.addEventListener("phx:copy", e => { if (e.target.dataset.copy) navigator.clipboard.writeText(e.target.dataset.copy) })
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
