@@ -143,14 +143,19 @@ My calls:
 
 ## The harness
 
-My call: the reference harness gains three script operations, and the dump
-gains three record types.
+My call: the reference harness gains two script operations, and the dump gains
+two record types. Both operations are terminal, replacing the final `dump`
+line. Map-scoped operations keep the harness's `<map> <op> …` order, so `faces`
+is `<map> faces`; `fill` is unscoped because it takes a region, not a map.
 
 | Script op | Taprats call | Dump record |
 | --- | --- | --- |
-| `faces <map>` | `Faces.extractFaces` | `black <x y …>` and `white <x y …>` lines, in Taprats' order, or `faces error` |
+| `<map> faces` | `Faces.extractFaces` | `black <x y …>` and `white <x y …>` lines, in Taprats' order, or `faces error` |
 | `fill <x y ×4> ; <t1x t1y> ; <t2x t2y>` | `FillRegion` with a recording callback | `cell <t1> <t2>` lines, or `fill error` |
-| `rect …` ops | `Rect` methods | one line per result |
+
+`Rect` gets no harness operations: its arithmetic is closed-form and
+transform-free apart from `center_inside/2`, which is pinned by hand-derived
+values and properties instead.
 
 The plan fixes the exact syntax. As before, structure compares exactly and
 coordinates to `1e-12`.
