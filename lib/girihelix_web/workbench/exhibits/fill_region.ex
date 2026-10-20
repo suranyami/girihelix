@@ -8,15 +8,18 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
 
   The picture draws the region as a stroked polygon, both translation vectors
   from the origin as guides, and every scanned row's outermost `x` extent as a
-  horizontal guide. Only the last frame fills cells: `:change_basis` and
-  `:find_rows` leave the row map empty, so the scan is visible as it is built.
-  Each filled cell is the parallelogram `origin`, `origin + T1`,
-  `origin + T1 + T2`, `origin + T2`.
+  guide mapped through the basis. Only the final frame fills cells:
+  `:change_basis` and `:find_rows` leave the row map empty, so before the scan
+  the picture shows the region and the vectors but no rows; the `:scan_rows`
+  frame adds every row extent and its cells. Each filled cell is the
+  parallelogram `origin`, `origin + T1`, `origin + T1 + T2`, `origin + T2`.
 
-  A degenerate basis — parallel translation vectors — is reported, not raised.
-  The `:change_basis` step records `:degenerate_basis`, the remaining steps pass
-  the state through, and the panel's `failure` row names the reason. Such a run
-  draws the region and the vectors but no rows and no cells.
+  Two failures are reported, not raised. Parallel translation vectors record
+  `:degenerate_basis` in the `:change_basis` step, and a region spanning more
+  than 1,000 lattice rows records `:too_many_units` in `:find_rows`. The
+  remaining steps pass a failed state through, and the panel's `failure` row
+  names the reason. Such a run draws the region and the vectors but no rows and
+  no cells.
   """
 
   @behaviour GirihelixWeb.Workbench.Exhibit
@@ -129,16 +132,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
     ]
   end
 
-  # `iymin` is nil until `:find_rows` has run, so frame zero has no row guides
-  # even though its row map is empty anyway.
+  # The row map holds lattice-space extents, so each guide is mapped through
+  # the basis: the world points are `x * T1 + y * T2`.
   defp row_ops(%{iymin: nil}), do: []
 
-  defp row_ops(%{iymin: iymin, rows: rows}) do
+  defp row_ops(%{iymin: iymin, rows: rows, t1: t1, t2: t2}) do
     rows
     |> Enum.sort()
     |> Enum.map(fn {offset, {xmin, xmax}} ->
-      y = 1.0 * (iymin + offset)
-      {:guide, {xmin, y}, {xmax, y}, []}
+      y = iymin + offset
+      {:guide, lattice_point(xmin, y, t1, t2), lattice_point(xmax, y, t1, t2), []}
     end)
   end
 
@@ -175,6 +178,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
   end
 
   defp pair(%Point{x: x, y: y}), do: {x, y}
+
+  defp lattice_point(x, y, %Point{} = t1, %Point{} = t2) do
+    pair(Point.new(x * t1.x + y * t2.x, x * t1.y + y * t2.y))
+  end
 
   # Every coordinate reads as a float: `1.0`, never `1`.
   defp coordinate(value), do: value |> Kernel.*(1.0) |> to_string()

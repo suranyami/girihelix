@@ -78,6 +78,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "none"}]
   end
 
+  test "the find-rows frame has its row range set but no rows yet" do
+    values = Param.values(Exhibit.params(), :default)
+    {:ok, frames} = Steps.run(Exhibit.steps(values), Exhibit.initial(values))
+    frame = Enum.at(frames, 2)
+    assert frame.step.id == :find_rows
+    assert {:both, ops, rows} = Exhibit.draw(frame, values)
+
+    assert Enum.count(ops, &match?({:guide, _, _, []}, &1)) == 2
+    assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "none"}]
+  end
+
   test "the final frame draws the translation guides, a guide per row and every cell" do
     values = Param.values(Exhibit.params(), :default)
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
@@ -98,6 +109,35 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     assert {:polygon, [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}], :fill, [fill: "currentColor", opacity: 0.15]} in ops
 
     assert rows == [{"rows", "4"}, {"cells", "20"}, {"failure", "none"}]
+  end
+
+  test "row guides are mapped through a sheared basis" do
+    values = %{Param.values(Exhibit.params(), :default) | t2y: 2.0}
+    frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
+    assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
+
+    assert {:guide, {0.0, 0.0}, {4.0, 0.0}, []} in ops
+    assert {:guide, {0.0, 2.0}, {4.0, 2.0}, []} in ops
+
+    assert rows == [{"rows", "2"}, {"cells", "10"}, {"failure", "none"}]
+  end
+
+  test "a region spanning too many lattice rows reports the failure" do
+    values = %{
+      Param.values(Exhibit.params(), :default)
+      | width: 10.0,
+        height: 10.0,
+        t1x: 2.0,
+        t1y: 1.9,
+        t2x: 0.1,
+        t2y: 0.1
+    }
+
+    frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
+    assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
+
+    refute Enum.any?(ops, &match?({:polygon, _, :fill, _}, &1))
+    assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "too_many_units"}]
   end
 
   test "a degenerate basis reports the failure and draws no cells" do
