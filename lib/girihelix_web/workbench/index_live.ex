@@ -10,13 +10,16 @@ defmodule GirihelixWeb.Workbench.IndexLive do
   use GirihelixWeb, :live_view
 
   alias GirihelixWeb.Workbench.Registry
+  alias Phoenix.LiveView.Socket
 
   @impl true
+  @spec mount(map(), map(), Socket.t()) :: {:ok, Socket.t()}
   def mount(_params, _session, socket) do
     {:ok, assign(socket, :groups, Registry.grouped())}
   end
 
   @impl true
+  @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>

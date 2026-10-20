@@ -39,17 +39,21 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
   alias GirihelixWeb.Workbench.Source
+  alias Phoenix.LiveView.Socket
 
   # The same cap the workbench's runs use everywhere; a run longer than this is
   # a bug in the exhibit, not a page worth rendering.
   @max_frames 200
 
   @impl true
+  @spec mount(map(), map(), Socket.t()) :: {:ok, Socket.t()}
   def mount(_params, _session, socket) do
     {:ok, socket}
   end
 
   @impl true
+  @spec handle_params(map(), String.t(), Socket.t()) ::
+          {:noreply, Socket.t()}
   def handle_params(%{"slug" => slug} = params, _uri, socket) do
     exhibit = fetch!(slug)
     param_defs = exhibit.params()
@@ -80,6 +84,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   end
 
   @impl true
+  @spec handle_event(String.t(), map(), Socket.t()) ::
+          {:noreply, Socket.t()}
   def handle_event("go", %{"to" => to}, socket) do
     {:noreply, patch_frame(socket, target(to, socket.assigns.index, socket.assigns.count))}
   end
@@ -100,6 +106,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   end
 
   @impl true
+  @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
