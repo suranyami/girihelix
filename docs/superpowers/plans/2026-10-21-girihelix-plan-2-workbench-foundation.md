@@ -434,7 +434,10 @@ Commit message: `feat: add declarative workbench parameters`.
     - `{"tol2/0", "1.0e-10"}`
     - `{"equals(1.0, 1.0 + 1.0e-8)", "true"}`
     - `{"near(1.0e-8, 1.0e-7)", "true"}`
-    - `{"near two points 1.0e-6 apart, tolerance 1.0e-10", "false"}`
+    - `{"near two points 1.0e-6 apart, tolerance 1.0e-10", "true"}` — the
+      squared-distance trap: the squared distance is `1.0e-12`, below the
+      tolerance, so points much further apart than the tolerance suggests are
+      "near".
 
 - [ ] **Step 1: Write the failing registry and exhibit tests**
 
