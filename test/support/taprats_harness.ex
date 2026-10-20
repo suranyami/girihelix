@@ -284,7 +284,7 @@ defmodule Girihelix.TapratsHarness do
   end
 
   # An empty face, or one with an odd coordinate count, is malformed.
-  defp build_face(pairs, values, line) when length(pairs) * 2 == length(values),
+  defp build_face(pairs, values, _line) when length(pairs) * 2 == length(values),
     do: Enum.map(pairs, fn [x, y] -> {x, y} end)
 
   defp build_face(_pairs, _values, line), do: bad_line("face coordinates in", line)
