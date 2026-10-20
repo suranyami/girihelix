@@ -1,6 +1,7 @@
 defmodule Girihelix.TapratsHarnessTest do
   use ExUnit.Case, async: true
 
+  alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.TapratsHarness
 
@@ -146,5 +147,80 @@ defmodule Girihelix.TapratsHarnessTest do
     base = %{vertices: [{0.0, 0.0}], edges: [], rings: [[]], verify: true}
 
     assert {:error, [_ | _]} = TapratsHarness.compare(base, %{base | vertices: [], rings: []})
+  end
+
+  test "parse_script/1 reads the terminal faces operation" do
+    assert [{:faces, "A"}] = TapratsHarness.parse_script("A faces\n")
+  end
+
+  test "parse_script/1 reads the terminal fill operation" do
+    assert [{:fill, points, t1, t2}] =
+             TapratsHarness.parse_script("fill 0 0 4 0 4 3 0 3 ; 1 0 ; 0 1\n")
+
+    assert points == [
+             Point.new(0.0, 0.0),
+             Point.new(4.0, 0.0),
+             Point.new(4.0, 3.0),
+             Point.new(0.0, 3.0)
+           ]
+
+    assert t1 == Point.new(1.0, 0.0)
+    assert t2 == Point.new(0.0, 1.0)
+  end
+
+  test "parse_dump/1 reads the faces dump" do
+    dump =
+      TapratsHarness.parse_dump("""
+      faces ok
+      black 0.0 0.0 4.0 0.0 0.0 3.0
+      white 4.0 0.0 4.0 3.0 0.0 3.0
+      """)
+
+    assert dump == %{
+             faces:
+               {:ok,
+                %{
+                  black: [[{0.0, 0.0}, {4.0, 0.0}, {0.0, 3.0}]],
+                  white: [[{4.0, 0.0}, {4.0, 3.0}, {0.0, 3.0}]]
+                }}
+           }
+  end
+
+  test "parse_dump/1 reads both faces failures" do
+    assert %{faces: {:error, :filling}} = TapratsHarness.parse_dump("faces error filling\n")
+    assert %{faces: {:error, :empty}} = TapratsHarness.parse_dump("faces error empty\n")
+  end
+
+  test "parse_dump/1 reads the fill dump, signed cells included" do
+    dump =
+      TapratsHarness.parse_dump("""
+      fill ok
+      cell 0 0
+      cell -2 3
+      """)
+
+    assert dump == %{cells: {:ok, [{0, 0}, {-2, 3}]}}
+  end
+
+  test "parse_dump/1 reads the fill failure" do
+    assert %{cells: {:error, :too_many}} = TapratsHarness.parse_dump("fill error too_many\n")
+  end
+
+  test "compare/2 accepts a face coordinate within 1e-12 and rejects a swap of the faces" do
+    expected = %{faces: {:ok, %{black: [[{0.0, 0.0}, {1.0, 0.0}]], white: [[{1.0, 1.0}]]}}}
+
+    near = %{faces: {:ok, %{black: [[{5.0e-13, 0.0}, {1.0, 0.0}]], white: [[{1.0, 1.0}]]}}}
+    assert TapratsHarness.compare(expected, near) == :ok
+
+    swapped = %{faces: {:ok, %{black: [[{1.0, 1.0}]], white: [[{0.0, 0.0}, {1.0, 0.0}]]}}}
+    assert {:error, _} = TapratsHarness.compare(expected, swapped)
+  end
+
+  test "compare/2 is exact on cells, so a swapped order fails" do
+    expected = %{cells: {:ok, [{0, 0}, {1, 0}]}}
+
+    assert TapratsHarness.compare(expected, %{cells: {:ok, [{0, 0}, {1, 0}]}}) == :ok
+    assert {:error, _} = TapratsHarness.compare(expected, %{cells: {:ok, [{1, 0}, {0, 0}]}})
+    assert {:error, _} = TapratsHarness.compare(expected, %{cells: {:error, :too_many}})
   end
 end

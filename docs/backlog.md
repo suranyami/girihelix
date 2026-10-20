@@ -28,6 +28,22 @@ conversion or a `sorter/0` helper, and Plan 3 will need it, since the
 comparator's one caller is in `Infer`. A comparator is exactly the kind of thing
 a spec should pin down.
 
+### `Faces.Walk` has no iteration cap (captured 2026-10-20, Plan 1c homogenisation)
+
+The walk stops only on returning to its start, as Taprats' does, so a map whose
+ring order does not lead back to the start loops forever instead of failing. No
+valid map reaches it, and a visited set or a step cap would change behaviour on a
+corrupt map. Fixing it means choosing a new reason for `Faces.extract_faces/1`,
+such as `:unwalkable_face`, and pinning it with a hand-built corrupt map.
+
+### `Rect.center_inside/2` raises on a zero-sized rect (captured 2026-10-20, Plan 1c homogenisation)
+
+It divides by both of the inner rect's dimensions, so a zero width or height
+raises `ArithmeticError`; Taprats would carry Infinity or NaN. Plan 1c documents
+the precondition because the design named no error reason for `Rect`. A later
+caller that can supply a degenerate rect needs either an error tuple or a
+constructor that rules zero extents out.
+
 ## Closed
 
 - **`Point.normalize/1`'s scaling branch unasserted** (Plan 1a review). Closed

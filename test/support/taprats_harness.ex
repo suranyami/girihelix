@@ -15,6 +15,8 @@ defmodule Girihelix.TapratsHarness do
   to return an error tuple to.
   """
 
+  alias Girihelix.Engine.Faces
+  alias Girihelix.Engine.FillRegion
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
@@ -24,12 +26,20 @@ defmodule Girihelix.TapratsHarness do
   @scenarios_dir "reference/oracle/scenarios"
 
   @type verify :: true | false | :npe | :unchecked
-  @type dump :: %{
-          vertices: [{float(), float()}],
+  @type corner :: {float(), float()}
+  @type map_dump :: %{
+          vertices: [corner()],
           edges: [{non_neg_integer(), non_neg_integer()}],
           rings: [[non_neg_integer()]],
           verify: verify()
         }
+  @type faces_dump :: %{
+          faces:
+            {:ok, %{black: [[corner()]], white: [[corner()]]}}
+            | {:error, :filling | :empty}
+        }
+  @type cells_dump :: %{cells: {:ok, [{integer(), integer()}]} | {:error, :too_many}}
+  @type dump :: map_dump() | faces_dump() | cells_dump()
   @type op :: tuple()
 
   @doc "The directory holding the Taprats fixtures."
@@ -60,7 +70,28 @@ defmodule Girihelix.TapratsHarness do
   def run_script(ops), do: run(ops, %{})
 
   defp run([{:dump, name}], state), do: state |> state_of(name) |> Map.fetch!(:map) |> dump()
+
+  defp run([{:faces, name}], state) do
+    state |> state_of(name) |> Map.fetch!(:map) |> Faces.extract_faces() |> faces_dump()
+  end
+
+  defp run([{:fill, region, t1, t2}], _state), do: region |> FillRegion.fill(t1, t2) |> fill_dump()
+
   defp run([op | rest], state), do: run(rest, step(op, state))
+
+  defp faces_dump({:ok, colouring}) do
+    %{faces: {:ok, %{black: face_corners(colouring.black), white: face_corners(colouring.white)}}}
+  end
+
+  defp faces_dump({:error, :filling_conflict}), do: %{faces: {:error, :filling}}
+  defp faces_dump({:error, :no_faces}), do: %{faces: {:error, :empty}}
+
+  defp face_corners(faces), do: Enum.map(faces, fn face -> Enum.map(face, fn %Point{x: x, y: y} -> {x, y} end) end)
+
+  defp fill_dump({:ok, cells}), do: %{cells: {:ok, cells}}
+  defp fill_dump({:error, :too_many_units}), do: %{cells: {:error, :too_many}}
+
+  defp fill_dump({:error, :degenerate_basis}), do: raise(ArgumentError, "a golden fill scenario has a degenerate basis")
 
   defp step({:vertex, name, x, y}, state) do
     %{map: map, handles: handles} = state_of(state, name)
@@ -110,7 +141,7 @@ defmodule Girihelix.TapratsHarness do
   indices, rings as edge-order indices from each ring's head. `verify` is
   whether `PlanarMap.verify/1` finds no problem.
   """
-  @spec dump(PlanarMap.t()) :: dump()
+  @spec dump(PlanarMap.t()) :: map_dump()
   def dump(map) do
     vertices = PlanarMap.vertices(map)
     vertex_index = index_of(vertices)
@@ -151,6 +182,15 @@ defmodule Girihelix.TapratsHarness do
   defp parse_op(line), do: line |> String.split() |> op(line)
 
   defp op(["dump", map], _line), do: {:dump, map}
+  defp op([map, "faces"], _line), do: {:faces, map}
+
+  defp op(["fill" | spec], line) do
+    case spec |> Enum.join(" ") |> String.split(";") do
+      [region, t1, t2] -> {:fill, region_points(region, line), point(t1, line), point(t2, line)}
+      _other -> bad_line("script", line)
+    end
+  end
+
   defp op([map, "vertex", x, y], line), do: {:vertex, map, number(x, line), number(y, line)}
   defp op([map, "edge", i, j], line), do: {:edge, map, index(i, line), index(j, line)}
   defp op([map, "remove", i], line), do: {:remove, map, index(i, line)}
@@ -183,17 +223,52 @@ defmodule Girihelix.TapratsHarness do
   defp transform(["sc", r], line), do: r |> number(line) |> Transform.scale()
   defp transform(_tokens, line), do: bad_line("script", line)
 
+  defp region_points(text, line) do
+    case numbers(text, line) do
+      [a, b, c, d, e, f, g, h] ->
+        [
+          Point.new(a, b),
+          Point.new(c, d),
+          Point.new(e, f),
+          Point.new(g, h)
+        ]
+
+      _other ->
+        bad_line("script", line)
+    end
+  end
+
+  defp point(text, line) do
+    case numbers(text, line) do
+      [x, y] -> Point.new(x, y)
+      _other -> bad_line("script", line)
+    end
+  end
+
+  defp numbers(text, line), do: text |> String.split() |> Enum.map(&number(&1, line))
+
   # -- dump parsing -----------------------------------------------------------
 
   @doc "Parses a dump, in Java's float spelling, into a `t:dump/0`."
   @spec parse_dump(String.t()) :: dump()
   def parse_dump(text) do
-    items =
+    lines =
       text
       |> String.split("\n")
       |> Enum.map(&String.trim/1)
       |> Enum.reject(&(&1 == ""))
-      |> Enum.map(&dump_item/1)
+
+    case lines do
+      ["faces ok" | rest] -> %{faces: {:ok, parse_faces(rest)}}
+      ["faces error " <> word] -> %{faces: {:error, face_error(word)}}
+      ["fill ok" | rest] -> %{cells: {:ok, Enum.map(rest, &cell/1)}}
+      ["fill error " <> word] -> %{cells: {:error, fill_error(word)}}
+      _other -> parse_map_dump(lines)
+    end
+  end
+
+  defp parse_map_dump(lines) do
+    items = Enum.map(lines, &dump_item/1)
 
     %{
       vertices: for({:v, point} <- items, do: point),
@@ -208,6 +283,43 @@ defmodule Girihelix.TapratsHarness do
         |> verify_word()
     }
   end
+
+  defp parse_faces(lines) do
+    Enum.reduce(lines, %{black: [], white: []}, fn line, acc -> add_face(acc, line) end)
+  end
+
+  defp add_face(acc, line) do
+    case String.split(line) do
+      ["black" | coords] -> %{acc | black: acc.black ++ [face(coords, line)]}
+      ["white" | coords] -> %{acc | white: acc.white ++ [face(coords, line)]}
+      _other -> bad_line("face", line)
+    end
+  end
+
+  defp face(coords, line) do
+    values = Enum.map(coords, &number(&1, line))
+    values |> Enum.chunk_every(2) |> build_face(values, line)
+  end
+
+  # An empty face, or one with an odd coordinate count, is malformed.
+  defp build_face(pairs, values, _line) when length(pairs) * 2 == length(values),
+    do: Enum.map(pairs, fn [x, y] -> {x, y} end)
+
+  defp build_face(_pairs, _values, line), do: bad_line("face coordinates in", line)
+
+  defp cell(line) do
+    case String.split(line) do
+      ["cell", t1, t2] -> {integer(t1, line), integer(t2, line)}
+      _other -> bad_line("cell in", line)
+    end
+  end
+
+  defp face_error("filling"), do: :filling
+  defp face_error("empty"), do: :empty
+  defp face_error(other), do: bad_line("faces error word", inspect(other))
+
+  defp fill_error("too_many"), do: :too_many
+  defp fill_error(other), do: bad_line("fill error word", inspect(other))
 
   defp dump_item(line), do: line |> String.split() |> dump_item(line)
 
@@ -233,6 +345,14 @@ defmodule Girihelix.TapratsHarness do
   `:unchecked`, or when `expected.verify` is not `true`.
   """
   @spec compare(dump(), dump()) :: :ok | {:error, [String.t()]}
+  def compare(%{faces: expected}, %{faces: actual}), do: expected |> faces_errors(actual) |> result()
+
+  def compare(%{cells: expected}, %{cells: actual}), do: expected |> cells_errors(actual) |> result()
+
+  def compare(%{faces: _expected}, actual), do: {:error, ["dump shape: expected faces, got #{inspect(Map.keys(actual))}"]}
+
+  def compare(%{cells: _expected}, actual), do: {:error, ["dump shape: expected cells, got #{inspect(Map.keys(actual))}"]}
+
   def compare(expected, actual) do
     errors =
       vertex_errors(expected.vertices, actual.vertices) ++
@@ -242,6 +362,46 @@ defmodule Girihelix.TapratsHarness do
 
     result(errors)
   end
+
+  defp faces_errors({:error, reason}, {:error, reason}), do: []
+
+  defp faces_errors({:ok, expected}, {:ok, actual}) do
+    face_list_errors("black", expected.black, actual.black) ++
+      face_list_errors("white", expected.white, actual.white)
+  end
+
+  defp faces_errors(expected, actual), do: ["faces: expected #{inspect(expected)}, got #{inspect(actual)}"]
+
+  defp face_list_errors(label, expected, actual) when length(expected) != length(actual),
+    do: ["#{label} face count: expected #{length(expected)}, got #{length(actual)}"]
+
+  defp face_list_errors(label, expected, actual) do
+    expected
+    |> Enum.zip(actual)
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {{e, a}, i} -> face_errors(label, i, e, a) end)
+  end
+
+  defp face_errors(label, index, expected, actual) when length(expected) != length(actual),
+    do: ["#{label} face #{index} corner count: expected #{length(expected)}, got #{length(actual)}"]
+
+  defp face_errors(label, index, expected, actual) do
+    expected
+    |> Enum.zip(actual)
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {{e, a}, c} -> corner_errors(label, index, c, e, a) end)
+  end
+
+  defp corner_errors(_label, _face, _corner, {ex, ey}, {ax, ay})
+       when abs(ex - ax) < @tolerance and abs(ey - ay) < @tolerance, do: []
+
+  defp corner_errors(label, face, corner, expected, actual),
+    do: ["#{label} face #{face} corner #{corner}: expected #{inspect(expected)}, got #{inspect(actual)}"]
+
+  defp cells_errors({:error, reason}, {:error, reason}), do: []
+  defp cells_errors({:ok, expected}, {:ok, actual}), do: exact_errors("cells", expected, actual)
+
+  defp cells_errors(expected, actual), do: ["cells: expected #{inspect(expected)}, got #{inspect(actual)}"]
 
   defp result([]), do: :ok
   defp result(errors), do: {:error, errors}
@@ -275,6 +435,13 @@ defmodule Girihelix.TapratsHarness do
 
   defp number_result({value, ""}, _line), do: value
   defp number_result(_other, line), do: bad_line("number in", line)
+
+  defp integer(token, line) do
+    case Integer.parse(token) do
+      {value, ""} -> value
+      _other -> bad_line("integer in", line)
+    end
+  end
 
   defp index(token, line), do: token |> Integer.parse() |> index_result(line)
 

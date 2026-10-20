@@ -594,6 +594,60 @@ for ones:
   in the harness. The port's unit is an immutable value, so replicating a map into
   itself gives a finite result.
 
+### `Faces`, `FillRegion` and `Rect`: the faithful flaws
+
+`Faces` and `FillRegion` reproduce Taprats' behaviour, flaws included, for the
+same reason as `PlanarMap`: a corrected face walk or fill changes which faces
+and cells every later stage sees. Each flaw below is pinned by a unit test or a
+golden scenario under `test/girihelix/engine/`. `Rect` is a value type with no
+flaws to keep; its decisions are at the end of this section.
+
+1. **The fill leaves gaps along the region's edges.** It tracks only each row's
+   outermost x extent and rounds both ends inward with `floor`, so a unit that
+   only partly overlaps the region can be left out. The caller is expected to
+   expand the region before filling. Pinned by the golden `fill-edge-gaps`.
+2. **The fill stops at 1,000 rows.** A region spanning more than 1,000 integer
+   rows is `{:error, :too_many_units}`. The test is `iymax - iymin > 999`, so
+   exactly 1,000 rows are accepted. Pinned by the goldens `fill-cap-999`
+   (accepted) and `fill-cap-1000` (rejected).
+3. **A face is abandoned on a dangling edge.** A walk that enters a vertex of
+   degree one returns nothing and registers nothing, so the edge belongs to no
+   face. Pinned by the golden `faces-dangling` and the unit test "a dangling
+   edge leaves the face it hangs off".
+4. **The rejected outer face is still registered.** A clockwise face is left
+   out of the result but its edges are registered, so the colouring reaches it
+   and colours it. A real face adjacent both to it and to an opposite-coloured
+   face then conflicts. That is why a square split by a diagonal, a 3×3 grid, a
+   hub closed by a hexagon and an odd-degree map all report
+   `{:error, :filling_conflict}`. Pinned by the goldens `faces-square-diagonal`,
+   `faces-grid-3x3`, `faces-hub-hexagon` and `faces-conflict`, and by the unit
+   test "two triangles sharing an edge are a filling conflict".
+5. **The walk stops at the first return to its start.** A face that visits a
+   vertex twice before closing yields a partial face, and the rest of its edges
+   register against that truncation. Pinned by the golden `faces-figure-eight`,
+   which reproduces Taprats' two separate square faces at the shared vertex.
+6. **The conflict check is order-dependent.** A neighbour that is on the stack
+   but not yet coloured contributes no constraint, so a non-two-colourable map
+   can pass. `{:error, :filling_conflict}` means a conflict was seen, not that
+   the map is provably two-colourable. Pinned by the conflict goldens.
+7. **A face with no coloured neighbour is black.** The seed is therefore always
+   black, and two parallel edges give two black faces. Pinned by the golden
+   `faces-two-corner` and the unit test "two parallel edges give two two-corner
+   faces".
+
+Two decisions diverge deliberately:
+
+- **A degenerate fill basis reports `{:error, :degenerate_basis}`.** Taprats
+  divides by a zero determinant and carries Infinity or NaN into a single
+  degenerate row. There is no golden for this: the expected output is arbitrary
+  under NaN, so the unit test "parallel translation vectors are a degenerate
+  basis" pins the port instead.
+- **`Rect` has no harness operations.** Its arithmetic is closed-form and
+  transform-free apart from `center_inside/2`, which is pinned by properties and
+  hand-derived values in `rect_test.exs`. `center_inside/2` requires non-zero
+  dimensions; a zero extent raises `ArithmeticError` where Taprats would carry
+  NaN.
+
 ### `Intersect`: segment crossings
 
 `Intersect` is deliberately minimal. It is segment-to-segment only, and it is
