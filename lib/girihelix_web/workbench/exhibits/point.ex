@@ -100,7 +100,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Point do
   @spec reproduce(map()) :: String.t()
   def reproduce(params) do
     %Point{x: x, y: y} = point(params)
-    "Point.new(#{coordinate(x)}, #{coordinate(y)})"
+    "Girihelix.Engine.Geometry.Point.new(#{coordinate(x)}, #{coordinate(y)})"
   end
 
   defp point(%{x: x, y: y}), do: Point.new(x, y)

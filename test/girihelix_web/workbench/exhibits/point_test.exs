@@ -22,7 +22,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.PointTest do
 
     assert {"mag", "5.0"} in rows
     assert {"mag2", "25.0"} in rows
-    assert Exhibit.reproduce(values) == "Point.new(3.0, 4.0)"
+    assert Exhibit.reproduce(values) == "Girihelix.Engine.Geometry.Point.new(3.0, 4.0)"
   end
 
   test "identifies itself and declares two float coordinates" do
@@ -82,6 +82,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.PointTest do
     assert {"x", "1.0"} in rows
     assert {"angle", "0.0"} in rows
     assert {"perp", "-0.0, 1.0"} in rows
-    assert Exhibit.reproduce(values) == "Point.new(1.0, 0.0)"
+    assert Exhibit.reproduce(values) == "Girihelix.Engine.Geometry.Point.new(1.0, 0.0)"
   end
 end
