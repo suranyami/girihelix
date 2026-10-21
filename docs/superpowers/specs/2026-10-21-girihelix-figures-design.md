@@ -126,6 +126,11 @@ The behaviour and the dispatcher for the two operations every figure supports.
 - **`n/1` is a `RadialFigure` callback, not a `Figure` callback.** That is what
   lets `ExplicitFigure` implement `Figure` without inventing a symmetry order
   it does not have.
+- **A radial figure declares only `RadialFigure`; `ExplicitFigure` declares
+  `Figure`.** Both behaviours carry `build_unit/1`, and a module cannot declare
+  both without Elixir's conflicting-behaviours warning, which fails the
+  warnings-as-errors gate. `Figure.unit/1` dispatches to the struct's module, so
+  the split changes no caller.
 
 ### `Girihelix.Engine.Figures.RadialFigure`
 
