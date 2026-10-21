@@ -36,9 +36,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   alias GirihelixWeb.Workbench.Param
 
   # The construction starts here, and the point is static even at frame zero.
-  @tip {1.0, 0.0}
-  @construction_radius 3.0
-  @construction_opts [opacity: 0.6]
   @closure_opts [width: 3.0, dash: "6 3"]
   @cent_opts [stroke: "currentColor", width: 2.0, opacity: 1.0]
 
@@ -98,7 +95,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
   def draw(%Steps.Frame{state: state} = frame, _params) do
-    whole = whole_map(state)
+    whole = Figures.whole_map(state)
     {:both, ops(state, whole, frame), rows(state, whole)}
   end
 
@@ -118,10 +115,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   # Replaying `Figure.map/1` would rebuild the unit and can re-raise a failure a
   # retained frame has already survived: for `n = 3` the closure raises after
   # `:assemble`, leaving a non-nil unit in the last frame of a failed run.
-  defp whole_map(%{map: nil}), do: nil
-
-  defp whole_map(%{map: unit, n: n}), do: PlanarMap.replicate!(PlanarMap.new(), unit, RadialFigure.ladder(n))
-
   defp ops(state, nil, _frame), do: partial_ops(state)
 
   defp ops(state, whole, frame) do
@@ -130,24 +123,18 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   end
 
   defp partial_ops(state) do
-    [tip_op()] ++ chord_ops(state) ++ crossing_ops(state)
+    [Figures.tip_op()] ++ chord_ops(state) ++ crossing_ops(state)
   end
-
-  defp tip_op, do: {:point, @tip, 4.0, []}
 
   defp chord_ops(%{a: %Point{} = a, b: %Point{} = b}) do
     from = Format.pair(a)
     to = Format.pair(b)
-    [{:guide, from, to, []}, {:label, midpoint(from, to), "base chord", []}]
+    [{:guide, from, to, []}, {:label, Format.midpoint(from, to), "base chord", []}]
   end
 
   defp chord_ops(_state), do: []
 
-  defp crossing_ops(%{points: points}), do: Enum.map(points, &construction_op/1)
-
-  defp construction_op(point), do: {:point, Format.pair(point), @construction_radius, @construction_opts}
-
-  defp midpoint({ax, ay}, {bx, by}), do: {(ax + bx) / 2.0, (ay + by) / 2.0}
+  defp crossing_ops(%{points: points}), do: Enum.map(points, &Figures.construction_op/1)
 
   defp closure_ops(%Steps.Frame{step: %Steps.Step{id: :closure}}, state), do: closure(state)
   defp closure_ops(_frame, _state), do: []
@@ -167,7 +154,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
 
     [
       {:line, pair_from, pair_apex, @closure_opts},
-      {:label, midpoint(pair_from, pair_apex), "closure", []}
+      {:label, Format.midpoint(pair_from, pair_apex), "closure", []}
     ]
   end
 
@@ -191,12 +178,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
     [
       {"n", Integer.to_string(state.n)},
       {"d requested", Format.coordinate(state.d)},
-      {"d clamped", number(state.clamp_d)},
-      {"di", integer(state.di)},
-      {"frac", number(state.dfrac)},
+      {"d clamped", Figures.number(state.clamp_d)},
+      {"di", Figures.integer(state.di)},
+      {"frac", Figures.number(state.dfrac)},
       {"is integer", yes_no(state.is_int)},
-      {"s stored", integer(state.clamp_s)},
-      {"outer s", integer(state.outer_s)},
+      {"s stored", Figures.integer(state.clamp_s)},
+      {"outer s", Figures.integer(state.outer_s)},
       {"closure", closure_name(state)}
     ] ++ Figures.rows_for(whole)
   end
@@ -205,12 +192,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   defp closure_name(%{di: nil}), do: "no"
   defp closure_name(%{clamp_s: clamp_s, di: di}) when clamp_s == di, do: "yes"
   defp closure_name(_state), do: "no"
-
-  defp number(nil), do: "n/a"
-  defp number(value), do: Format.coordinate(value)
-
-  defp integer(nil), do: "n/a"
-  defp integer(value), do: Integer.to_string(value)
 
   defp yes_no(nil), do: "n/a"
   defp yes_no(true), do: "yes"

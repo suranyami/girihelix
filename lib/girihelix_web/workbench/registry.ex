@@ -12,6 +12,7 @@ defmodule GirihelixWeb.Workbench.Registry do
   iteration order.
   """
 
+  alias GirihelixWeb.Workbench.Exhibits.Connect
   alias GirihelixWeb.Workbench.Exhibits.Faces
   alias GirihelixWeb.Workbench.Exhibits.FillRegion
   alias GirihelixWeb.Workbench.Exhibits.Intersect
@@ -19,7 +20,9 @@ defmodule GirihelixWeb.Workbench.Registry do
   alias GirihelixWeb.Workbench.Exhibits.PlanarMap
   alias GirihelixWeb.Workbench.Exhibits.Point
   alias GirihelixWeb.Workbench.Exhibits.Polygon
+  alias GirihelixWeb.Workbench.Exhibits.Radial
   alias GirihelixWeb.Workbench.Exhibits.Rosette
+  alias GirihelixWeb.Workbench.Exhibits.Scale
   alias GirihelixWeb.Workbench.Exhibits.Star
   alias GirihelixWeb.Workbench.Exhibits.Transform
 
@@ -33,7 +36,10 @@ defmodule GirihelixWeb.Workbench.Registry do
     Faces,
     FillRegion,
     Star,
-    Rosette
+    Rosette,
+    Scale,
+    Connect,
+    Radial
   ]
 
   @doc "Every registered exhibit, in display order."

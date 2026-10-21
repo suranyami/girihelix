@@ -24,4 +24,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Format do
   """
   @spec pair(Point.t()) :: {float(), float()}
   def pair(%Point{x: x, y: y}), do: {x, y}
+
+  @doc """
+  The midpoint of two draw-op points, where a guide's label sits.
+  """
+  @spec midpoint({number(), number()}, {number(), number()}) :: {float(), float()}
+  def midpoint({ax, ay}, {bx, by}), do: {(ax + bx) / 2.0, (ay + by) / 2.0}
 end

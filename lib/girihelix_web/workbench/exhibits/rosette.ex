@@ -21,21 +21,14 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
 
   @behaviour GirihelixWeb.Workbench.Exhibit
 
-  alias Girihelix.Engine.Figures.RadialFigure
   alias Girihelix.Engine.Figures.Rosette, as: RosetteFigure
   alias Girihelix.Engine.Geometry.Point
-  alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Viewport
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
   alias GirihelixWeb.Workbench.Exhibits.Figures
   alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
-
-  # The construction starts here, and the point is static even at frame zero.
-  @tip {1.0, 0.0}
-  @construction_radius 3.0
-  @construction_opts [opacity: 0.6]
 
   @impl true
   @spec slug() :: String.t()
@@ -93,7 +86,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
   def draw(%Steps.Frame{state: state}, _params) do
-    whole = whole_map(state)
+    whole = Figures.whole_map(state)
     {:both, ops(state, whole), rows(state, whole)}
   end
 
@@ -112,10 +105,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   # The state's `map` is the unit; the whole figure is that unit replicated.
   # Replaying `Figure.map/1` would rebuild it and could re-raise a failure a
   # retained frame has survived.
-  defp whole_map(%{map: nil}), do: nil
-
-  defp whole_map(%{map: unit, n: n}), do: PlanarMap.replicate!(PlanarMap.new(), unit, RadialFigure.ladder(n))
-
   defp ops(state, nil), do: partial_ops(state)
 
   defp ops(state, whole) do
@@ -123,10 +112,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   end
 
   defp partial_ops(state) do
-    [tip_op()] ++ frame_ops(state) ++ walk_ops(state)
+    [Figures.tip_op()] ++ frame_ops(state) ++ walk_ops(state)
   end
-
-  defp tip_op, do: {:point, @tip, 4.0, []}
 
   defp frame_ops(%{frame: nil}), do: []
 
@@ -134,7 +121,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
     from = Format.pair(frame.up_outer)
     to = Format.pair(frame.bisector)
 
-    [{:guide, from, to, []}, {:label, midpoint(from, to), "outer bisector", []}] ++
+    [{:guide, from, to, []}, {:label, Format.midpoint(from, to), "outer bisector", []}] ++
       qtip_ops(frame) ++ key_ops(frame) ++ stable_ops(frame, q_clamp)
   end
 
@@ -143,7 +130,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
       {:ok, qtip} ->
         from = Format.pair(frame.tip)
         to = Format.pair(qtip)
-        [{:guide, from, to, []}, {:label, midpoint(from, to), "tip to qtip", []}]
+        [{:guide, from, to, []}, {:label, Format.midpoint(from, to), "tip to qtip", []}]
 
       :error ->
         []
@@ -155,7 +142,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
       {{:ok, key_point}, {:ok, key_end}} ->
         from = Format.pair(key_point)
         to = Format.pair(key_end)
-        [{:guide, from, to, []}, {:label, midpoint(from, to), "key line", []}]
+        [{:guide, from, to, []}, {:label, Format.midpoint(from, to), "key line", []}]
 
       _missing ->
         []
@@ -167,24 +154,20 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   defp stable_ops(frame, q_clamp) when q_clamp < 0.0 do
     from = Format.pair(frame.tip)
     to = Format.pair(frame.stable_isect)
-    [{:guide, from, to, []}, {:label, midpoint(from, to), "stable ray", []}]
+    [{:guide, from, to, []}, {:label, Format.midpoint(from, to), "stable ray", []}]
   end
 
   defp stable_ops(_frame, _q_clamp), do: []
 
-  defp walk_ops(%{points: points}), do: Enum.map(points, &construction_op/1)
-
-  defp construction_op(point), do: {:point, Format.pair(point), @construction_radius, @construction_opts}
-
-  defp midpoint({ax, ay}, {bx, by}), do: {(ax + bx) / 2.0, (ay + by) / 2.0}
+  defp walk_ops(%{points: points}), do: Enum.map(points, &Figures.construction_op/1)
 
   defp rows(state, whole) do
     [
       {"n", Integer.to_string(state.n)},
       {"q requested", Format.coordinate(state.q)},
-      {"q clamped", number(state.q_clamp)},
+      {"q clamped", Figures.number(state.q_clamp)},
       {"s requested", Integer.to_string(state.s)},
-      {"s stored", integer(state.s_clamp)},
+      {"s stored", Figures.integer(state.s_clamp)},
       {"key point", key_point_text(state)},
       {"steps emitted", Integer.to_string(emitted(state.points))},
       {"steps skipped", Integer.to_string(state.skipped)}
@@ -205,10 +188,4 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   # `points` holds the key point followed by the walk's successful crossings.
   defp emitted([]), do: 0
   defp emitted(points), do: length(points) - 1
-
-  defp number(nil), do: "n/a"
-  defp number(value), do: Format.coordinate(value)
-
-  defp integer(nil), do: "n/a"
-  defp integer(value), do: Integer.to_string(value)
 end
