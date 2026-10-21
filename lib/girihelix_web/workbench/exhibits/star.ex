@@ -135,13 +135,19 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
 
   defp tip_op, do: {:point, @tip, 4.0, []}
 
-  defp chord_ops(%{a: %Point{} = a, b: %Point{} = b}), do: [{:guide, Format.pair(a), Format.pair(b), []}]
+  defp chord_ops(%{a: %Point{} = a, b: %Point{} = b}) do
+    from = Format.pair(a)
+    to = Format.pair(b)
+    [{:guide, from, to, []}, {:label, midpoint(from, to), "base chord", []}]
+  end
 
   defp chord_ops(_state), do: []
 
   defp crossing_ops(%{points: points}), do: Enum.map(points, &construction_op/1)
 
   defp construction_op(point), do: {:point, Format.pair(point), @construction_radius, @construction_opts}
+
+  defp midpoint({ax, ay}, {bx, by}), do: {(ax + bx) / 2.0, (ay + by) / 2.0}
 
   defp closure_ops(%Steps.Frame{step: %Steps.Step{id: :closure}}, state), do: closure(state)
   defp closure_ops(_frame, _state), do: []
@@ -156,7 +162,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   defp apex_ops(%{map: map, top: top, n: n}) do
     from = PlanarMap.position!(map, top)
     apex = Transform.apply_to(RadialFigure.tr(n), from)
-    [{:line, Format.pair(from), Format.pair(apex), @closure_opts}]
+    pair_from = Format.pair(from)
+    pair_apex = Format.pair(apex)
+
+    [
+      {:line, pair_from, pair_apex, @closure_opts},
+      {:label, midpoint(pair_from, pair_apex), "closure", []}
+    ]
   end
 
   # A fractional `d` closes through `cent`, the crossing of the two chords the

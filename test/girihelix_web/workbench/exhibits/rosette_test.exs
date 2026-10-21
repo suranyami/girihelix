@@ -17,6 +17,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.RosetteTest do
 
     assert {:both, ops, rows} = Rosette.draw(last, params)
     assert Enum.any?(ops, &match?({:guide, _, _, _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, _, _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "outer bisector", []}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "tip to qtip", []}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "key line", []}, &1))
     assert {"steps skipped", skipped} = List.keyfind(rows, "steps skipped", 0)
     assert skipped != "0"
     assert Rosette.reproduce(params) =~ "Rosette.new!(12, -0.8, 4)"
@@ -80,7 +84,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.RosetteTest do
     {:both, positive_ops, _} = draw_last(positive)
     {:both, negative_ops, _} = draw_last(negative)
 
-    assert length(negative_ops) == length(positive_ops) + 1
+    assert Enum.any?(negative_ops, &match?({:label, _, "stable ray", []}, &1))
+    refute Enum.any?(positive_ops, &match?({:label, _, "stable ray", []}, &1))
   end
 
   test "pins the 2.5-unit viewport centred on the unit circle" do

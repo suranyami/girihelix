@@ -23,6 +23,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.StarTest do
 
     assert {:both, ops, rows} = Star.draw(last, params)
     assert Enum.any?(ops, &match?({:line, _, _, _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, _, _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "base chord", []}, &1))
     assert {"vertices", _} = List.keyfind(rows, "vertices", 0)
     assert Star.reproduce(params) =~ "Girihelix.Engine.Figures.Star.new!(8, 3.0, 2)"
   end
@@ -71,6 +73,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StarTest do
     assert {:both, ops, rows} = Star.draw(last, params)
 
     assert Enum.any?(ops, &match?({:line, _, _, [width: 3.0, dash: "6 3"]}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "closure", []}, &1))
     assert {"closure", "yes"} in rows
   end
 

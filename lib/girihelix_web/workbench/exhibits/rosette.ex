@@ -131,21 +131,31 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   defp frame_ops(%{frame: nil}), do: []
 
   defp frame_ops(%{frame: frame, q_clamp: q_clamp}) do
-    [{:guide, Format.pair(frame.up_outer), Format.pair(frame.bisector), []}] ++
+    from = Format.pair(frame.up_outer)
+    to = Format.pair(frame.bisector)
+
+    [{:guide, from, to, []}, {:label, midpoint(from, to), "outer bisector", []}] ++
       qtip_ops(frame) ++ key_ops(frame) ++ stable_ops(frame, q_clamp)
   end
 
   defp qtip_ops(frame) do
     case Map.fetch(frame, :qtip) do
-      {:ok, qtip} -> [{:guide, Format.pair(frame.tip), Format.pair(qtip), []}]
-      :error -> []
+      {:ok, qtip} ->
+        from = Format.pair(frame.tip)
+        to = Format.pair(qtip)
+        [{:guide, from, to, []}, {:label, midpoint(from, to), "tip to qtip", []}]
+
+      :error ->
+        []
     end
   end
 
   defp key_ops(frame) do
     case {Map.fetch(frame, :key_point), Map.fetch(frame, :key_end)} do
       {{:ok, key_point}, {:ok, key_end}} ->
-        [{:guide, Format.pair(key_point), Format.pair(key_end), []}]
+        from = Format.pair(key_point)
+        to = Format.pair(key_end)
+        [{:guide, from, to, []}, {:label, midpoint(from, to), "key line", []}]
 
       _missing ->
         []
@@ -155,7 +165,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   defp stable_ops(_frame, nil), do: []
 
   defp stable_ops(frame, q_clamp) when q_clamp < 0.0 do
-    [{:guide, Format.pair(frame.tip), Format.pair(frame.stable_isect), []}]
+    from = Format.pair(frame.tip)
+    to = Format.pair(frame.stable_isect)
+    [{:guide, from, to, []}, {:label, midpoint(from, to), "stable ray", []}]
   end
 
   defp stable_ops(_frame, _q_clamp), do: []
@@ -163,6 +175,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   defp walk_ops(%{points: points}), do: Enum.map(points, &construction_op/1)
 
   defp construction_op(point), do: {:point, Format.pair(point), @construction_radius, @construction_opts}
+
+  defp midpoint({ax, ay}, {bx, by}), do: {(ax + bx) / 2.0, (ay + by) / 2.0}
 
   defp rows(state, whole) do
     [
