@@ -123,7 +123,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Scale do
   defp map_ops(%{map: map}), do: Figures.map_ops(map)
 
   defp vertex_ops(%{map: nil}), do: []
-  defp vertex_ops(%{map: map}), do: Figures.vertex_ops(map, radius: 3.0, opts: [opacity: 0.6])
+  defp vertex_ops(%{map: map}), do: Figures.vertex_ops(map)
 
   defp border_ops(%{border: nil}), do: []
 

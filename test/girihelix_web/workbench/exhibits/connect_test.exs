@@ -53,6 +53,22 @@ defmodule GirihelixWeb.Workbench.Exhibits.ConnectTest do
     assert {"verify", "n/a"} in rows
   end
 
+  test "a degenerate child is a failure frame, not a crash" do
+    params = %{Param.values(Connect.params(), :default) | child: :star, n: 3}
+
+    assert {:error, %Steps.Failure{frames: frames}} =
+             Steps.run(Connect.steps(params), Connect.initial(params))
+
+    assert frames != []
+
+    for frame <- frames do
+      assert {:both, [_ | _], [_ | _]} = Connect.draw(frame, params)
+    end
+
+    assert {:both, _ops, rows} = Connect.draw(List.last(frames), params)
+    assert {"derived s", "1.0"} in rows
+  end
+
   test "the completed frame reports the result and labels its diagnostics" do
     params = Param.values(Connect.params(), :default)
 

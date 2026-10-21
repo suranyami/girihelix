@@ -22,6 +22,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.ScaleTest do
     assert {:both, ops, rows} = Scale.draw(List.last(frames), params)
     assert [_ | _] = ops
     assert Enum.any?(ops, &match?({:point, _, _, _}, &1))
+    assert Enum.any?(ops, &match?({:point, _, 4.0, []}, &1))
+    refute Enum.any?(ops, &match?({:point, _, 3.0, [opacity: 0.6]}, &1))
     assert {"passthrough", _} = List.keyfind(rows, "passthrough", 0)
     assert Scale.reproduce(params) =~ "ScaleFigure.build_unit"
   end

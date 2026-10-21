@@ -21,6 +21,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   alias Girihelix.Engine.Figures.ConnectFigure
   alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.Figures.RadialFigure
+  alias Girihelix.Engine.Figures.ScaleFigure
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.Render.Viewport
@@ -53,19 +54,24 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   def params, do: Figures.child_params([])
 
   # The stored scale is the derived one, so the panel and the transport show the
-  # number the solver found rather than a requested value.
+  # number the solver found rather than a requested value. Deriving it can raise
+  # on degenerate in-range geometry, which must not crash the page: the fallback
+  # is one, exactly as the engine's own no-crossing path stores.
   @impl true
   @spec initial(map()) :: ConnectFigure.state()
   def initial(params) do
     child = Figures.build_child(params)
-    ConnectFigure.start(child, ConnectFigure.new!(child).s)
+    ConnectFigure.start(child, derived_s(child))
   end
 
   @impl true
   @spec steps(map()) :: [Steps.Step.t()]
   def steps(params) do
     child = Figures.build_child(params)
-    ConnectFigure.steps(child, ConnectFigure.new!(child).s)
+    # The arguments are ignored (the sequence is static), so the placeholder s
+    # is never read. Deriving it here again would reintroduce the raise site and
+    # do dead work; a degenerate child now fails visibly in :scale_clip instead.
+    ConnectFigure.steps(child, 1.0)
   end
 
   @impl true
@@ -93,6 +99,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   defp child_call(%{child: :rosette, n: n, q: q, child_s: s}) do
     "Girihelix.Engine.Figures.Rosette.new!(#{Integer.to_string(n)}, " <>
       "#{Format.coordinate(q)}, #{Integer.to_string(s)})"
+  end
+
+  # `ArgumentError` is the engine's degenerate-geometry failure; keep the rescue
+  # narrow so a real bug still surfaces. `normalise_s/1` is what the constructor
+  # applies to the solved value.
+  defp derived_s(child) do
+    child
+    |> ConnectFigure.compute_scale()
+    |> ScaleFigure.normalise_s()
+  rescue
+    ArgumentError -> 1.0
   end
 
   defp ops(state) do
