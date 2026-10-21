@@ -33,6 +33,8 @@ defmodule Girihelix.Engine.Figures.ExplicitFigure do
 
   @doc "`new/1` for a caller that has the map, raising otherwise."
   @spec new!(term()) :: t()
+  def new!(map) when not is_struct(map, PlanarMap), do: raise(ArgumentError, "explicit figure: not_a_map")
+
   def new!(map) do
     case new(map) do
       {:ok, figure} -> figure
