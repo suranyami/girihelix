@@ -110,16 +110,16 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   def render(%{index: nil} = assigns) do
     ~H"""
     <Layouts.app flash={@flash} wide>
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-3">
         <.exhibit_header exhibit={@exhibit} />
 
         <p :if={@failure} role="alert" class="alert alert-error">
           Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
         </p>
 
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-          <div class="min-w-0"><.source_pane source={@source} /></div>
-          <aside class="min-w-0">
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <aside class="w-80 shrink-0">
             <.controls params={@param_defs} values={@values} />
           </aside>
         </div>
@@ -131,7 +131,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} wide>
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-3">
         <.exhibit_header exhibit={@exhibit} />
 
         <p :if={@failure} role="alert" class="alert alert-error">
@@ -142,19 +142,19 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
           <.transport index={@index} count={@count} step={@step} failure={@failure} />
         </section>
 
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-          <section id="picture" class="min-w-0">
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <section id="picture" class="min-w-0 flex-1">
             <.canvas drawing={@drawing} viewport={@viewport} />
           </section>
 
-          <aside class="min-w-0">
+          <aside class="w-80 shrink-0">
             <.controls params={@param_defs} values={@values} />
           </aside>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-          <div class="min-w-0"><.source_pane source={@source} /></div>
-          <div class="min-w-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
         </div>
       </div>
     </Layouts.app>
@@ -169,7 +169,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       <.link navigate={~p"/workbench"} class="text-sm opacity-70 hover:underline">
         &larr; Workbench
       </.link>
-      <h1 class="text-2xl font-semibold">{@exhibit.title()}</h1>
+      <h1 class="text-xl font-semibold">{@exhibit.title()}</h1>
       <p class="text-sm opacity-70">{@exhibit.summary()}</p>
     </header>
     """

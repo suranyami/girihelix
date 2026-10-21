@@ -78,7 +78,7 @@ defmodule GirihelixWeb.Layouts do
 
   # The workbench uses the whole window with a small fixed gutter; the rest of
   # the app keeps the narrow centred column.
-  defp main_class(true), do: "px-3 py-4"
+  defp main_class(true), do: "px-6 py-3 sm:px-8"
   defp main_class(false), do: "px-4 py-20 sm:px-6 lg:px-8"
 
   defp inner_class(true), do: "space-y-4"
