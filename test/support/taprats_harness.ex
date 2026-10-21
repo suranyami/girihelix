@@ -16,6 +16,8 @@ defmodule Girihelix.TapratsHarness do
   """
 
   alias Girihelix.Engine.Faces
+  alias Girihelix.Engine.Figures.Figure
+  alias Girihelix.Engine.Figures.Star
   alias Girihelix.Engine.FillRegion
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
@@ -39,7 +41,13 @@ defmodule Girihelix.TapratsHarness do
             | {:error, :filling | :empty}
         }
   @type cells_dump :: %{cells: {:ok, [{integer(), integer()}]} | {:error, :too_many}}
-  @type dump :: map_dump() | faces_dump() | cells_dump()
+  @type figure_expr ::
+          {:star, integer(), float(), integer()}
+          | {:rosette, integer(), float(), integer()}
+          | {:scale, figure_expr(), float()}
+          | {:connect, figure_expr()}
+  @type figure_dump :: %{figure: {:ok, map_dump()} | {:error, :null}}
+  @type dump :: map_dump() | faces_dump() | cells_dump() | figure_dump()
   @type op :: tuple()
 
   @doc "The directory holding the Taprats fixtures."
@@ -77,7 +85,31 @@ defmodule Girihelix.TapratsHarness do
 
   defp run([{:fill, region, t1, t2}], _state), do: region |> FillRegion.fill(t1, t2) |> fill_dump()
 
+  defp run([{:figure, kind, expr}], _state), do: build_figure({:figure, kind, expr})
+
   defp run([op | rest], state), do: run(rest, step(op, state))
+
+  @doc """
+  Builds and dumps the figure named by a `figure` operation.
+
+  The map body is `dump/1`'s, so the figure and map dumps cannot drift. Any
+  exception raised by the port maps to `{:error, :null}`, which is the
+  source's `NullPointerException` outcome for those parameters. An expression
+  this task cannot build yet raises `ArgumentError`.
+  """
+  @spec build_figure({:figure, :map | :unit, figure_expr()}) :: figure_dump()
+  def build_figure({:figure, kind, {:star, n, d, s}}) do
+    %{figure: {:ok, kind |> build_star(n, d, s) |> dump()}}
+  rescue
+    _exception -> %{figure: {:error, :null}}
+  end
+
+  def build_figure({:figure, _kind, expr}) do
+    raise ArgumentError, "figure not yet buildable: #{inspect(expr)}"
+  end
+
+  defp build_star(:map, n, d, s), do: n |> Star.new!(d, s) |> Figure.map()
+  defp build_star(:unit, n, d, s), do: n |> Star.new!(d, s) |> Figure.unit()
 
   defp faces_dump({:ok, colouring}) do
     %{faces: {:ok, %{black: face_corners(colouring.black), white: face_corners(colouring.white)}}}
@@ -210,7 +242,44 @@ defmodule Girihelix.TapratsHarness do
     {:replicate, map, other, transforms}
   end
 
+  defp op(["figure", "map", expr | rest], line), do: {:figure, :map, figure_expr!([expr | rest], line)}
+
+  defp op(["figure", "unit", expr | rest], line), do: {:figure, :unit, figure_expr!([expr | rest], line)}
+
   defp op(_tokens, line), do: bad_line("script", line)
+
+  # `figure_expr!/2` parses one expression and rejects leftover tokens.
+  defp figure_expr!([expr | rest], line) do
+    case figure_expr([expr | rest], line) do
+      {expression, []} -> expression
+      {_expression, _rest} -> bad_line("script", line)
+    end
+  end
+
+  # Postfix, so `scale <expr> <s>` is unambiguous without parentheses.
+  defp figure_expr(["star", n, d, s | rest], line) do
+    {{:star, integer(n, line), number(d, line), integer(s, line)}, rest}
+  end
+
+  defp figure_expr(["rosette", n, q, s | rest], line) do
+    {{:rosette, integer(n, line), number(q, line), integer(s, line)}, rest}
+  end
+
+  defp figure_expr(["scale" | rest], line) do
+    {child, rest} = figure_expr(rest, line)
+
+    case rest do
+      [factor | rest] -> {{:scale, child, number(factor, line)}, rest}
+      [] -> bad_line("script", line)
+    end
+  end
+
+  defp figure_expr(["connect" | rest], line) do
+    {child, rest} = figure_expr(rest, line)
+    {{:connect, child}, rest}
+  end
+
+  defp figure_expr(_tokens, line), do: bad_line("script", line)
 
   defp transform(["m", a, b, c, d, e, f], line) do
     [a, b, c, d, e, f]
@@ -263,6 +332,9 @@ defmodule Girihelix.TapratsHarness do
       ["faces error " <> word] -> %{faces: {:error, face_error(word)}}
       ["fill ok" | rest] -> %{cells: {:ok, Enum.map(rest, &cell/1)}}
       ["fill error " <> word] -> %{cells: {:error, fill_error(word)}}
+      ["figure ok" | rest] -> %{figure: {:ok, parse_map_dump(rest)}}
+      ["figure unit ok" | rest] -> %{figure: {:ok, parse_map_dump(rest)}}
+      ["figure error null"] -> %{figure: {:error, :null}}
       _other -> parse_map_dump(lines)
     end
   end
@@ -349,19 +421,28 @@ defmodule Girihelix.TapratsHarness do
 
   def compare(%{cells: expected}, %{cells: actual}), do: expected |> cells_errors(actual) |> result()
 
+  def compare(%{figure: expected}, %{figure: actual}), do: expected |> figure_errors(actual) |> result()
+
   def compare(%{faces: _expected}, actual), do: {:error, ["dump shape: expected faces, got #{inspect(Map.keys(actual))}"]}
 
   def compare(%{cells: _expected}, actual), do: {:error, ["dump shape: expected cells, got #{inspect(Map.keys(actual))}"]}
 
-  def compare(expected, actual) do
-    errors =
-      vertex_errors(expected.vertices, actual.vertices) ++
-        exact_errors("edges", expected.edges, actual.edges) ++
-        exact_errors("rings", expected.rings, actual.rings) ++
-        verify_errors(expected.verify, actual.verify)
+  def compare(%{figure: _expected}, actual),
+    do: {:error, ["dump shape: expected figure, got #{inspect(Map.keys(actual))}"]}
 
-    result(errors)
+  def compare(expected, actual), do: expected |> map_errors(actual) |> result()
+
+  defp map_errors(expected, actual) do
+    vertex_errors(expected.vertices, actual.vertices) ++
+      exact_errors("edges", expected.edges, actual.edges) ++
+      exact_errors("rings", expected.rings, actual.rings) ++
+      verify_errors(expected.verify, actual.verify)
   end
+
+  defp figure_errors({:error, :null}, {:error, :null}), do: []
+  defp figure_errors({:ok, expected}, {:ok, actual}), do: map_errors(expected, actual)
+
+  defp figure_errors(expected, actual), do: ["figure: expected #{inspect(expected)}, got #{inspect(actual)}"]
 
   defp faces_errors({:error, reason}, {:error, reason}), do: []
 
