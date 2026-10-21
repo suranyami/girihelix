@@ -78,6 +78,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The homelab cluster is ARM64 (ROCK 5B+, Turing RK1), so the published
+      # image must carry both architectures. QEMU supplies the arm64 builder on
+      # the amd64 runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -115,4 +121,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
