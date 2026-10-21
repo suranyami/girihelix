@@ -44,6 +44,33 @@ the precondition because the design named no error reason for `Rect`. A later
 caller that can supply a degenerate rect needs either an error tuple or a
 constructor that rules zero extents out.
 
+### Syntax highlighting in the source pane is deferred (captured 2026-10-21, Plan 2 homogenisation)
+
+The source pane renders plain monospace text and marks the step's lines, so a
+reader sees the call but not syntax colours. `makeup` and `makeup_elixir` were
+the design's proposal; Plan 2 chose not to add the dependency. Adding it costs
+two pure-Elixir deps, a tokenizer call per rendered window and a stylesheet for
+the highlight classes. Deferred until the plain line pointer proves insufficient.
+
+### `Svg.render/3` does not XML-escape op option values (captured 2026-10-21, Plan 2 homogenisation)
+
+`fill`, `stroke`, `dash`, `width` and `opacity` are interpolated into attributes
+verbatim; only label text and the root class pass through `Svg.escape/1`. Every
+current value is an authored constant, so the output is safe today. An exhibit
+that derived a colour from a parameter would put arbitrary text into the
+document. Escape the option values in the serializer, or constrain them to a
+validated set, before the first parameter-derived option lands.
+
+### The source resolver assumes the process cwd is the project root (captured 2026-10-21, Plan 2 homogenisation)
+
+`Source.resolve/1` makes a captured absolute path relative with
+`Path.relative_to_cwd/1`, then accepts it only under `lib/`. That holds under
+`mix` and for the release, where the cwd is the project root. A caller started
+from another directory — an escript, a mix task run elsewhere, a future worker —
+would resolve every step to `:unavailable`. Pin a project-root setting at compile
+time from `__DIR__` if the workbench ever needs to run outside a project-root
+cwd.
+
 ## Closed
 
 - **`Point.normalize/1`'s scaling branch unasserted** (Plan 1a review). Closed

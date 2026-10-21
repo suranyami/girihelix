@@ -18,6 +18,9 @@ defmodule GirihelixWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    live "/workbench", Workbench.IndexLive
+    live "/workbench/:slug", Workbench.ExhibitLive
   end
 
   # Other scopes may use custom stacks.

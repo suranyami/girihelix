@@ -1,8 +1,7 @@
 # girihelix workbench — design
 
 **Date:** 2026-10-16
-**Status:** written, awaiting review. Implementation planning (the `writing-plans`
-skill) has not yet been run.
+**Status:** Plan 2 implemented 2026-10-21; Plans 3–7 remain.
 **Related:** [domain model design](2026-10-16-girihelix-domain-model-design.md) ·
 [porting specification](../../algorithm-analysis.md) ·
 [porting notes](../../porting-notes/)
@@ -103,7 +102,8 @@ Steps.at(frames, index)                # Frame.t | nil
 The distinction matters: **engine callers use `run!` so they get the faithful
 exception** the port promises, while the workbench uses `run/3` to render the
 failure as a state. `opts` accepts `:max_frames`, so a pathological construction
-cannot exhaust memory on a published page; a truncated run reports the cap.
+cannot exhaust memory on a published page; a truncated run stops at the cap and
+returns the frames built so far.
 
 Steps are built with a macro that captures the call site at compile time:
 
@@ -123,11 +123,14 @@ end
 pane exact: a frame knows the lines that produced it, with no introspection and no
 heuristic search.
 
-The **initial state is the parameter map**, and the first step is conventionally
-`:init`, turning those parameters into the algorithm's working state. That keeps
-the calling convention uniform — `Steps.run(steps, params)` — and gives the
-workbench a frame zero that shows the parameters as they were received, before
-anything is computed or clamped.
+The **initial state** comes from the exhibit's `initial/1` callback, which
+receives the typed parameter map. It is conventionally the parameter map itself.
+An algorithm that already owns a start constructor — Plan 1c's `Faces`,
+`FillRegion` and `PlanarMap` — supplies that constructor instead, so the
+workbench starts from exactly the state the engine uses. The calling convention
+stays uniform, and frame zero still shows the parameters as they were received,
+before anything is computed or clamped. See
+[Plan 2 implementation decisions](#plan-2-implementation-decisions).
 
 **Two entry points, one implementation.** Every algorithm exposes its steps and a
 plain function:
@@ -234,7 +237,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   def params do
     [
       %Param{name: :n, type: :integer, range: 3..24, default: 8, doc: "rotational order"},
-      %Param{name: :d, type: :float, range: 1.0..10.0, step: 0.1, default: 3.0, doc: "skip"},
+      %Param{name: :d, type: :float, range: 1..10, step: 0.1, default: 3.0, doc: "skip"},
       %Param{name: :s, type: :integer, range: 1..6, default: 2, doc: "steps out"}
     ]
   end
@@ -279,11 +282,12 @@ Frames carry the file and line captured by `step/3`, so the pane resolves a fram
 to a line range directly. No introspection, no searching for the module on disk,
 no guessing.
 
-Highlighting is server-side via `makeup` and `makeup_elixir`, which are pure
-Elixir. A JavaScript highlighter is deliberately avoided: `AGENTS.md` forbids
-inline `<script>` and vendored `<script src>`, so it would have to be bundled into
-`app.js` for no benefit. If the dependency is unwanted, plain monospace is an
-acceptable fallback — the line pointer is the essential part, not the colour.
+Highlighting is plain monospace with the active range marked: Plan 2 took the
+fallback, so `makeup` and `makeup_elixir` are not dependencies. A JavaScript
+highlighter was deliberately avoided too: `AGENTS.md` forbids inline `<script>`
+and vendored `<script src>`, so it would have to be bundled into `app.js` for no
+benefit. The line pointer is the essential part, not the colour; syntax
+colouring is deferred in the backlog.
 
 If the file cannot be read, the pane says so and the exhibit still works. The pane
 renders girihelix's own source only, never `reference/`.
@@ -343,7 +347,7 @@ seven plans, and two boundaries move.
 | # | Plan | Deliverable | Change |
 | --- | --- | --- | --- |
 | 1 | Engine foundation and geometry — `Steps`, `Loose`, `Point`, `Transform`, `Intersect`, `Polygon`, `Map`, `Faces`, `FillRegion` | Pure geometry authored as steps, golden-tested | gains `Steps`, loses literal transliteration as a goal |
-| 2 | Workbench foundation — draw ops, SVG serializer, viewport, exhibit behaviour, `/workbench`, controls, transport, source and reproduce panes, geometry exhibits | A publishable workbench over the geometry layer | new |
+| 2 | Workbench foundation — draw ops, SVG serializer, viewport, exhibit behaviour, `/workbench`, controls, transport, source and reproduce panes, geometry exhibits | A publishable workbench over the geometry layer | new — **done 2026-10-21** |
 | 3 | Figures — `Figure`, `RadialFigure`, `Star`, `Rosette`, `ScaleFigure`, `ConnectFigure` | `Star(8, 3.0, 2)` builds its vertices, and you can watch it do so | gains exhibits |
 | 4 | Catalogue and instancing — engine `Tiling`, `Feature`, `PlacedFeature`, `construct`, `.tiling` data and parser | Tiling plus figures to a constructed map you can step through | gains exhibits |
 | 5 | Render styles — `Plain`, `Filled`, `Outline` over the shared draw ops, face two-colouring | Constructed map to SVG, matching Taprats' geometry | consumes the Plan 2 serializer instead of defining it |
@@ -352,7 +356,8 @@ seven plans, and two boundaries move.
 
 Plan 1's remainder, after `Steps` and the geometry value types, became Plans 1b
 (`PlanarMap` and the Taprats reference harness) and 1c (`Faces`, `FillRegion` and
-`Rect`). **Plan 1 is complete as of 2026-10-20.**
+`Rect`). **Plan 1 is complete as of 2026-10-20. Plan 2 is complete as of
+2026-10-21.**
 
 `Steps` lands in Plan 1 rather than Plan 2 because it decides how Plan 1's
 algorithms are written; introducing it later would mean rewriting them. The SVG
@@ -361,6 +366,53 @@ Plan 5's styles consume it.
 
 The workbench is therefore publishable from Plan 2 onward. It is not scaffolding
 that Plan 7 replaces.
+
+## Plan 2 implementation decisions
+
+These are the choices Plan 2 made where this design had left a convention open or
+had proposed something the implementation did differently. They describe what is
+built, not what was considered.
+
+- **`initial/1` is a callback, not a convention.** The step model originally said
+  the initial state was the parameter map and the first step was an `:init`
+  translation. The Plan 1c algorithms already own their start constructors —
+  `Faces.start/1`, `FillRegion.start/3`, `PlanarMap.weld_start/2` and
+  `PlanarMap.replicate_start/1` — so each exhibit's `initial/1` calls the
+  algorithm's constructor with the typed parameters. The workbench therefore
+  starts from exactly the state the engine uses, and no exhibit re-implements a
+  start step the engine already has.
+- **Draw-op coordinates are `{x, y}` tuples in map space.** Every positional
+  argument — a line's endpoints, a guide's endpoints, a point's position, a
+  polygon's vertices — is a plain two-number tuple, never a `Point` struct. The
+  serializer projects a tuple without depending on a geometry value type, which
+  is what keeps the draw-op vocabulary closed and the engine's op type plain
+  data. Exhibits convert with the shared `Exhibits.Format.pair/1`.
+- **Faces are drawn with `currentColor`: black faces filled at 0.4 opacity, white
+  faces as a dashed stroke, so both read in light and dark themes.**
+- **The viewport picks a nominal screen scale.** `Viewport.fit/2` derives `scale`
+  so the SVG `viewBox` is 1,000 units wide whatever the drawing's map-space
+  extent. Stroke widths, marker radii and label font sizes are SVG units in that
+  space, so a stroke of `1.0` is about a pixel and a marker of `6.0` about six,
+  rather than a fraction of the map that changes with every exhibit. An explicit
+  `:scale` still overrides the derivation.
+- **The source pane is plain monospace.** It renders the step's window with the
+  active range marked by a background class and no syntax colouring, so `makeup`
+  and `makeup_elixir` are not dependencies. The line pointer is the essential
+  part; colour can be added later without changing the resolver or the pane's
+  contract.
+- **The copy button dispatches `phx:copy`.** The reproduce pane carries the
+  snippet in `data-copy` and sends `phx:copy` with `JS.dispatch/1`; one window
+  listener in `app.js` writes the payload to the clipboard. The LiveView cannot
+  touch the browser clipboard, and a single event needs no hook or LiveView
+  JavaScript module of its own.
+- **A run is capped at 200 frames, and an absent `frame` means the last one.**
+  `ExhibitLive` passes `max_frames: 200` to `Steps.run/3`. Reaching the cap ends
+  the run successfully with the frames built so far, because a run longer than
+  that is an exhibit bug rather than a page worth rendering. The `frame` query
+  key selects an index and is clamped to the run; omitting it selects the last
+  frame. A parameter change is patched without `frame`, so it lands on the
+  finished picture, while the transport includes `frame` so every position
+  remains linkable.
 
 ## Out of scope
 
@@ -409,7 +461,8 @@ None of these are designed, built or scheduled.
   altitude for this.
 - **Clamps become visible steps**, not local variables, so the source's thresholds
   are shown rather than hidden.
-- **A `makeup` dependency is acceptable** for server-side highlighting, in
-  preference to a bundled JavaScript highlighter.
+- **A `makeup` dependency was considered** for server-side highlighting, in
+  preference to a bundled JavaScript highlighter. Plan 2 shipped plain monospace
+  instead and did not add it.
 - **The engine purity rule gets a guard test**, so the boundary is mechanical
   rather than a convention.
