@@ -200,16 +200,7 @@ defmodule Girihelix.Engine.Figures.Star do
   end
 
   defp assemble(state) do
-    {map, tip} = PlanarMap.insert_vertex(PlanarMap.new(), state.a)
-    Enum.reduce(state.points, %{state | map: map, top: tip, bottom: tip}, &insert_crossing/2)
-  end
-
-  # One crossing: the upper vertex and its mirror, then the two chain edges.
-  defp insert_crossing(point, state) do
-    {map, top} = PlanarMap.insert_vertex(state.map, point)
-    {map, bottom} = PlanarMap.insert_vertex(map, RadialFigure.mirror(point))
-    map = PlanarMap.insert_edge!(map, state.top, top)
-    map = PlanarMap.insert_edge!(map, state.bottom, bottom)
+    {map, top, bottom} = RadialFigure.mirrored_chain(state.a, state.points)
     %{state | map: map, top: top, bottom: bottom}
   end
 

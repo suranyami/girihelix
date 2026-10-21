@@ -9,6 +9,7 @@ defmodule Girihelix.Engine.Figures.RadialFigureTest do
   alias Girihelix.Engine.Figures.RadialFigure
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
+  alias Girihelix.Engine.PlanarMap
 
   test "don, tr, arc and mirror are the source's primitives" do
     assert RadialFigure.don(8) == 0.125
@@ -50,5 +51,36 @@ defmodule Girihelix.Engine.Figures.RadialFigureTest do
     assert_in_delta p2.y, 0.0, 1.0e-15
     assert_in_delta p3.x, 0.0, 1.0e-15
     assert_in_delta p3.y, -1.0, 1.0e-15
+  end
+
+  test "mirrored_chain/2 inserts the tip, the point and its mirror, and two edges" do
+    tip = Point.new(1.0, 0.0)
+    point = Point.new(0.5, 0.25)
+    mirrored = Point.new(0.5, -0.25)
+
+    {map, top, bottom} = RadialFigure.mirrored_chain(tip, [point])
+
+    assert PlanarMap.verify(map) == :ok
+    assert PlanarMap.num_vertices(map) == 3
+    assert PlanarMap.num_edges(map) == 2
+    assert PlanarMap.position!(map, top) == point
+    assert PlanarMap.position!(map, bottom) == mirrored
+
+    # Every edge leaves the tip; their far ends are the point and its mirror.
+    far_ends =
+      Enum.map(PlanarMap.edges(map), fn edge ->
+        {from, to} = PlanarMap.endpoints!(map, edge)
+
+        case PlanarMap.position!(map, from) do
+          ^tip -> {from, to}
+          _other -> {to, from}
+        end
+      end)
+
+    assert Enum.all?(far_ends, fn {leaving, _far} -> PlanarMap.position!(map, leaving) == tip end)
+
+    assert far_ends
+           |> Enum.map(fn {_leaving, far} -> PlanarMap.position!(map, far) end)
+           |> Enum.sort() == Enum.sort([point, mirrored])
   end
 end

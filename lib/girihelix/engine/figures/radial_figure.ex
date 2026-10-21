@@ -57,6 +57,34 @@ defmodule Girihelix.Engine.Figures.RadialFigure do
   def mirror(%Point{x: x, y: y}), do: Point.new(x, -y)
 
   @doc """
+  Assembles a mirror-symmetric chain from `tip` and the ordered `points`.
+
+  The map starts empty. It inserts `tip` first, then for each point in order:
+  the point, its x-axis mirror as a **fresh** vertex, the top edge from the
+  previous top vertex, and the bottom edge from the previous bottom vertex,
+  carrying both handles forward. The first step's two edges therefore leave the
+  tip **top then bottom**, which fixes the ring head and hence every later
+  neighbour scan.
+
+  Returns `{map, top, bottom}` with the last vertices of the two chains.
+  """
+  @spec mirrored_chain(Point.t(), [Point.t()]) ::
+          {PlanarMap.t(), PlanarMap.vertex(), PlanarMap.vertex()}
+  def mirrored_chain(%Point{} = tip, points) when is_list(points) do
+    {map, vertex} = PlanarMap.insert_vertex(PlanarMap.new(), tip)
+    {map, top, bottom} = Enum.reduce(points, {map, vertex, vertex}, &insert_mirrored/2)
+    {map, top, bottom}
+  end
+
+  defp insert_mirrored(point, {map, top_prev, bottom_prev}) do
+    {map, top} = PlanarMap.insert_vertex(map, point)
+    {map, bottom} = PlanarMap.insert_vertex(map, mirror(point))
+    map = PlanarMap.insert_edge!(map, top_prev, top)
+    map = PlanarMap.insert_edge!(map, bottom_prev, bottom)
+    {map, top, bottom}
+  end
+
+  @doc """
   The regular `n`-gon's corners, counter-clockwise from `(1, 0)`.
 
   The first corner is exact: `arc(0.0)` is `(1.0, 0.0)` with no rounding.
