@@ -1,4 +1,4 @@
-defmodule GirihelixWeb.PageControllerTest do
+defmodule GirihelixWeb.Workbench.RootTest do
   use GirihelixWeb.ConnCase
 
   test "GET / renders the workbench index", %{conn: conn} do
