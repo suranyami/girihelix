@@ -31,6 +31,10 @@ defmodule GirihelixWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
+  attr :wide, :boolean,
+    default: false,
+    doc: "use the full window width with a small fixed margin, for the workbench"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -62,8 +66,8 @@ defmodule GirihelixWeb.Layouts do
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+    <main class={main_class(@wide)}>
+      <div class={inner_class(@wide)}>
         {render_slot(@inner_block)}
       </div>
     </main>
@@ -71,6 +75,14 @@ defmodule GirihelixWeb.Layouts do
     <.flash_group flash={@flash} />
     """
   end
+
+  # The workbench uses the whole window with a small fixed gutter; the rest of
+  # the app keeps the narrow centred column.
+  defp main_class(true), do: "px-3 py-4"
+  defp main_class(false), do: "px-4 py-20 sm:px-6 lg:px-8"
+
+  defp inner_class(true), do: "space-y-4"
+  defp inner_class(false), do: "mx-auto max-w-2xl space-y-4"
 
   @doc """
   Shows the flash group with standard titles and content.

@@ -37,7 +37,7 @@ defmodule GirihelixWeb.Workbench.Components.SourcePane do
     ~H"""
     <section id="source" class="flex flex-col gap-2">
       <p class="font-mono text-sm font-semibold">{@path}:{@first}</p>
-      <div class="overflow-x-auto rounded-box bg-base-200 p-3 font-mono text-xs leading-5">
+      <div class="h-72 overflow-auto rounded-box bg-base-200 p-3 font-mono text-xs leading-5">
         <div :for={{number, text} <- @lines} class={line_class(number, @first, @last)}>
           <span class="mr-3 inline-block w-8 select-none text-right opacity-50">{number}</span>
           <span class="whitespace-pre">{text}</span>

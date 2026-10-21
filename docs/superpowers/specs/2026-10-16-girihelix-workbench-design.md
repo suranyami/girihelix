@@ -10,6 +10,9 @@
 
 Two surfaces over one engine.
 
+`/` and `/workbench` both serve the exhibit index: the workbench is the app's
+landing page. An exhibit's canonical URL remains `/workbench/:slug`.
+
 `/workbench` is a gallery of engine components. Each component is an *exhibit*
 that renders its current state, lets you change its parameters, steps through the
 construction one step at a time in either direction, shows the source that

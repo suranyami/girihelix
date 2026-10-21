@@ -109,36 +109,52 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <.exhibit_header exhibit={@exhibit} />
+    <Layouts.app flash={@flash} wide>
+      <div class="flex flex-col gap-4">
+        <.exhibit_header exhibit={@exhibit} />
 
-      <p :if={@failure} role="alert" class="alert alert-error">
-        Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-      </p>
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
 
-      <.controls params={@param_defs} values={@values} />
-      <.source_pane source={@source} />
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+          <div class="min-w-0"><.source_pane source={@source} /></div>
+          <aside class="min-w-0">
+            <.controls params={@param_defs} values={@values} />
+          </aside>
+        </div>
+      </div>
     </Layouts.app>
     """
   end
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <div class="flex flex-col gap-6">
+    <Layouts.app flash={@flash} wide>
+      <div class="flex flex-col gap-4">
         <.exhibit_header exhibit={@exhibit} />
 
-        <div class="grid gap-6 lg:grid-cols-2">
-          <section id="picture" class="flex flex-col gap-4">
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
+
+        <section id="transport" class="min-w-0">
+          <.transport index={@index} count={@count} step={@step} failure={@failure} />
+        </section>
+
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+          <section id="picture" class="min-w-0">
             <.canvas drawing={@drawing} viewport={@viewport} />
-            <.transport index={@index} count={@count} step={@step} failure={@failure} />
           </section>
 
-          <aside class="flex flex-col gap-6">
+          <aside class="min-w-0">
             <.controls params={@param_defs} values={@values} />
-            <.source_pane source={@source} />
-            <.reproduce_pane snippet={@snippet} index={@index} />
           </aside>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+          <div class="min-w-0"><.source_pane source={@source} /></div>
+          <div class="min-w-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
         </div>
       </div>
     </Layouts.app>
