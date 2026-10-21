@@ -19,14 +19,14 @@ defmodule Girihelix.Engine.Figures.Figure do
   alias Girihelix.Engine.Figures.ExplicitFigure
   alias Girihelix.Engine.Figures.RadialFigure
   alias Girihelix.Engine.Figures.Rosette
+  alias Girihelix.Engine.Figures.ScaleFigure
   alias Girihelix.Engine.Figures.Star
   alias Girihelix.Engine.PlanarMap
 
   # Only the figures defined today may appear here: a typespec naming an
-  # undefined struct warns, and warnings are errors in this project. Tasks 5 and
-  # 6 add `ScaleFigure` and `ConnectFigure` to this union when their structs
-  # exist.
-  @type t :: %Star{} | %Rosette{} | %ExplicitFigure{}
+  # undefined struct warns, and warnings are errors in this project. Task 6 adds
+  # `ConnectFigure` to this union when its struct exists.
+  @type t :: %Star{} | %Rosette{} | %ScaleFigure{} | %ExplicitFigure{}
 
   @doc "The figure's basic unit, before the `n`-fold replication."
   @callback build_unit(t()) :: PlanarMap.t()
