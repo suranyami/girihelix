@@ -19,9 +19,22 @@ defmodule GirihelixWeb.Workbench.Registry do
   alias GirihelixWeb.Workbench.Exhibits.PlanarMap
   alias GirihelixWeb.Workbench.Exhibits.Point
   alias GirihelixWeb.Workbench.Exhibits.Polygon
+  alias GirihelixWeb.Workbench.Exhibits.Rosette
+  alias GirihelixWeb.Workbench.Exhibits.Star
   alias GirihelixWeb.Workbench.Exhibits.Transform
 
-  @exhibits [Loose, Point, Transform, Intersect, Polygon, PlanarMap, Faces, FillRegion]
+  @exhibits [
+    Loose,
+    Point,
+    Transform,
+    Intersect,
+    Polygon,
+    PlanarMap,
+    Faces,
+    FillRegion,
+    Star,
+    Rosette
+  ]
 
   @doc "Every registered exhibit, in display order."
   @spec exhibits() :: [module()]
