@@ -207,7 +207,9 @@ the **raw, unclamped** `d`, while every other point in the construction uses
 `clamp_d`. And `Star` carries **no null guard** where `Rosette` carries one: a
 failed intersection is dereferenced and throws. The two constructions meet
 degenerate input differently, and a port has to decide that per figure rather than
-once.
+once. The canonical failing case is `(n, d, s) = (8, 7.02, 3)`: the closure's
+`cent` intersection is null, so the source dereferences null and the port raises
+`star: degenerate_crossing`.
 
 ### `Rosette` — Lee's construction
 

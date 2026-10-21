@@ -223,4 +223,76 @@ defmodule Girihelix.TapratsHarnessTest do
     assert {:error, _} = TapratsHarness.compare(expected, %{cells: {:ok, [{1, 0}, {0, 0}]}})
     assert {:error, _} = TapratsHarness.compare(expected, %{cells: {:error, :too_many}})
   end
+
+  test "parse_script/1 reads figure expressions recursively" do
+    assert TapratsHarness.parse_script("figure map star 8 3.0 2\n") ==
+             [{:figure, :map, {:star, 8, 3.0, 2}}]
+
+    assert TapratsHarness.parse_script("figure unit rosette 12 -0.8 4\n") ==
+             [{:figure, :unit, {:rosette, 12, -0.8, 4}}]
+
+    assert TapratsHarness.parse_script("figure map scale rosette 8 0.0 3 1.5\n") ==
+             [{:figure, :map, {:scale, {:rosette, 8, 0.0, 3}, 1.5}}]
+
+    assert TapratsHarness.parse_script("figure map connect scale star 8 3.0 2 1.4\n") ==
+             [{:figure, :map, {:connect, {:scale, {:star, 8, 3.0, 2}, 1.4}}}]
+  end
+
+  test "parse_script/1 rejects a malformed figure expression" do
+    assert_raise ArgumentError, ~r/figure/, fn ->
+      TapratsHarness.parse_script("figure map star 8 3.0")
+    end
+
+    assert_raise ArgumentError, ~r/figure/, fn ->
+      TapratsHarness.parse_script("figure map scale star 8 3.0 2")
+    end
+  end
+
+  test "parse_dump/1 reads the figure dump headers" do
+    body = """
+    vertices 1
+    v 1.0 0.0
+    edges 0
+    rings
+    r 0
+    verify true
+    """
+
+    expected = %{vertices: [{1.0, 0.0}], edges: [], rings: [[]], verify: true}
+
+    assert %{figure: {:ok, parsed}} = TapratsHarness.parse_dump("figure ok\n" <> body)
+    assert parsed == expected
+
+    assert %{figure: {:ok, parsed}} = TapratsHarness.parse_dump("figure unit ok\n" <> body)
+    assert parsed == expected
+  end
+
+  test "parse_dump/1 reads the figure failure" do
+    assert %{figure: {:error, :null}} = TapratsHarness.parse_dump("figure error null\n")
+  end
+
+  test "compare/2 compares figure dumps, including the null failure" do
+    ok = %{figure: {:ok, %{vertices: [{0.0, 0.0}], edges: [], rings: [[]], verify: true}}}
+
+    assert TapratsHarness.compare(ok, ok) == :ok
+    assert TapratsHarness.compare(%{figure: {:error, :null}}, %{figure: {:error, :null}}) == :ok
+
+    assert {:error, _} = TapratsHarness.compare(ok, %{figure: {:error, :null}})
+    assert {:error, _} = TapratsHarness.compare(%{figure: {:error, :null}}, ok)
+
+    assert {:error, _} =
+             TapratsHarness.compare(ok, %{
+               figure: {:ok, %{vertices: [], edges: [], rings: [], verify: true}}
+             })
+  end
+
+  test "build_figure/1 maps a Star failure to the null error" do
+    assert TapratsHarness.build_figure({:figure, :map, {:star, 8, 7.02, 3}}) ==
+             %{figure: {:error, :null}}
+  end
+
+  test "build_figure/1 builds a connect expression" do
+    assert %{figure: {:ok, %{verify: true}}} =
+             TapratsHarness.build_figure({:figure, :map, {:connect, {:star, 8, 3.0, 2}}})
+  end
 end
