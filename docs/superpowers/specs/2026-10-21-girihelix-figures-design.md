@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-21
 **Status:** implemented 2026-10-21 (Plan 3). Every decision not inherited from an
-earlier design is marked "my call".
+earlier design is recorded under Decisions taken.
 **Related:** [workbench design](2026-10-16-girihelix-workbench-design.md) ·
 [engine types design](2026-10-17-girihelix-engine-types-design.md) ·
 [domain model design](2026-10-16-girihelix-domain-model-design.md) ·
@@ -252,11 +252,11 @@ defstruct [:n, :d, :clamp_d, :s]
 @spec new(pos_integer(), float(), integer()) :: {:ok, t()} | {:error, reason()}
 @spec new!(pos_integer(), float(), integer()) :: t()
 @spec clamp_d(pos_integer(), float()) :: float()
-@spec clamp_s(integer(), integer()) :: non_neg_integer()
+@spec clamp_s(integer(), integer()) :: integer()
 
 @spec start(pos_integer(), float(), integer()) :: state()
 @spec steps(pos_integer(), float(), integer()) :: [Girihelix.Engine.Steps.Step.t()]
-@spec result(state()) :: Girihelix.Engine.PlanarMap.t()
+@spec result(state()) :: Girihelix.Engine.PlanarMap.t() | nil
 @spec build_unit(t()) :: Girihelix.Engine.PlanarMap.t()
 ```
 
@@ -328,6 +328,8 @@ defstruct [:n, :q, :s]
         figure: t() | nil,
         map: Girihelix.Engine.PlanarMap.t() | nil,
         frame: map() | nil,
+        q_clamp: float() | nil,
+        s_clamp: non_neg_integer() | nil,
         points: [Girihelix.Engine.Geometry.Point.t()],
         top: Girihelix.Engine.PlanarMap.vertex() | nil,
         bottom: Girihelix.Engine.PlanarMap.vertex() | nil,
@@ -337,13 +339,13 @@ defstruct [:n, :q, :s]
 @spec new(pos_integer(), float(), integer()) :: {:ok, t()} | {:error, reason()}
 @spec new!(pos_integer(), float(), integer()) :: t()
 @spec clamp_q(float()) :: float()
-@spec clamp_s(pos_integer(), integer()) :: non_neg_integer()
+@spec clamp_s(pos_integer(), integer()) :: integer()
 @spec with_q(t(), float()) :: t()
 @spec with_s(t(), integer()) :: t()
 
 @spec start(pos_integer(), float(), integer()) :: state()
 @spec steps(pos_integer(), float(), integer()) :: [Girihelix.Engine.Steps.Step.t()]
-@spec result(state()) :: Girihelix.Engine.PlanarMap.t()
+@spec result(state()) :: Girihelix.Engine.PlanarMap.t() | nil
 @spec build_unit(t()) :: Girihelix.Engine.PlanarMap.t()
 ```
 
@@ -445,7 +447,7 @@ defstruct [:child, :s]
 @spec build_unit(Girihelix.Engine.Figures.RadialFigure.t(), float()) :: Girihelix.Engine.PlanarMap.t()
 @spec start(Girihelix.Engine.Figures.RadialFigure.t(), float()) :: state()
 @spec steps(Girihelix.Engine.Figures.RadialFigure.t(), float()) :: [Girihelix.Engine.Steps.Step.t()]
-@spec result(state()) :: Girihelix.Engine.PlanarMap.t()
+@spec result(state()) :: Girihelix.Engine.PlanarMap.t() | nil
 ```
 
 `build_unit/2` is the shared implementation, so `ConnectFigure` can call the
@@ -511,8 +513,8 @@ unit. That is safe in this port because `build_unit` always returns a new map.
 | `s` | derived `float` | `compute_scale(child)`, then `normalise_s/1`; stored |
 
 `compute_scale/1` is the shared "clamp" function: the constructor calls it to
-set `s`, and the `:clamp` step records the derived value and whether it is the
-fallback. The three `1.0` fallbacks (no tip at all, a tip with
+set `s`, and the `:clamp` step records the derived value and whether the scale
+is `1.0`. The three `1.0` fallbacks (no tip at all, a tip with
 no lower neighbour, and a failed intersection) are indistinguishable in the
 derived scale. The build state records only that the scale is `1.0` — the
 `fallback` boolean — for the panel, without changing the geometry; it does not
@@ -530,7 +532,7 @@ defstruct [:child, :s]
         child: Girihelix.Engine.Figures.RadialFigure.t(),
         figure: t() | nil,
         map: Girihelix.Engine.PlanarMap.t() | nil,
-        fallback: nil | :no_tip | :no_lower_neighbour | :parallel,
+        fallback: boolean() | nil,
         max_x: float() | nil
       }
 
@@ -541,7 +543,7 @@ defstruct [:child, :s]
 
 @spec start(Girihelix.Engine.Figures.RadialFigure.t(), float()) :: state()
 @spec steps(Girihelix.Engine.Figures.RadialFigure.t(), float()) :: [Girihelix.Engine.Steps.Step.t()]
-@spec result(state()) :: Girihelix.Engine.PlanarMap.t()
+@spec result(state()) :: Girihelix.Engine.PlanarMap.t() | nil
 @spec build_unit(t()) :: Girihelix.Engine.PlanarMap.t()
 ```
 
@@ -554,7 +556,7 @@ once. `child_changed/1` re-derives `s` from the child, mirroring the source's
 
 | Id | Label | What it does |
 | --- | --- | --- |
-| `:clamp` | derive the scale | Records the derived `s` and any fallback |
+| `:clamp` | derive the scale | Records the derived `s` and whether it is `1.0` |
 | `:scale_clip` | scale and clip the child | The whole `ScaleFigure.build_unit/2` |
 | `:fold` | fold the upper half | `rotate_half`: copy down one step, add permuted edges, delete originals |
 | `:half_step` | rotate by half a step | `pi/n` when `s` is not `1.0` |
@@ -577,7 +579,7 @@ defstruct [:map]
 @type t :: %__MODULE__{map: Girihelix.Engine.PlanarMap.t()}
 @type reason :: :not_a_map
 
-@spec new(Girihelix.Engine.PlanarMap.t()) :: {:ok, t()} | {:error, reason()}
+@spec new(term()) :: {:ok, t()} | {:error, reason()}
 @spec new!(Girihelix.Engine.PlanarMap.t()) :: t()
 @spec build_unit(t()) :: Girihelix.Engine.PlanarMap.t()
 ```
@@ -829,8 +831,8 @@ faintly beneath, then every copy as the unit's edges mapped through one ladder
 transform, labelled `Tr^k` at the copy's own bounding-box centre. Each copy is
 drawn from the unit, not from the coalesced map, because replication has already
 merged the copies' shared vertices. The unit itself is drawn heavier. The panel
-reports the transform count and whether the unit's first and last copies
-coalesced.
+reports the kind, the order, the unit's and the map's counts, the transform
+count and the verification verdict.
 
 Panel rows: `kind`, `n`, `unit vertices`, `unit edges`, `transforms`,
 `vertices`, `edges`, `verify`.
@@ -936,8 +938,9 @@ would visibly jitter.
   `figure`, `unit`, `map` and `transforms`. Every key except the `radial`
   exhibit's own four is one the engine's `start/…` state defines.
 - **`Exhibits.Figures` finished with a fixed, verified API:** `map_ops/1`,
-  `map_ops/2`, `unit_ops/1`, `vertex_ops/2`, `rows_for/1`, `whole_map/1`,
-  `tip_op/0`, `construction_op/1`, `map_label/2`, `number/1`, `integer/1`,
+  `map_ops/2`, `unit_ops/1`, `vertex_ops/1`, `vertex_ops/2`, `viewport_for/1`,
+  `viewport_for/2`, `rows_for/1`, `whole_map/1`, `tip_op/0`,
+  `construction_op/1`, `map_label/2`, `number/1`, `integer/1`,
   `child_params/1` and `build_child/1`. The midpoint helper lives beside the
   other number spellings in `Exhibits.Format.midpoint/2`.
 - **Star's canonical crash parameters are `n = 8, d = 7.02, s = 3`.** The

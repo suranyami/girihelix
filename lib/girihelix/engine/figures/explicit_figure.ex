@@ -27,7 +27,7 @@ defmodule Girihelix.Engine.Figures.ExplicitFigure do
   Anything else is refused with `{:error, :not_a_map}` rather than raising;
   `new!/1` raises.
   """
-  @spec new(PlanarMap.t()) :: {:ok, t()} | {:error, reason()}
+  @spec new(term()) :: {:ok, t()} | {:error, reason()}
   def new(map) when is_struct(map, PlanarMap), do: {:ok, %__MODULE__{map: map}}
   def new(_map), do: {:error, :not_a_map}
 

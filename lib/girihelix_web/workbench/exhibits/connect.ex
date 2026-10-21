@@ -87,9 +87,15 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
       "Girihelix.Engine.Figures.ConnectFigure.new!(" <> child_call(params) <> "))"
   end
 
+  # The normalised unit is within the unit circle, so the figure's own extent is
+  # the whole window the exhibit needs.
   @impl true
   @spec viewport(map()) :: Viewport.t()
-  def viewport(_params), do: %Viewport{left: -1.25, top: 1.25, width: 2.5, scale: 400.0}
+  def viewport(params) do
+    Figures.viewport_for(fn ->
+      params |> Figures.build_child() |> ConnectFigure.new!() |> Figure.map()
+    end)
+  end
 
   defp child_call(%{child: :star, n: n, d: d, child_s: s}) do
     "Girihelix.Engine.Figures.Star.new!(#{Integer.to_string(n)}, " <>

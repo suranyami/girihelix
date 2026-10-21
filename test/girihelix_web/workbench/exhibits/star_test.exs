@@ -86,15 +86,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.StarTest do
     assert {"closure", "yes"} in rows
   end
 
-  test "pins the 2.5-unit viewport centred on the unit circle" do
+  test "frames an aspect-correct window centred on the origin" do
     params = Param.values(Star.params(), :default)
+    radius = 1.25
+    width = 2.0 * radius / 0.75
+    viewport = Star.viewport(params)
 
-    assert Star.viewport(params) == %Girihelix.Engine.Render.Viewport{
-             left: -1.25,
-             top: 1.25,
-             width: 2.5,
-             scale: 400.0
-           }
+    assert viewport.left == -radius / 0.75
+    assert viewport.top == radius
+    assert viewport.width == width
+    assert viewport.scale == 1000.0 / width
   end
 
   defp assert_steps(steps, ids), do: assert(Enum.map(steps, & &1.id) == ids)

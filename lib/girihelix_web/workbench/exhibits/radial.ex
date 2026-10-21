@@ -142,7 +142,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Radial do
 
   @impl true
   @spec viewport(map()) :: Viewport.t()
-  def viewport(_params), do: %Viewport{left: -1.25, top: 1.25, width: 2.5, scale: 400.0}
+  def viewport(params) do
+    Figures.viewport_for(fn -> params |> build_figure() |> Figure.map() end)
+  end
 
   defp build_figure(%{kind: :star, n: n, d: d, s: s}), do: StarFigure.new!(n, d, s)
   defp build_figure(%{kind: :rosette, n: n, q: q, s: s}), do: RosetteFigure.new!(n, q, s)

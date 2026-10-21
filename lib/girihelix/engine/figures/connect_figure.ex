@@ -202,7 +202,7 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
   end
 
   @doc "The built map."
-  @spec result(state()) :: PlanarMap.t()
+  @spec result(state()) :: PlanarMap.t() | nil
   def result(%{map: map}), do: map
 
   @impl RadialFigure

@@ -101,15 +101,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.ScaleTest do
     assert Scale.reproduce(params) =~ "Girihelix.Engine.Figures.Star.new!(8, 3.0, 2)"
   end
 
-  test "pins the 2.5-unit viewport centred on the unit circle" do
+  test "frames an aspect-correct window large enough for the scaled child" do
     params = Param.values(Scale.params(), :default)
+    radius = 1.5
+    width = 2.0 * radius / 0.75
+    viewport = Scale.viewport(params)
 
-    assert Scale.viewport(params) == %Girihelix.Engine.Render.Viewport{
-             left: -1.25,
-             top: 1.25,
-             width: 2.5,
-             scale: 400.0
-           }
+    assert viewport.left == -radius / 0.75
+    assert viewport.top == radius
+    assert viewport.width == width
+    assert viewport.scale == 1000.0 / width
   end
 
   defp draw_last(params) do

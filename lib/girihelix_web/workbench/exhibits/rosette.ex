@@ -21,6 +21,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
 
   @behaviour GirihelixWeb.Workbench.Exhibit
 
+  alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.Figures.Rosette, as: RosetteFigure
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Render.Viewport
@@ -100,7 +101,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
 
   @impl true
   @spec viewport(map()) :: Viewport.t()
-  def viewport(_params), do: %Viewport{left: -1.25, top: 1.25, width: 2.5, scale: 400.0}
+  def viewport(%{n: n, q: q, s: s}) do
+    Figures.viewport_for(fn -> n |> RosetteFigure.new!(q, s) |> Figure.map() end)
+  end
 
   # The state's `map` is the unit; the whole figure is that unit replicated.
   # Replaying `Figure.map/1` would rebuild it and could re-raise a failure a

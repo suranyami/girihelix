@@ -98,7 +98,7 @@ defmodule Girihelix.TapratsHarness do
   The map body is `dump/1`'s, so the figure and map dumps cannot drift. Any
   exception raised by the port maps to `{:error, :null}`, which is the
   source's `NullPointerException` outcome for those parameters. An expression
-  this task cannot build yet raises `ArgumentError`.
+  outside the four parsed shapes raises `ArgumentError`.
   """
   @spec build_figure({:figure, :map | :unit, figure_expr()}) :: figure_dump()
   def build_figure({:figure, kind, {:star, n, d, s}}) do
@@ -126,7 +126,7 @@ defmodule Girihelix.TapratsHarness do
   end
 
   def build_figure({:figure, _kind, expr}) do
-    raise ArgumentError, "figure not yet buildable: #{inspect(expr)}"
+    raise ArgumentError, "unknown figure expression: #{inspect(expr)}"
   end
 
   defp build_star(:map, n, d, s), do: n |> Star.new!(d, s) |> Figure.map()
@@ -144,7 +144,7 @@ defmodule Girihelix.TapratsHarness do
   defp build_expression({:scale, expr, s}), do: expr |> build_expression() |> ScaleFigure.new!(s)
   defp build_expression({:connect, expr}), do: expr |> build_expression() |> ConnectFigure.new!()
 
-  defp build_expression(expr), do: raise(ArgumentError, "figure not yet buildable: #{inspect(expr)}")
+  defp build_expression(expr), do: raise(ArgumentError, "unknown figure expression: #{inspect(expr)}")
 
   defp build_kind(figure, :map), do: Figure.map(figure)
   defp build_kind(figure, :unit), do: Figure.unit(figure)

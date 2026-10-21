@@ -24,6 +24,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Figures do
   `child_params/1` declares the shared `child`, `n`, `q`, `d` and `child_s`
   parameters, and `build_child/1` builds the declared child from a typed map.
 
+  `viewport_for/2` frames the whole figure for the canvas's `0.75` aspect. It
+  takes a builder rather than a map so the whole construction, including a
+  builder that raises on a degenerate figure, sits inside its `ArgumentError`
+  fallback: a failed run's last frame draws only the tip, which the minimum
+  radius already contains.
+
   `rows_for/1` reports the counts and the verification verdict. A `nil` map is
   a frame before `:assemble`: there is nothing to count or verify yet, so its
   rows are honest placeholders rather than a zero that would read as a result.
@@ -37,6 +43,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Figures do
   alias Girihelix.Engine.Figures.Star, as: StarFigure
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Op
+  alias Girihelix.Engine.Render.Viewport
   alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
@@ -44,6 +51,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Figures do
   @tip {1.0, 0.0}
   @construction_radius 3.0
   @construction_opts [opacity: 0.6]
+  @canvas_aspect 0.75
+  @nominal_width 1000.0
+  @minimum_radius 1.25
 
   @doc "The point every figure construction starts from, static at frame zero."
   @spec tip_op() :: Op.t()
@@ -60,6 +70,33 @@ defmodule GirihelixWeb.Workbench.Exhibits.Figures do
   @doc "The unit's edges as heavier lines over the whole figure."
   @spec unit_ops(PlanarMap.t()) :: [Op.t()]
   def unit_ops(map), do: edge_ops(map, width: 2.0)
+
+  @doc """
+  The viewport every figure exhibit frames its drawing with.
+
+  `builder` returns the figure's whole map; `floor` is an extra radial lower
+  bound for a drawing that reaches past its final map, such as Scale's scaled
+  pre-clip extent. The radius is `max(#{@minimum_radius}, floor, extent)`, where
+  the extent is the largest `|x|` or `|y|` over the map's vertices.
+
+  The canvas aspect is #{@canvas_aspect}, and `Viewport` derives the height as
+  `width * aspect`, so the window is the square `[-r, r]²`:
+  `left = -r / aspect`, `top = r`, `width = 2r / aspect` and
+  `scale = #{@nominal_width} / width`. For `r = #{@minimum_radius}` that is
+  `left: -1.6666…, top: 1.25, width: 3.3333…, scale: 300.0`.
+
+  A builder that raises `ArgumentError` — a degenerate figure — falls back to
+  the minimum radius: its retained failure frame draws only the tip, which that
+  window contains.
+  """
+  @spec viewport_for((-> PlanarMap.t()), number()) :: Viewport.t()
+  def viewport_for(builder, floor \\ 0.0) when is_function(builder, 0) do
+    builder
+    |> radius(floor)
+    |> viewport()
+  rescue
+    ArgumentError -> viewport(@minimum_radius)
+  end
 
   @doc "A label at the midpoint of a map's first edge, naming a diagnostic copy."
   @spec map_label(PlanarMap.t(), String.t()) :: [Op.t()]
@@ -184,6 +221,28 @@ defmodule GirihelixWeb.Workbench.Exhibits.Figures do
   @spec integer(integer() | nil) :: String.t()
   def integer(nil), do: "n/a"
   def integer(value), do: Integer.to_string(value)
+
+  defp radius(builder, floor) do
+    max(@minimum_radius, max(floor * 1.0, extent(builder.())))
+  end
+
+  defp extent(map) do
+    Enum.reduce(PlanarMap.vertices(map), 0.0, fn vertex, acc ->
+      %{x: x, y: y} = PlanarMap.position!(map, vertex)
+      max(acc, max(abs(x), abs(y)))
+    end)
+  end
+
+  defp viewport(radius) do
+    width = 2.0 * radius / @canvas_aspect
+
+    %Viewport{
+      left: -radius / @canvas_aspect,
+      top: radius,
+      width: width,
+      scale: @nominal_width / width
+    }
+  end
 
   defp edge_ops(map, opts) do
     Enum.map(PlanarMap.edges(map), fn edge ->

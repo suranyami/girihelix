@@ -88,15 +88,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.RosetteTest do
     refute Enum.any?(positive_ops, &match?({:label, _, "stable ray", []}, &1))
   end
 
-  test "pins the 2.5-unit viewport centred on the unit circle" do
+  test "frames an aspect-correct window centred on the origin" do
     params = Param.values(Rosette.params(), :default)
+    radius = 1.25
+    width = 2.0 * radius / 0.75
+    viewport = Rosette.viewport(params)
 
-    assert Rosette.viewport(params) == %Girihelix.Engine.Render.Viewport{
-             left: -1.25,
-             top: 1.25,
-             width: 2.5,
-             scale: 400.0
-           }
+    assert viewport.left == -radius / 0.75
+    assert viewport.top == radius
+    assert viewport.width == width
+    assert viewport.scale == 1000.0 / width
   end
 
   defp draw_last(params) do

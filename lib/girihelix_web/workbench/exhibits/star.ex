@@ -21,6 +21,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
 
   @behaviour GirihelixWeb.Workbench.Exhibit
 
+  alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.Figures.RadialFigure
   alias Girihelix.Engine.Figures.Star, as: StarFigure
   alias Girihelix.Engine.Geometry.Intersect
@@ -109,7 +110,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
 
   @impl true
   @spec viewport(map()) :: Viewport.t()
-  def viewport(_params), do: %Viewport{left: -1.25, top: 1.25, width: 2.5, scale: 400.0}
+  def viewport(%{n: n, d: d, s: s}) do
+    Figures.viewport_for(fn -> n |> StarFigure.new!(d, s) |> Figure.map() end)
+  end
 
   # The state's `map` is the unit; the whole figure is that unit replicated.
   # Replaying `Figure.map/1` would rebuild the unit and can re-raise a failure a

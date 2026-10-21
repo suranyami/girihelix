@@ -84,7 +84,7 @@ defmodule Girihelix.Engine.Figures.Star do
   def clamp_d(n, d), do: max(1.0, min(d * 1.0, 0.5 * n - 0.01))
 
   @doc "`min(s, di)`: the stored step count cannot exceed the skip's integer part."
-  @spec clamp_s(integer(), integer()) :: non_neg_integer()
+  @spec clamp_s(integer(), integer()) :: integer()
   def clamp_s(s, di), do: min(s, di)
 
   @doc "The state `steps/3` starts from: parameters only, every derived field empty."
@@ -144,7 +144,7 @@ defmodule Girihelix.Engine.Figures.Star do
   end
 
   @doc "The built map."
-  @spec result(state()) :: PlanarMap.t()
+  @spec result(state()) :: PlanarMap.t() | nil
   def result(%{map: map}), do: map
 
   @impl RadialFigure

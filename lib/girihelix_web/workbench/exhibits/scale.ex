@@ -88,9 +88,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.Scale do
       child_call(params) <> ", #{Format.coordinate(s)}))"
   end
 
+  # The map is clipped to the unit n-gon, but the scaled child reaches `s` before
+  # that clip, so the scale is a floor on the radius as well.
   @impl true
   @spec viewport(map()) :: Viewport.t()
-  def viewport(_params), do: %Viewport{left: -1.25, top: 1.25, width: 2.5, scale: 400.0}
+  def viewport(%{s: s} = params) do
+    Figures.viewport_for(fn -> params |> Figures.build_child() |> Figure.map() end, abs(s))
+  end
 
   defp child_call(%{child: :star, n: n, d: d, child_s: s}) do
     "Girihelix.Engine.Figures.Star.new!(#{Integer.to_string(n)}, " <>

@@ -70,7 +70,7 @@ defmodule Girihelix.Engine.Figures.Rosette do
   def clamp_q(q), do: min(max(q * 1.0, -@q_limit), @q_limit)
 
   @doc "`min(s, div(n - 1, 2))`: integer division, so half an odd order rounds down."
-  @spec clamp_s(pos_integer(), integer()) :: non_neg_integer()
+  @spec clamp_s(pos_integer(), integer()) :: integer()
   def clamp_s(n, s), do: min(s, div(n - 1, 2))
 
   @doc "A copy of `rosette` with `q` clamped."
@@ -134,7 +134,7 @@ defmodule Girihelix.Engine.Figures.Rosette do
   end
 
   @doc "The built map."
-  @spec result(state()) :: PlanarMap.t()
+  @spec result(state()) :: PlanarMap.t() | nil
   def result(%{map: map}), do: map
 
   @impl RadialFigure
