@@ -9,26 +9,20 @@ defmodule Girihelix.Engine.Figures.FigureTest do
   alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.PlanarMap
 
-  test "unit/1 and map/1 replicate the fixture four times without doubling the vertices" do
+  test "unit/1 and map/1 replicate the fixture four times without doubling" do
     figure = %Square{}
 
     unit = Figure.unit(figure)
-    assert PlanarMap.num_vertices(unit) == 4
-    assert PlanarMap.num_edges(unit) == 4
+    assert PlanarMap.num_vertices(unit) == 2
+    assert PlanarMap.num_edges(unit) == 1
 
     map = Figure.map(figure)
 
-    # Four rotations of the diamond land on the same four vertices, so the
-    # ladder does not double them: the copies coalesce.
+    # Four quarter turns of the wedge produce the diamond's four sides, so the
+    # copies meet at shared vertices and add no parallel edges.
+    assert PlanarMap.verify(map) == :ok
     assert PlanarMap.num_vertices(map) == 4
-
-    # `replicate!/3` coalesces vertices but never edges. This fixture's unit is
-    # closed, so each of the four transforms contributes its four edges and the
-    # result is sixteen parallel edges, which `verify/1` reports. That is the
-    # engine's documented behaviour, not a fault in the fixture.
-    assert PlanarMap.num_edges(map) == 16
-    assert {:error, problems} = PlanarMap.verify(map)
-    assert Enum.all?(problems, &match?({:parallel_edge, _edge}, &1))
+    assert PlanarMap.num_edges(map) == 4
   end
 
   test "radial?/1 distinguishes the radial figures" do
