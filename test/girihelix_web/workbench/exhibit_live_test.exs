@@ -27,12 +27,20 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ "collect colours"
   end
 
+  test "the scrub slider sends a frame", %{conn: conn} do
+    {:ok, view, html} = live(conn, "/workbench/faces")
+    assert html =~ "collect colours"
+
+    html = render_change(view, "go", %{"frame" => "1"})
+    assert html =~ "discover faces"
+  end
+
   test "the URL clamps a parameter and carries the frame", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/workbench/point?x=99.0&y=4.0")
     assert html =~ ~s(value="5.0")
 
-    {:ok, view, _html} = live(conn, "/workbench/faces?frame=3")
-    assert render(view) =~ "collect colours"
+    {:ok, view, _html} = live(conn, "/workbench/faces?frame=1")
+    assert render(view) =~ "discover faces"
   end
 
   test "a parameter change resets to the last frame", %{conn: conn} do

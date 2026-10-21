@@ -387,6 +387,8 @@ built, not what was considered.
   serializer projects a tuple without depending on a geometry value type, which
   is what keeps the draw-op vocabulary closed and the engine's op type plain
   data. Exhibits convert with the shared `Exhibits.Format.pair/1`.
+- **Faces are drawn with `currentColor`: black faces filled at 0.4 opacity, white
+  faces as a dashed stroke, so both read in light and dark themes.**
 - **The source pane is plain monospace.** It renders the step's window with the
   active range marked by a background class and no syntax colouring, so `makeup`
   and `makeup_elixir` are not dependencies. The line pointer is the essential

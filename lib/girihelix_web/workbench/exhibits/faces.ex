@@ -10,10 +10,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
   is laid out row by row, because `PlanarMap.insert_vertex/2` splits at most one
   edge and discovery follows edge order.
 
-  The picture draws every edge as a line, fills each kept face once the colour
-  step has given it a colour, and marks every discovered face's corners.
-  Discovery registers the rejected clockwise outer contour too, so its corners
-  are marked even though it is never filled.
+  The picture draws every edge as a line, marks the two colours differently once
+  the colour step has assigned them, and marks every discovered face's corners.
+  Black faces are filled in `currentColor` at 0.4 opacity; white faces are a
+  dashed `currentColor` stroke, so both colours stay visible in the light and
+  dark themes. Discovery registers the rejected clockwise outer contour too, so
+  its corners are marked even though it is never drawn as a face.
 
   A map that cannot be two-coloured is reported, not raised. The colour step
   records `:filling_conflict` or `:no_faces` in the frame's state, so the run
@@ -217,18 +219,18 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
   end
 
   defp fill_op(map, %{vertices: vertices, state: :black}) do
-    polygon_op(map, vertices, "black")
+    polygon_op(map, vertices, :fill, fill: "currentColor", opacity: 0.4)
   end
 
   defp fill_op(map, %{vertices: vertices, state: :white}) do
-    polygon_op(map, vertices, "white")
+    polygon_op(map, vertices, :stroke, stroke: "currentColor", width: 1.5, dash: "4 3")
   end
 
   defp fill_op(_map, _info), do: nil
 
-  defp polygon_op(map, vertices, colour) do
+  defp polygon_op(map, vertices, mode, opts) do
     points = Enum.map(vertices, &Format.pair(PlanarMap.position!(map, &1)))
-    {:polygon, points, :fill, [fill: colour, opacity: 0.25]}
+    {:polygon, points, mode, opts}
   end
 
   # Every discovered face is marked, including the rejected outer contour: the

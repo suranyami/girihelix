@@ -128,10 +128,27 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
     {:both, replicate_ops(receiver, params), replicate_rows(receiver)}
   end
 
+  @doc """
+  The finished map a scenario builds.
+
+  Unlike `scenario/1`, which returns the inputs, this runs the same steps the
+  exhibit shows and returns the receiver the operation leaves behind.
+  """
+  @spec result(:weld_squares | :replicate_ladder) :: PlanarMap.t()
+  def result(:weld_squares) do
+    {receiver, other} = scenario(:weld_squares)
+    receiver |> PlanarMap.weld!(other) |> elem(0)
+  end
+
+  def result(:replicate_ladder) do
+    {receiver, unit} = scenario(:replicate_ladder)
+    PlanarMap.replicate!(receiver, unit, rotations())
+  end
+
   @impl true
   @spec reproduce(map()) :: String.t()
   def reproduce(%{scenario: scenario}) do
-    "GirihelixWeb.Workbench.Exhibits.PlanarMap.scenario(#{inspect(scenario)})"
+    "GirihelixWeb.Workbench.Exhibits.PlanarMap.result(#{inspect(scenario)})"
   end
 
   defp weld_ops(%{receiver: receiver}, other, crossings) do

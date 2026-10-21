@@ -58,8 +58,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Loose do
     [
       step(
         :build,
-        "Compute the tolerance table",
-        "Calls each Loose predicate once, at the values the table names.",
+        "Read the parameters",
+        "No computation happens here; draw/2 computes the table from the engine.",
         & &1
       )
     ]

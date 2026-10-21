@@ -170,14 +170,25 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMapTest do
            ]
   end
 
-  test "reproduces the scenario with a fully qualified pasteable snippet" do
+  test "result/1 is the finished map the steps build" do
+    values = Param.values(Exhibit.params(), :default)
+    frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
+    final = List.last(frames).state.receiver
+
+    result = Exhibit.result(:weld_squares)
+
+    assert PlanarMap.num_vertices(result) == PlanarMap.num_vertices(final)
+    assert PlanarMap.num_edges(result) == PlanarMap.num_edges(final)
+  end
+
+  test "reproduces the result with a fully qualified pasteable snippet" do
     values = Param.values(Exhibit.params(), :default)
 
     assert Exhibit.reproduce(values) ==
-             "GirihelixWeb.Workbench.Exhibits.PlanarMap.scenario(:weld_squares)"
+             "GirihelixWeb.Workbench.Exhibits.PlanarMap.result(:weld_squares)"
 
     assert Exhibit.reproduce(%{values | scenario: :replicate_ladder}) ==
-             "GirihelixWeb.Workbench.Exhibits.PlanarMap.scenario(:replicate_ladder)"
+             "GirihelixWeb.Workbench.Exhibits.PlanarMap.result(:replicate_ladder)"
   end
 
   defp positions(map) do

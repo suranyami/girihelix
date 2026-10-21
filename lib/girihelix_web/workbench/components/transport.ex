@@ -39,16 +39,17 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
       <div class="flex flex-wrap items-center gap-2">
         <button type="button" class="btn btn-sm" phx-click="go" phx-value-to="first">First</button>
         <button type="button" class="btn btn-sm" phx-click="go" phx-value-to="prev">Prev</button>
-        <input
-          type="range"
-          name="frame"
-          phx-change="go"
-          min="0"
-          max={@count - 1}
-          value={@index}
-          class="range range-sm"
-          aria-label="Frame"
-        />
+        <form id="frame-form" phx-change="go">
+          <input
+            type="range"
+            name="frame"
+            min="0"
+            max={@count - 1}
+            value={@index}
+            class="range range-sm"
+            aria-label="Frame"
+          />
+        </form>
         <button type="button" class="btn btn-sm" phx-click="go" phx-value-to="next">Next</button>
         <button type="button" class="btn btn-sm" phx-click="go" phx-value-to="last">Last</button>
       </div>

@@ -35,6 +35,9 @@ defmodule GirihelixWeb.Workbench.Components.TransportTest do
     assert html =~ ~s(phx-change="go")
     assert html =~ ~s(min="0")
     assert html =~ ~s(value="1")
+
+    # LiveView only accepts a change event from an input inside a form.
+    assert html =~ ~r/<form[^>]*phx-change="go"[^>]*>\s*<input[^>]*type="range"/
   end
 
   test "frame zero is the parameters frame, with no step prose" do

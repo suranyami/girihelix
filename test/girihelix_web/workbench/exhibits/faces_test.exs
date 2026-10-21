@@ -12,8 +12,19 @@ defmodule GirihelixWeb.Workbench.Exhibits.FacesTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    assert Enum.any?(ops, &match?({:polygon, _, :fill, [{:fill, "black"} | _]}, &1))
-    assert Enum.any?(ops, &match?({:polygon, _, :fill, [{:fill, "white"} | _]}, &1))
+    assert Enum.any?(
+             ops,
+             &match?({:polygon, _, :fill, [fill: "currentColor", opacity: 0.4]}, &1)
+           )
+
+    assert Enum.any?(
+             ops,
+             &match?(
+               {:polygon, _, :stroke, [stroke: "currentColor", width: 1.5, dash: "4 3"]},
+               &1
+             )
+           )
+
     assert {"black", "1"} in rows
     assert {"white", "1"} in rows
   end
@@ -88,7 +99,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.FacesTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    assert Enum.count(ops, &match?({:polygon, _, :fill, _}, &1)) == 2
+    assert Enum.count(ops, &match?({:polygon, _, :fill, _}, &1)) == 1
+    assert Enum.count(ops, &match?({:polygon, _, :stroke, _}, &1)) == 1
     assert Enum.count(ops, &match?({:point, _, _, []}, &1)) == 6
 
     assert rows == [

@@ -23,19 +23,22 @@ defmodule GirihelixWeb.Workbench.RegistryTest do
 
   test "every exhibit draws at its defaults and extremes" do
     for exhibit <- Registry.exhibits(),
-        values <- variants(exhibit) do
+        {kind, values} <- variants(exhibit) do
       run = Steps.run(exhibit.steps(values), exhibit.initial(values), max_frames: 200)
 
-      case run do
-        {:ok, frames} ->
+      case {kind, run} do
+        {:defaults, {:ok, frames}} ->
+          assert_frames(exhibit, values, frames)
+
+        {:defaults, {:error, failure}} ->
+          flunk("defaults failed: #{inspect(failure)}")
+
+        {:extreme, {:ok, frames}} ->
+          assert_frames(exhibit, values, frames)
+
+        {:extreme, {:error, %Steps.Failure{frames: frames}}} ->
           assert frames != []
-
-          for frame <- frames do
-            assert_drawing(exhibit.draw(frame, values))
-          end
-
-        {:error, %Steps.Failure{step: %Steps.Step{}}} ->
-          :ok
+          assert_frames(exhibit, values, frames)
       end
     end
   end
@@ -47,10 +50,18 @@ defmodule GirihelixWeb.Workbench.RegistryTest do
     params = exhibit.params()
     defaults = Param.values(params, :default)
 
-    [defaults] ++
+    [{:defaults, defaults}] ++
       for param <- params,
           mode <- [:first, :last],
-          do: Map.put(defaults, param.name, Param.values([param], mode)[param.name])
+          do: {:extreme, Map.put(defaults, param.name, Param.values([param], mode)[param.name])}
+  end
+
+  defp assert_frames(exhibit, values, frames) do
+    assert frames != []
+
+    for frame <- frames do
+      assert_drawing(exhibit.draw(frame, values))
+    end
   end
 
   defp assert_drawing({:canvas, ops}), do: assert(ops != [])
