@@ -130,7 +130,10 @@ The Java is in `reference/1.1.12/src/app/`.
     - `ladder(pos_integer()) :: [Transform.t()]`
     - `map(t()) :: PlanarMap.t()`
   - `Girihelix.Engine.FigureFixtures.Square` (test only), a four-fold figure
-    whose unit is the diamond `(1,0), (0,1), (-1,0), (0,-1)` with four edges.
+    whose unit is the single-side wedge `(1,0)`–`(0,1)`: two vertices, one
+    edge. Four quarter turns then produce the diamond's four sides — 4
+    vertices, 4 edges, `verify/1 == :ok` — rather than four copies of a closed
+    diamond (which would append 16 parallel edges).
 
 `Figure.map/1` needs clauses for `ExplicitFigure` (not yet defined) and the
 radial behaviour. For this task, declare `@type t :: struct()` in both
