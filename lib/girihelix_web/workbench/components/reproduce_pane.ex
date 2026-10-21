@@ -34,7 +34,7 @@ defmodule GirihelixWeb.Workbench.Components.ReproducePane do
           Copy
         </button>
       </div>
-      <pre id="reproduce" class="overflow-x-auto rounded-box bg-base-200 p-3 text-xs"><code>{@snippet}</code></pre>
+      <pre id="reproduce" class="h-40 overflow-auto rounded-box bg-base-200 p-3 text-xs"><code>{@snippet}</code></pre>
     </section>
     """
   end

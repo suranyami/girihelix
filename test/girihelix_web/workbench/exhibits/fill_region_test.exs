@@ -12,9 +12,21 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    cells = Enum.filter(ops, &match?({:polygon, _, :fill, _}, &1))
+    cells =
+      Enum.filter(
+        ops,
+        &match?(
+          {:polygon, _, :fill, [fill: "currentColor", stroke: "currentColor", width: 0.75, opacity: 0.3]},
+          &1
+        )
+      )
+
     assert length(cells) == 20
     assert {"cells", "20"} in rows
+    assert Enum.any?(ops, &match?({:label, _, "region", _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "T1", _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "T2", _}, &1))
+    assert Enum.any?(ops, &match?({:label, _, "row 0: x 0.0 .. 4.0", _}, &1))
   end
 
   test "an intermediate frame draws only the region and its rows" do
@@ -73,9 +85,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
 
     assert {:polygon, region, :stroke, _} = hd(ops)
     assert region == [{0.0, 0.0}, {4.0, 0.0}, {4.0, 3.0}, {0.0, 3.0}]
-    assert Enum.count(ops, &match?({:guide, _, _, []}, &1)) == 2
+    assert Enum.count(ops, &match?({:guide, _, _, _}, &1)) == 2
 
-    assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "none"}]
+    assert rows == [
+             {"rows", "0"},
+             {"cells", "0"},
+             {"failure", "none"},
+             {"shading", "unit cells"},
+             {"bars", "each row's outermost x extent"},
+             {"arrows", "T1 and T2"}
+           ]
   end
 
   test "the find-rows frame has its row range set but no rows yet" do
@@ -85,8 +104,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     assert frame.step.id == :find_rows
     assert {:both, ops, rows} = Exhibit.draw(frame, values)
 
-    assert Enum.count(ops, &match?({:guide, _, _, []}, &1)) == 2
-    assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "none"}]
+    assert Enum.count(ops, &match?({:guide, _, _, _}, &1)) == 2
+
+    assert rows == [
+             {"rows", "0"},
+             {"cells", "0"},
+             {"failure", "none"},
+             {"shading", "unit cells"},
+             {"bars", "each row's outermost x extent"},
+             {"arrows", "T1 and T2"}
+           ]
   end
 
   test "the final frame draws the translation guides, a guide per row and every cell" do
@@ -94,21 +121,29 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    assert {:guide, {0.0, 0.0}, {1.0, 0.0}, []} in ops
-    assert {:guide, {0.0, 0.0}, {0.0, 1.0}, []} in ops
+    assert {:guide, {0.0, 0.0}, {1.0, 0.0}, [width: 2.0]} in ops
+    assert {:guide, {0.0, 0.0}, {0.0, 1.0}, [width: 2.0]} in ops
 
     row_guides = Enum.filter(ops, &row_guide?/1)
 
     assert row_guides == [
-             {:guide, {0.0, 0.0}, {4.0, 0.0}, []},
-             {:guide, {0.0, 1.0}, {4.0, 1.0}, []},
-             {:guide, {0.0, 2.0}, {4.0, 2.0}, []},
-             {:guide, {0.0, 3.0}, {4.0, 3.0}, []}
+             {:guide, {0.0, 0.0}, {4.0, 0.0}, [width: 2.0]},
+             {:guide, {0.0, 1.0}, {4.0, 1.0}, [width: 2.0]},
+             {:guide, {0.0, 2.0}, {4.0, 2.0}, [width: 2.0]},
+             {:guide, {0.0, 3.0}, {4.0, 3.0}, [width: 2.0]}
            ]
 
-    assert {:polygon, [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}], :fill, [fill: "currentColor", opacity: 0.15]} in ops
+    assert {:polygon, [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}], :fill,
+            [fill: "currentColor", stroke: "currentColor", width: 0.75, opacity: 0.3]} in ops
 
-    assert rows == [{"rows", "4"}, {"cells", "20"}, {"failure", "none"}]
+    assert rows == [
+             {"rows", "4"},
+             {"cells", "20"},
+             {"failure", "none"},
+             {"shading", "unit cells"},
+             {"bars", "each row's outermost x extent"},
+             {"arrows", "T1 and T2"}
+           ]
   end
 
   test "row guides are mapped through a sheared basis" do
@@ -116,10 +151,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    assert {:guide, {0.0, 0.0}, {4.0, 0.0}, []} in ops
-    assert {:guide, {0.0, 2.0}, {4.0, 2.0}, []} in ops
+    assert {:guide, {0.0, 0.0}, {4.0, 0.0}, [width: 2.0]} in ops
+    assert {:guide, {0.0, 2.0}, {4.0, 2.0}, [width: 2.0]} in ops
 
-    assert rows == [{"rows", "2"}, {"cells", "10"}, {"failure", "none"}]
+    assert rows == [
+             {"rows", "2"},
+             {"cells", "10"},
+             {"failure", "none"},
+             {"shading", "unit cells"},
+             {"bars", "each row's outermost x extent"},
+             {"arrows", "T1 and T2"}
+           ]
   end
 
   test "a region spanning too many lattice rows reports the failure" do
@@ -136,8 +178,22 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    refute Enum.any?(ops, &match?({:polygon, _, :fill, _}, &1))
-    assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "too_many_units"}]
+    refute Enum.any?(
+             ops,
+             &match?(
+               {:polygon, _, :fill, [fill: "currentColor", stroke: "currentColor", width: 0.75, opacity: 0.3]},
+               &1
+             )
+           )
+
+    assert rows == [
+             {"rows", "0"},
+             {"cells", "0"},
+             {"failure", "too_many_units"},
+             {"shading", "unit cells"},
+             {"bars", "each row's outermost x extent"},
+             {"arrows", "T1 and T2"}
+           ]
   end
 
   test "a degenerate basis reports the failure and draws no cells" do
@@ -145,8 +201,22 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
     frames = Steps.run!(Exhibit.steps(values), Exhibit.initial(values))
     assert {:both, ops, rows} = Exhibit.draw(List.last(frames), values)
 
-    refute Enum.any?(ops, &match?({:polygon, _, :fill, _}, &1))
-    assert rows == [{"rows", "0"}, {"cells", "0"}, {"failure", "degenerate_basis"}]
+    refute Enum.any?(
+             ops,
+             &match?(
+               {:polygon, _, :fill, [fill: "currentColor", stroke: "currentColor", width: 0.75, opacity: 0.3]},
+               &1
+             )
+           )
+
+    assert rows == [
+             {"rows", "0"},
+             {"cells", "0"},
+             {"failure", "degenerate_basis"},
+             {"shading", "unit cells"},
+             {"bars", "each row's outermost x extent"},
+             {"arrows", "T1 and T2"}
+           ]
   end
 
   test "reproduces the fill with a fully qualified pasteable snippet" do
@@ -173,6 +243,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegionTest do
                "Girihelix.Engine.Geometry.Point.new(-0.5, 1.0))"
   end
 
-  defp row_guide?({:guide, {from, _from_y}, {to, _to_y}, []}), do: from == 0.0 and to == 4.0
+  defp row_guide?({:guide, {from, _from_y}, {to, _to_y}, [width: 2.0]}), do: from == 0.0 and to == 4.0
+
   defp row_guide?(_op), do: false
 end

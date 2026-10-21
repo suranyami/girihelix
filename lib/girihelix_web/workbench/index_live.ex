@@ -22,7 +22,7 @@ defmodule GirihelixWeb.Workbench.IndexLive do
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} wide>
       <div class="flex flex-col gap-8">
         <header class="flex flex-col gap-2">
           <h1 class="text-2xl font-semibold">Workbench</h1>

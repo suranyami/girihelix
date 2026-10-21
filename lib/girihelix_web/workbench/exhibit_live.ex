@@ -109,36 +109,52 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <.exhibit_header exhibit={@exhibit} />
+    <Layouts.app flash={@flash} wide>
+      <div class="flex flex-col gap-3">
+        <.exhibit_header exhibit={@exhibit} />
 
-      <p :if={@failure} role="alert" class="alert alert-error">
-        Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-      </p>
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
 
-      <.controls params={@param_defs} values={@values} />
-      <.source_pane source={@source} />
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <aside class="w-80 shrink-0">
+            <.controls params={@param_defs} values={@values} />
+          </aside>
+        </div>
+      </div>
     </Layouts.app>
     """
   end
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <div class="flex flex-col gap-6">
+    <Layouts.app flash={@flash} wide>
+      <div class="flex flex-col gap-3">
         <.exhibit_header exhibit={@exhibit} />
 
-        <div class="grid gap-6 lg:grid-cols-2">
-          <section id="picture" class="flex flex-col gap-4">
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
+
+        <section id="transport" class="min-w-0">
+          <.transport index={@index} count={@count} step={@step} failure={@failure} />
+        </section>
+
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <section id="picture" class="min-w-0 flex-1">
             <.canvas drawing={@drawing} viewport={@viewport} />
-            <.transport index={@index} count={@count} step={@step} failure={@failure} />
           </section>
 
-          <aside class="flex flex-col gap-6">
+          <aside class="w-80 shrink-0">
             <.controls params={@param_defs} values={@values} />
-            <.source_pane source={@source} />
-            <.reproduce_pane snippet={@snippet} index={@index} />
           </aside>
+        </div>
+
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
         </div>
       </div>
     </Layouts.app>
@@ -153,7 +169,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       <.link navigate={~p"/workbench"} class="text-sm opacity-70 hover:underline">
         &larr; Workbench
       </.link>
-      <h1 class="text-2xl font-semibold">{@exhibit.title()}</h1>
+      <h1 class="text-xl font-semibold">{@exhibit.title()}</h1>
       <p class="text-sm opacity-70">{@exhibit.summary()}</p>
     </header>
     """

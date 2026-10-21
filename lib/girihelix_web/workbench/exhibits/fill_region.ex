@@ -116,20 +116,44 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
   end
 
   defp ops(state, cells) do
-    [region_op(state)] ++
+    region_op(state) ++
       translation_ops(state) ++
       row_ops(state) ++
       cells
   end
 
   defp region_op(%{region: region}) do
-    {:polygon, Enum.map(region, &Format.pair/1), :stroke, []}
+    [
+      {:polygon, Enum.map(region, &Format.pair/1), :stroke, [width: 1.5]},
+      {:label, region |> Enum.at(3) |> Format.pair(), "region", []}
+    ]
   end
 
   defp translation_ops(%{t1: t1, t2: t2}) do
+    origin = Point.new(0.0, 0.0)
+
+    List.flatten([
+      {:guide, {0.0, 0.0}, Format.pair(t1), [width: 2.0]},
+      arrow_ops(origin, t1, "T1"),
+      {:guide, {0.0, 0.0}, Format.pair(t2), [width: 2.0]},
+      arrow_ops(origin, t2, "T2")
+    ])
+  end
+
+  # The arrowhead is sized from the vector itself, so it reads at any viewport
+  # scale without the exhibit knowing the serializer's scale. A zero vector
+  # degenerates to a point-sized head and still labels the origin.
+  defp arrow_ops(from, to, label) do
+    direction = Point.subtract(to, from)
+    head = 0.18 * Point.mag(direction)
+    unit = Point.normalize(direction)
+    base = Point.subtract(to, Point.scale(unit, head))
+    side = Point.scale(Point.perp(unit), head * 0.5)
+
     [
-      {:guide, {0.0, 0.0}, Format.pair(t1), []},
-      {:guide, {0.0, 0.0}, Format.pair(t2), []}
+      {:polygon, Enum.map([to, Point.add(base, side), Point.subtract(base, side)], &Format.pair/1), :fill,
+       [fill: "currentColor"]},
+      {:label, to |> Point.add(Point.scale(unit, head * 0.6)) |> Format.pair(), label, []}
     ]
   end
 
@@ -140,10 +164,23 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
   defp row_ops(%{iymin: iymin, rows: rows, t1: t1, t2: t2}) do
     rows
     |> Enum.sort()
-    |> Enum.map(fn {offset, {xmin, xmax}} ->
+    |> Enum.flat_map(fn {offset, {xmin, xmax}} ->
       y = iymin + offset
-      {:guide, lattice_point(xmin, y, t1, t2), lattice_point(xmax, y, t1, t2), []}
+      from = lattice_point(xmin, y, t1, t2)
+      to = lattice_point(xmax, y, t1, t2)
+      middle = midpoint(from, to)
+
+      [
+        {:guide, from, to, [width: 2.0]},
+        {:label, middle, row_label(y, xmin, xmax), []}
+      ]
     end)
+  end
+
+  defp midpoint({ax, ay}, {bx, by}), do: {(ax + bx) / 2.0, (ay + by) / 2.0}
+
+  defp row_label(y, xmin, xmax) do
+    "row #{y}: x #{Format.coordinate(xmin)} .. #{Format.coordinate(xmax)}"
   end
 
   # Cells exist only once the scan has completed without a failure.
@@ -160,14 +197,18 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
     far = Point.new(along_t1.x + t2.x, along_t1.y + t2.y)
     along_t2 = Point.new(origin.x + t2.x, origin.y + t2.y)
 
-    {:polygon, Enum.map([origin, along_t1, far, along_t2], &Format.pair/1), :fill, [fill: "currentColor", opacity: 0.15]}
+    {:polygon, Enum.map([origin, along_t1, far, along_t2], &Format.pair/1), :fill,
+     [fill: "currentColor", stroke: "currentColor", width: 0.75, opacity: 0.3]}
   end
 
   defp rows(state, cell_count) do
     [
       {"rows", Integer.to_string(map_size(state.rows))},
       {"cells", Integer.to_string(cell_count)},
-      {"failure", failure_name(state.failure)}
+      {"failure", failure_name(state.failure)},
+      {"shading", "unit cells"},
+      {"bars", "each row's outermost x extent"},
+      {"arrows", "T1 and T2"}
     ]
   end
 

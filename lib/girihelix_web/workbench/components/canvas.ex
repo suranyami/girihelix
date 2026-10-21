@@ -58,11 +58,13 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     assigns = assign(assigns, ops: ops, rows: rows)
 
     ~H"""
-    <div class="grid gap-6 md:grid-cols-2 md:items-start">
-      <div id="canvas" class="w-full">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div id="canvas" class="min-w-0 flex-1">
         <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
       </div>
-      <.panel_view rows={@rows} />
+      <div class="w-64 shrink-0">
+        <.panel_view rows={@rows} />
+      </div>
     </div>
     """
   end
@@ -84,7 +86,7 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
 
   defp panel_view(assigns) do
     ~H"""
-    <table id="panel" class="table table-sm">
+    <table id="panel" class="table table-sm w-auto">
       <tbody>
         <tr :for={{label, value} <- @rows}>
           <th scope="row">{label}</th>
