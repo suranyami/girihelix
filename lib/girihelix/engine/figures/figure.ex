@@ -16,6 +16,7 @@ defmodule Girihelix.Engine.Figures.Figure do
   unchanged. `map/1` therefore has one clause per kind.
   """
 
+  alias Girihelix.Engine.Figures.ConnectFigure
   alias Girihelix.Engine.Figures.ExplicitFigure
   alias Girihelix.Engine.Figures.RadialFigure
   alias Girihelix.Engine.Figures.Rosette
@@ -23,10 +24,7 @@ defmodule Girihelix.Engine.Figures.Figure do
   alias Girihelix.Engine.Figures.Star
   alias Girihelix.Engine.PlanarMap
 
-  # Only the figures defined today may appear here: a typespec naming an
-  # undefined struct warns, and warnings are errors in this project. Task 6 adds
-  # `ConnectFigure` to this union when its struct exists.
-  @type t :: %Star{} | %Rosette{} | %ScaleFigure{} | %ExplicitFigure{}
+  @type t :: %Star{} | %Rosette{} | %ScaleFigure{} | %ConnectFigure{} | %ExplicitFigure{}
 
   @doc "The figure's basic unit, before the `n`-fold replication."
   @callback build_unit(t()) :: PlanarMap.t()

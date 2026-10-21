@@ -16,6 +16,7 @@ defmodule Girihelix.TapratsHarness do
   """
 
   alias Girihelix.Engine.Faces
+  alias Girihelix.Engine.Figures.ConnectFigure
   alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.Figures.Rosette
   alias Girihelix.Engine.Figures.ScaleFigure
@@ -118,6 +119,12 @@ defmodule Girihelix.TapratsHarness do
     _exception -> %{figure: {:error, :null}}
   end
 
+  def build_figure({:figure, kind, {:connect, expr}}) do
+    %{figure: {:ok, kind |> build_connected(expr) |> dump()}}
+  rescue
+    _exception -> %{figure: {:error, :null}}
+  end
+
   def build_figure({:figure, _kind, expr}) do
     raise ArgumentError, "figure not yet buildable: #{inspect(expr)}"
   end
@@ -130,9 +137,12 @@ defmodule Girihelix.TapratsHarness do
 
   defp build_scaled(kind, expr, s), do: expr |> build_expression() |> ScaleFigure.new!(s) |> build_kind(kind)
 
+  defp build_connected(kind, expr), do: expr |> build_expression() |> ConnectFigure.new!() |> build_kind(kind)
+
   defp build_expression({:star, n, d, s}), do: Star.new!(n, d, s)
   defp build_expression({:rosette, n, q, s}), do: Rosette.new!(n, q, s)
   defp build_expression({:scale, expr, s}), do: expr |> build_expression() |> ScaleFigure.new!(s)
+  defp build_expression({:connect, expr}), do: expr |> build_expression() |> ConnectFigure.new!()
 
   defp build_expression(expr), do: raise(ArgumentError, "figure not yet buildable: #{inspect(expr)}")
 

@@ -12,7 +12,8 @@ defmodule Girihelix.Engine.FiguresGoldenTest do
     figure-star-closure figure-star-clamped figure-star-crash
     figure-rosette-default figure-rosette-negative-q figure-rosette-clamped
     figure-rosette-fixme figure-scale-passthrough figure-scale-rosette
-    figure-scale-clipped)
+    figure-scale-clipped
+    figure-connect-rosette figure-connect-star figure-connect-nested)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do
