@@ -28,6 +28,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   @impl true
@@ -122,13 +123,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
   end
 
   defp region_op(%{region: region}) do
-    {:polygon, Enum.map(region, &pair/1), :stroke, []}
+    {:polygon, Enum.map(region, &Format.pair/1), :stroke, []}
   end
 
   defp translation_ops(%{t1: t1, t2: t2}) do
     [
-      {:guide, {0.0, 0.0}, pair(t1), []},
-      {:guide, {0.0, 0.0}, pair(t2), []}
+      {:guide, {0.0, 0.0}, Format.pair(t1), []},
+      {:guide, {0.0, 0.0}, Format.pair(t2), []}
     ]
   end
 
@@ -159,7 +160,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
     far = Point.new(along_t1.x + t2.x, along_t1.y + t2.y)
     along_t2 = Point.new(origin.x + t2.x, origin.y + t2.y)
 
-    {:polygon, Enum.map([origin, along_t1, far, along_t2], &pair/1), :fill, [fill: "currentColor", opacity: 0.15]}
+    {:polygon, Enum.map([origin, along_t1, far, along_t2], &Format.pair/1), :fill, [fill: "currentColor", opacity: 0.15]}
   end
 
   defp rows(state, cell_count) do
@@ -174,15 +175,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
   defp failure_name(reason), do: Atom.to_string(reason)
 
   defp point_call(%Point{x: x, y: y}) do
-    "Girihelix.Engine.Geometry.Point.new(#{coordinate(x)}, #{coordinate(y)})"
+    "Girihelix.Engine.Geometry.Point.new(#{Format.coordinate(x)}, #{Format.coordinate(y)})"
   end
-
-  defp pair(%Point{x: x, y: y}), do: {x, y}
 
   defp lattice_point(x, y, %Point{} = t1, %Point{} = t2) do
-    pair(Point.new(x * t1.x + y * t2.x, x * t1.y + y * t2.y))
+    Format.pair(Point.new(x * t1.x + y * t2.x, x * t1.y + y * t2.y))
   end
-
-  # Every coordinate reads as a float: `1.0`, never `1`.
-  defp coordinate(value), do: value |> Kernel.*(1.0) |> to_string()
 end

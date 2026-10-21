@@ -29,6 +29,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Intersect do
   alias Girihelix.Engine.Geometry.Segment
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
@@ -124,8 +125,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Intersect do
   # The built state carries the segments, so the crossing is read, not rebuilt.
   defp built_ops(%{first: first, second: second} = built) do
     [
-      {:line, pair(Segment.from(first)), pair(Segment.to(first)), []},
-      {:line, pair(Segment.from(second)), pair(Segment.to(second)), []}
+      {:line, Format.pair(Segment.from(first)), Format.pair(Segment.to(first)), []},
+      {:line, Format.pair(Segment.from(second)), Format.pair(Segment.to(second)), []}
     ] ++
       endpoint_ops([
         Segment.from(first),
@@ -153,15 +154,15 @@ defmodule GirihelixWeb.Workbench.Exhibits.Intersect do
     [from_first, to_first, from_second, to_second] = points
 
     [
-      {:line, pair(from_first), pair(to_first), []},
-      {:line, pair(from_second), pair(to_second), []}
+      {:line, Format.pair(from_first), Format.pair(to_first), []},
+      {:line, Format.pair(from_second), Format.pair(to_second), []}
     ] ++ endpoint_ops(points)
   end
 
-  defp endpoint_ops(points), do: Enum.map(points, &{:point, pair(&1), @endpoint_radius, []})
+  defp endpoint_ops(points), do: Enum.map(points, &{:point, Format.pair(&1), @endpoint_radius, []})
 
   defp crossing_ops(nil), do: []
-  defp crossing_ops(%Point{} = point), do: [{:point, pair(point), @crossing_radius, []}]
+  defp crossing_ops(%Point{} = point), do: [{:point, Format.pair(point), @crossing_radius, []}]
 
   defp built_rows(%{params: params, intersection: intersection, true_intersection: true_intersection}) do
     [
@@ -180,21 +181,16 @@ defmodule GirihelixWeb.Workbench.Exhibits.Intersect do
   end
 
   defp format_params(nil), do: "none"
-  defp format_params({s, t}), do: "{#{coordinate(s)}, #{coordinate(t)}}"
+  defp format_params({s, t}), do: "{#{Format.coordinate(s)}, #{Format.coordinate(t)}}"
 
   defp format_point(nil), do: "none"
-  defp format_point(%Point{x: x, y: y}), do: "#{coordinate(x)}, #{coordinate(y)}"
+  defp format_point(%Point{x: x, y: y}), do: "#{Format.coordinate(x)}, #{Format.coordinate(y)}"
 
   defp segment_call(from, to) do
     "Girihelix.Engine.Geometry.Segment.new(#{point_call(from)}, #{point_call(to)})"
   end
 
   defp point_call({x, y}) do
-    "Girihelix.Engine.Geometry.Point.new(#{coordinate(x)}, #{coordinate(y)})"
+    "Girihelix.Engine.Geometry.Point.new(#{Format.coordinate(x)}, #{Format.coordinate(y)})"
   end
-
-  defp pair(%Point{x: x, y: y}), do: {x, y}
-
-  # Every coordinate reads as a float: `1.0`, never `1`.
-  defp coordinate(value), do: value |> Kernel.*(1.0) |> to_string()
 end

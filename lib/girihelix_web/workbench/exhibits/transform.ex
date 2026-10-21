@@ -27,6 +27,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Transform do
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
@@ -110,7 +111,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Transform do
     %Transform{a: a, b: b, c: c, d: d, e: e, f: f} = transform(params)
 
     "Girihelix.Engine.Geometry.Transform.new(" <>
-      Enum.map_join([a, b, c, d, e, f], ", ", &coordinate/1) <> ")"
+      Enum.map_join([a, b, c, d, e, f], ", ", &Format.coordinate/1) <> ")"
   end
 
   defp scalar(name, default, doc) do
@@ -143,17 +144,14 @@ defmodule GirihelixWeb.Workbench.Exhibits.Transform do
     %Transform{a: a, b: b, c: c, d: d, e: e, f: f} = transform
 
     [
-      {"a", coordinate(a)},
-      {"b", coordinate(b)},
-      {"c", coordinate(c)},
-      {"d", coordinate(d)},
-      {"e", coordinate(e)},
-      {"f", coordinate(f)},
-      {"determinant", coordinate(Transform.determinant(transform))},
+      {"a", Format.coordinate(a)},
+      {"b", Format.coordinate(b)},
+      {"c", Format.coordinate(c)},
+      {"d", Format.coordinate(d)},
+      {"e", Format.coordinate(e)},
+      {"f", Format.coordinate(f)},
+      {"determinant", Format.coordinate(Transform.determinant(transform))},
       {"flips", to_string(Transform.flips(transform))}
     ]
   end
-
-  # Every scalar reads as a float: `1.0`, never `1`.
-  defp coordinate(value), do: value |> Kernel.*(1.0) |> to_string()
 end

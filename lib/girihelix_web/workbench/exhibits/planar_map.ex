@@ -33,6 +33,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
   alias Girihelix.Engine.Render.Viewport
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
@@ -148,17 +149,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
   defp edge_op(map, edge, tag) do
     {v1, v2} = PlanarMap.endpoints!(map, edge)
 
-    {tag, pair(PlanarMap.position!(map, v1)), pair(PlanarMap.position!(map, v2)), []}
+    {tag, Format.pair(PlanarMap.position!(map, v1)), Format.pair(PlanarMap.position!(map, v2)), []}
   end
 
   defp vertex_ops(map) do
     Enum.map(PlanarMap.vertices(map), fn vertex ->
-      {:point, pair(PlanarMap.position!(map, vertex)), @vertex_radius, []}
+      {:point, Format.pair(PlanarMap.position!(map, vertex)), @vertex_radius, []}
     end)
   end
 
   defp crossing_ops(crossings) do
-    Enum.map(crossings, &{:point, pair(&1), @crossing_radius, []})
+    Enum.map(crossings, &{:point, Format.pair(&1), @crossing_radius, []})
   end
 
   defp weld_rows(%{receiver: receiver}, crossings) do
@@ -220,6 +221,4 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
   defp rotations do
     Enum.map(0..(@rotations - 1), &Transform.rotate(&1 * @rotation_angle))
   end
-
-  defp pair(%Point{x: x, y: y}), do: {x, y}
 end

@@ -29,6 +29,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Polygon do
   alias Girihelix.Engine.Geometry.Polygon
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
@@ -154,26 +155,21 @@ defmodule GirihelixWeb.Workbench.Exhibits.Polygon do
   defp ops(polygon, probe) do
     points = Polygon.points(polygon)
 
-    [{:polygon, Enum.map(points, &pair/1), :fill, [fill: "currentColor", opacity: 0.15]}] ++
-      Enum.map(points, &{:point, pair(&1), @vertex_radius, []}) ++
-      [{:point, pair(probe), @probe_radius, []}]
+    [{:polygon, Enum.map(points, &Format.pair/1), :fill, [fill: "currentColor", opacity: 0.15]}] ++
+      Enum.map(points, &{:point, Format.pair(&1), @vertex_radius, []}) ++
+      [{:point, Format.pair(probe), @probe_radius, []}]
   end
 
   defp rows(polygon, probe) do
     [
       {"vertices", Integer.to_string(Polygon.num_vertices(polygon))},
-      {"area", coordinate(Polygon.area(polygon))},
-      {"arc length", coordinate(Polygon.arc_length(polygon, true))},
+      {"area", Format.coordinate(Polygon.area(polygon))},
+      {"arc length", Format.coordinate(Polygon.arc_length(polygon, true))},
       {"contains probe", to_string(Polygon.contains_point?(polygon, probe))}
     ]
   end
 
   defp point_call(%Point{x: x, y: y}) do
-    "Girihelix.Engine.Geometry.Point.new(#{coordinate(x)}, #{coordinate(y)})"
+    "Girihelix.Engine.Geometry.Point.new(#{Format.coordinate(x)}, #{Format.coordinate(y)})"
   end
-
-  defp pair(%Point{x: x, y: y}), do: {x, y}
-
-  # Every measure and coordinate reads as a float: `1.0`, never `1`.
-  defp coordinate(value), do: value |> Kernel.*(1.0) |> to_string()
 end

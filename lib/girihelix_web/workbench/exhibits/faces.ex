@@ -29,6 +29,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
@@ -205,7 +206,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
     Enum.map(PlanarMap.edges(map), fn edge ->
       {v1, v2} = PlanarMap.endpoints!(map, edge)
 
-      {:line, pair(PlanarMap.position!(map, v1)), pair(PlanarMap.position!(map, v2)), []}
+      {:line, Format.pair(PlanarMap.position!(map, v1)), Format.pair(PlanarMap.position!(map, v2)), []}
     end)
   end
 
@@ -226,7 +227,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
   defp fill_op(_map, _info), do: nil
 
   defp polygon_op(map, vertices, colour) do
-    points = Enum.map(vertices, &pair(PlanarMap.position!(map, &1)))
+    points = Enum.map(vertices, &Format.pair(PlanarMap.position!(map, &1)))
     {:polygon, points, :fill, [fill: colour, opacity: 0.25]}
   end
 
@@ -237,7 +238,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
     |> Enum.sort()
     |> Enum.flat_map(fn {_id, info} ->
       Enum.map(info.vertices, fn vertex ->
-        {:point, pair(PlanarMap.position!(map, vertex)), @vertex_radius, []}
+        {:point, Format.pair(PlanarMap.position!(map, vertex)), @vertex_radius, []}
       end)
     end)
   end
@@ -262,6 +263,4 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
 
   defp failure_name(nil), do: "none"
   defp failure_name(reason), do: Atom.to_string(reason)
-
-  defp pair(%Point{x: x, y: y}), do: {x, y}
 end

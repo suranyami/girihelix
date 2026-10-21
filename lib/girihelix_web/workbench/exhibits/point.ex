@@ -18,6 +18,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Point do
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibit
+  alias GirihelixWeb.Workbench.Exhibits.Format
   alias GirihelixWeb.Workbench.Param
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
@@ -100,7 +101,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Point do
   @spec reproduce(map()) :: String.t()
   def reproduce(params) do
     %Point{x: x, y: y} = point(params)
-    "Girihelix.Engine.Geometry.Point.new(#{coordinate(x)}, #{coordinate(y)})"
+    "Girihelix.Engine.Geometry.Point.new(#{Format.coordinate(x)}, #{Format.coordinate(y)})"
   end
 
   defp point(%{x: x, y: y}), do: Point.new(x, y)
@@ -109,16 +110,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Point do
     %Point{x: perp_x, y: perp_y} = Point.perp(point)
 
     [
-      {"x", coordinate(point.x)},
-      {"y", coordinate(point.y)},
-      {"mag", coordinate(Point.mag(point))},
-      {"mag2", coordinate(Point.mag2(point))},
-      {"angle", coordinate(Point.angle(point))},
-      {"perp", "#{coordinate(perp_x)}, #{coordinate(perp_y)}"}
+      {"x", Format.coordinate(point.x)},
+      {"y", Format.coordinate(point.y)},
+      {"mag", Format.coordinate(Point.mag(point))},
+      {"mag2", Format.coordinate(Point.mag2(point))},
+      {"angle", Format.coordinate(Point.angle(point))},
+      {"perp", "#{Format.coordinate(perp_x)}, #{Format.coordinate(perp_y)}"}
     ]
   end
-
-  # Integer coordinates are legal in the typed parameter map, but every measure
-  # reads as a float: `3.0`, never `3`.
-  defp coordinate(value), do: value |> Kernel.*(1.0) |> to_string()
 end
