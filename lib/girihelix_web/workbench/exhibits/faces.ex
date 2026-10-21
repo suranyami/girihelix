@@ -36,7 +36,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
   # changes, so these are never projected.
-  @vertex_radius 0.15
+  @vertex_radius 6.0
 
   @split_points [{0.0, 0.0}, {2.0, 0.0}]
   @split_midpoint {1.0, 0.0}

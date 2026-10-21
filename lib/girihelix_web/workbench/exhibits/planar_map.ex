@@ -38,8 +38,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
   # changes, so these are never projected.
-  @vertex_radius 0.15
-  @crossing_radius 0.3
+  @vertex_radius 6.0
+  @crossing_radius 9.0
 
   @square_points [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}]
   @spoke_points [{0.0, 0.0}, {1.0, 0.0}, {1.5, 0.3}]

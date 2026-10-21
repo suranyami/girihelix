@@ -389,6 +389,12 @@ built, not what was considered.
   data. Exhibits convert with the shared `Exhibits.Format.pair/1`.
 - **Faces are drawn with `currentColor`: black faces filled at 0.4 opacity, white
   faces as a dashed stroke, so both read in light and dark themes.**
+- **The viewport picks a nominal screen scale.** `Viewport.fit/2` derives `scale`
+  so the SVG `viewBox` is 1,000 units wide whatever the drawing's map-space
+  extent. Stroke widths, marker radii and label font sizes are SVG units in that
+  space, so a stroke of `1.0` is about a pixel and a marker of `6.0` about six,
+  rather than a fraction of the map that changes with every exhibit. An explicit
+  `:scale` still overrides the derivation.
 - **The source pane is plain monospace.** It renders the step's window with the
   active range marked by a background class and no syntax colouring, so `makeup`
   and `makeup_elixir` are not dependencies. The line pointer is the essential

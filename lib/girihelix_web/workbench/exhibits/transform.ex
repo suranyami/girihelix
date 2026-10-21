@@ -32,7 +32,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Transform do
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
   # changes, so this is never projected.
-  @vertex_radius 0.2
+  @vertex_radius 6.0
 
   @square [{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}]
   @triangle [{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}]

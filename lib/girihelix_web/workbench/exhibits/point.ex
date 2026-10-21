@@ -23,8 +23,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Point do
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
   # changes, so these are never projected.
-  @origin_radius 0.15
-  @point_radius 0.25
+  @origin_radius 6.0
+  @point_radius 9.0
 
   @impl true
   @spec slug() :: String.t()

@@ -56,7 +56,8 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
         aspect: 0.5
       )
 
-    assert html =~ ~s(viewBox="0.0 0.0 2.0 1.0")
+    # The empty view is the nominal 1000-wide canvas at aspect 0.5.
+    assert html =~ ~s(viewBox="0.0 0.0 1.0e3 500.0")
   end
 
   test "canvas renders a panel as a two-column table" do

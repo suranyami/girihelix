@@ -34,8 +34,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Polygon do
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
   # changes, so these are never projected.
-  @vertex_radius 0.2
-  @probe_radius 0.3
+  @vertex_radius 6.0
+  @probe_radius 9.0
 
   @square [
     Point.new(0.0, 0.0),

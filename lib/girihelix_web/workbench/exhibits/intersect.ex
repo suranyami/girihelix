@@ -34,8 +34,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Intersect do
 
   # SVG units, not map units: a marker keeps its screen size as the viewport
   # changes, so these are never projected.
-  @endpoint_radius 0.2
-  @crossing_radius 0.3
+  @endpoint_radius 6.0
+  @crossing_radius 9.0
 
   @impl true
   @spec slug() :: String.t()

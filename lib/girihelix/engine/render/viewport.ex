@@ -9,6 +9,14 @@ defmodule Girihelix.Engine.Render.Viewport do
   serializer must agree with the aspect the caller framed with. Keeping four
   numbers rather than seven also makes a viewport a literal a test can write.
 
+  **`fit/2` chooses a nominal screen scale.** By default it derives `scale` so
+  the `viewBox` is 1000 units wide, whatever the map-space extent. That is what
+  makes an op's presentation sizes meaningful: a stroke width of `1.0`, a marker
+  radius of `6.0` and a label font size of `12.0` are SVG units on a canvas of
+  the same nominal width, not map units that grow with the drawing. An explicit
+  `:scale` overrides the derivation when a caller wants a fixed map-to-SVG
+  ratio.
+
   **The y axis flips.** Map space is y-up and SVG is y-down. `project/2` measures
   y downward from `top`, so the view's top edge projects to SVG y = 0 and its
   bottom edge to `width * aspect * scale`.
@@ -25,7 +33,10 @@ defmodule Girihelix.Engine.Render.Viewport do
 
   @default_padding 0.1
   @default_aspect 0.75
-  @default_scale 1.0
+  # The nominal width of the SVG viewBox, in SVG units. `fit/2` derives `scale`
+  # from it so presentation sizes (stroke widths, marker radii, font sizes) keep
+  # the same meaning whatever the drawing's map-space extent.
+  @nominal_width 1000.0
 
   # The empty view is a fixed square centred on the origin, so a drawing with no
   # points still produces a stable SVG canvas.
@@ -45,13 +56,14 @@ defmodule Girihelix.Engine.Render.Viewport do
       default `#{@default_padding}`.
     * `:aspect` — height divided by width, and therefore greater than zero;
       default `#{@default_aspect}`.
-    * `:scale` — SVG units per map unit; default `#{@default_scale}`.
+    * `:scale` — SVG units per map unit; by default it is derived so the
+      `viewBox` is #{@nominal_width} units wide.
 
   A bound with no extent at all — a single point, or only a label — becomes a
   `2.0` by `2.0` box centred on it before padding, so the view is never
   zero-width. `nil` bounds give the fixed empty view,
-  `%Viewport{left: -1.0, top: 1.0, width: 2.0, scale: scale}`; only `:scale`
-  applies to it, since there is no content to pad or frame.
+  `%Viewport{left: -1.0, top: 1.0, width: 2.0, scale: @nominal_width / 2.0}`;
+  only `:scale` applies to it, since there is no content to pad or frame.
   """
   @spec fit(Bounds.t() | nil, keyword()) :: t()
   def fit(bounds, opts \\ [])
@@ -61,7 +73,7 @@ defmodule Girihelix.Engine.Render.Viewport do
       left: -@empty_width / 2.0,
       top: @empty_width / 2.0,
       width: @empty_width,
-      scale: option(opts, :scale, @default_scale)
+      scale: option(opts, :scale, @nominal_width / @empty_width)
     }
   end
 
@@ -80,7 +92,7 @@ defmodule Girihelix.Engine.Render.Viewport do
       left: centre_x - view_width / 2.0,
       top: centre_y + view_width * aspect / 2.0,
       width: view_width,
-      scale: option(opts, :scale, @default_scale)
+      scale: option(opts, :scale, @nominal_width / view_width)
     }
   end
 
