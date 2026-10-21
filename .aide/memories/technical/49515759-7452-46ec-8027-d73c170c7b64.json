@@ -1,0 +1,23 @@
+{
+  "id": 22,
+  "uuid": "49515759-7452-46ec-8027-d73c170c7b64",
+  "layer": "technical",
+  "what": "`Phoenix.VerifiedRoutes`' `~p` sigil URL-encodes an interpolated query slot itself: `~p\"/path?#{URI.encode_query(map)}\"` double-encodes the query into `x%3D2.0%26frame%3D0`, while `~p\"/path?#{map}\"` encodes the map exactly once (via Plug.Conn.Query.encode). Pass the query as a map (e.g. `Param.encode/2` plus a frame key), not a pre-encoded string.",
+  "why": "Hit while wiring the workbench LiveView URL state in Plan 2; the failure is silent (the URL is valid but the params never decode).",
+  "scope": "lib/girihelix_web/**",
+  "context_label": "VerifiedRoutes query interpolation",
+  "contributor": "David Parry",
+  "tags": [
+    "phoenix",
+    "verified-routes",
+    "liveview",
+    "query"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-21T00:01:29.386Z",
+  "updated_at": "2026-10-21T00:01:29.386Z"
+}

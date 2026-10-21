@@ -1,0 +1,23 @@
+{
+  "id": 19,
+  "uuid": "0b5767bd-f240-4f96-91fb-5bd354b78ff7",
+  "layer": "technical",
+  "what": "Elixir 1.20.3 rejects float range bounds at construction: `1.0..10.0` raises ArgumentError \"ranges (first..last//step) expect both sides to be integers, got: 1.0..10.0\". A float-typed parameter therefore declares an integer Range (e.g. `1..10` or `-5..5`) plus a float `step`, and the value is coerced to float where it is decoded. The workbench design and Plan 2 were amended to this form.",
+  "why": "The workbench design originally used `range: 1.0..10.0`, which cannot compile; the same trap applies to any future spec that puts float bounds in a Range.",
+  "scope": "lib/girihelix_web/**",
+  "context_label": "Elixir float ranges and workbench parameters",
+  "contributor": "David Parry",
+  "tags": [
+    "elixir",
+    "range",
+    "types",
+    "workbench"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-20T21:12:29.185Z",
+  "updated_at": "2026-10-20T21:12:29.185Z"
+}

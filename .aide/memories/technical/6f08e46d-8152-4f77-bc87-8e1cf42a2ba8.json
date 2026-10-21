@@ -1,0 +1,23 @@
+{
+  "id": 20,
+  "uuid": "6f08e46d-8152-4f77-bc87-8e1cf42a2ba8",
+  "layer": "technical",
+  "what": "In Elixir, `assert {:point, {3.0, 4.0}, _radius, _opts} in ops` does not compile: `in` is an expression, so the underscore-prefixed names are unbound variables. To assert that a list contains an element matching a tuple pattern, use `assert Enum.any?(ops, &match?({:point, {3.0, 4.0}, _, _}, &1))`. The same applies to `in rows`.",
+  "why": "Plan 2's sample tests used the broken form; implementers hit it twice and had to adapt. Future plan authors should write the compilable form.",
+  "scope": null,
+  "context_label": "Elixir test pattern assertions",
+  "contributor": "David Parry",
+  "tags": [
+    "elixir",
+    "testing",
+    "exunit",
+    "patterns"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-10-20T21:22:22.800Z",
+  "updated_at": "2026-10-20T21:22:22.800Z"
+}
