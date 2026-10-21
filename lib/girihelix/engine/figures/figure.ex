@@ -11,14 +11,22 @@ defmodule Girihelix.Engine.Figures.Figure do
   explicit map, has no symmetry order to invent, and `Figure` must be able to
   hold it without one.
 
-  Every figure in the engine today is radial, so `map/1` has a single clause
-  that delegates to `RadialFigure`; a non-radial figure adds its own clause.
+  A radial figure is its unit replicated under its symmetry ladder; a non-radial
+  one, such as `ExplicitFigure`, stores its whole map and `map/1` returns it
+  unchanged. `map/1` therefore has one clause per kind.
   """
 
+  alias Girihelix.Engine.Figures.ExplicitFigure
   alias Girihelix.Engine.Figures.RadialFigure
+  alias Girihelix.Engine.Figures.Rosette
+  alias Girihelix.Engine.Figures.Star
   alias Girihelix.Engine.PlanarMap
 
-  @type t :: struct()
+  # Only the figures defined today may appear here: a typespec naming an
+  # undefined struct warns, and warnings are errors in this project. Tasks 5 and
+  # 6 add `ScaleFigure` and `ConnectFigure` to this union when their structs
+  # exist.
+  @type t :: %Star{} | %Rosette{} | %ExplicitFigure{}
 
   @doc "The figure's basic unit, before the `n`-fold replication."
   @callback build_unit(t()) :: PlanarMap.t()
@@ -34,6 +42,7 @@ defmodule Girihelix.Engine.Figures.Figure do
   figure is its stored map.
   """
   @spec map(t()) :: PlanarMap.t()
+  def map(%ExplicitFigure{map: map}), do: map
   def map(%_{} = figure), do: RadialFigure.map(figure)
 
   @doc """

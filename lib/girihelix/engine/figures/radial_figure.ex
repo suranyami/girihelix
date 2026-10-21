@@ -20,11 +20,16 @@ defmodule Girihelix.Engine.Figures.RadialFigure do
   behaviour.
   """
 
+  alias Girihelix.Engine.Figures.Rosette
+  alias Girihelix.Engine.Figures.Star
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
 
-  @type t :: struct()
+  # Only the radial figures defined today may appear here: a typespec naming an
+  # undefined struct warns, and warnings are errors in this project. Tasks 5 and
+  # 6 add `ScaleFigure` and `ConnectFigure` when their structs exist.
+  @type t :: %Star{} | %Rosette{}
 
   @doc "The figure's basic unit, before the `n`-fold replication."
   @callback build_unit(t()) :: PlanarMap.t()
