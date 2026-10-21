@@ -7,7 +7,11 @@ defmodule Girihelix.Engine.Figures.StarTest do
 
   use ExUnit.Case, async: true
 
+  alias Girihelix.Engine.Figures.RadialFigure
   alias Girihelix.Engine.Figures.Star
+  alias Girihelix.Engine.Geometry.Intersect
+  alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Segment
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Steps
 
@@ -65,6 +69,29 @@ defmodule Girihelix.Engine.Figures.StarTest do
     assert PlanarMap.verify(map) == :ok
     assert PlanarMap.num_vertices(map) == 3
     assert PlanarMap.num_edges(map) == 2
+  end
+
+  test "the closure's cent uses the raw d after clamping (d = 99)" do
+    star = Star.new!(8, 99.0, 3)
+    map = Star.build_unit(star)
+
+    don = RadialFigure.don(8)
+    did = :math.floor(star.clamp_d)
+    dfrac = star.clamp_d - did
+    a = Point.new(1.0, 0.0)
+    line = Segment.new!(RadialFigure.arc(did * don), RadialFigure.arc(-dfrac * don))
+
+    raw = Intersect.get_intersection(line, Segment.new!(a, RadialFigure.arc(99.0 * don)))
+
+    clamped =
+      Intersect.get_intersection(line, Segment.new!(a, RadialFigure.arc(star.clamp_d * don)))
+
+    positions = Enum.map(PlanarMap.vertices(map), &PlanarMap.position!(map, &1))
+
+    assert raw
+    assert raw != clamped
+    assert raw in positions
+    refute clamped in positions
   end
 
   test "the stepped builder and the plain builder agree" do

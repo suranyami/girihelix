@@ -1,21 +1,26 @@
 defmodule Girihelix.Engine.Figures.ConnectFigure do
   @moduledoc """
-  A radial figure whose scaled-out edges are made to meet, a port of Taprats'
-  `ConnectFigure.java`.
+  A radial figure whose scaled-out edges are made to meet.
 
   The scale is **derived from the child**, not passed: `compute_scale/1` builds
   the child's unit, extends the tip's ray away from its lower neighbour, and
   intersects that ray with one rotated copy of the mirrored ray. The crossing's
   distance from the origin gives `s = cos(PI/n) / |isection|`, which puts the
-  extended edges' meeting point on the unit n-gon's inradius. A child with no
-  tip, no lower neighbour or no crossing stores `1.0`, which makes the scaling
-  stage a no-op.
+  extended edges' meeting point on the unit n-gon's inradius. **Three paths fall
+  back to `1.0`**: no tip at all, a tip with no lower neighbour, and a null
+  crossing. They are geometrically identical and the derived scale does not say
+  which one happened; `1.0` makes the scaling stage a no-op.
 
   Building the unit runs `ScaleFigure.build_unit/2` and then reshapes it so the
-  apex returns to `(1, 0)`: the half strictly above the x axis is copied down by
-  one symmetry step and its originals deleted, leaving the axis vertices as the
+  apex returns to `(1, 0)`: the half above the x axis is copied down by one
+  symmetry step and its originals deleted, leaving the axis vertices as the
   seam; unless `s` is `1.0` the whole map then turns by half a step; finally it
   is scaled so the maximum x is `1`.
+
+  **The fold's two tolerances leave an axis seam.** Movers are selected with
+  `y > -1e-7` but originals are deleted only for `y > 1e-7`, so the band
+  `|y| <= 1e-7` keeps its originals as well as their rotated copies. The extra
+  vertices and edges on the axis are deliberate and pinned by a test.
 
   **The child is never touched.** Both the scale derivation and the build ask
   the child for a fresh unit, so the child struct and its map are unchanged.
@@ -100,7 +105,7 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
   end
 
   # `nil` when the vertex is not a tip candidate or has no lower neighbour: the
-  # source keeps scanning instead of stopping.
+  # scan continues instead of stopping.
   defp scale_at(map, vertex, tip_pos, tr, n) do
     case lower_neighbour(map, vertex, tip_pos) do
       nil -> nil
@@ -255,10 +260,10 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
 
   # -- the fold ---------------------------------------------------------------
 
-  # Five passes, as the source: select the movers, insert their rotated copies,
-  # collect the edges wholly among movers, insert the permuted edges, then delete
-  # the originals strictly above the axis. The band |y| <= 1e-7 stays: those
-  # vertices are duplicated in place rather than moved, which is the seam.
+  # Five passes: select the movers, insert their rotated copies, collect the
+  # edges wholly among movers, insert the permuted edges, then delete the
+  # originals strictly above the axis. The band |y| <= 1e-7 keeps its originals
+  # as well as their copies rather than moving them wholesale, which is the seam.
   defp rotate_half(map, n) do
     tp = Transform.rotate(-2.0 * :math.pi() * RadialFigure.don(n))
 

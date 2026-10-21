@@ -77,6 +77,30 @@ defmodule Girihelix.Engine.Figures.ScaleFigureTest do
     assert_in_delta max_x, 1.5, 1.0e-9
   end
 
+  # The s = 1.5 test above pins the max-x result; this one names the cause: the
+  # ray hits no n-gon edge, so the endpoint stays on the tip and the endpoint
+  # insertion coalesces onto the chain head instead of adding a closing seam.
+  test "the s = 1.5 endpoint coalesces onto the chain head" do
+    child = Rosette.new!(8, 0.0, 3)
+
+    frames =
+      child
+      |> ScaleFigure.steps(1.5)
+      |> Steps.run!(ScaleFigure.start(child, 1.5))
+
+    clip = frame(frames, :clip)
+    extended = frame(frames, :extend)
+    endpoint = frame(frames, :endpoint)
+
+    assert clip.state.endpoint == clip.state.tip_pos
+    assert endpoint.state.last_top == extended.state.last_top
+
+    assert PlanarMap.num_vertices(endpoint.state.map) ==
+             PlanarMap.num_vertices(extended.state.map)
+
+    assert PlanarMap.num_edges(endpoint.state.map) == PlanarMap.num_edges(extended.state.map)
+  end
+
   test "the stepped builder and the plain builder agree" do
     child = Rosette.new!(8, 0.0, 3)
 
@@ -90,5 +114,9 @@ defmodule Girihelix.Engine.Figures.ScaleFigureTest do
       |> ScaleFigure.result()
 
     assert stepped == plain
+  end
+
+  defp frame(frames, id) do
+    Enum.find(frames, fn frame -> frame.step && frame.step.id == id end)
   end
 end

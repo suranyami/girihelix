@@ -1,6 +1,6 @@
 defmodule Girihelix.Engine.Figures.Rosette do
   @moduledoc """
-  Lee's rosette, a port of Taprats' `Rosette.java`.
+  Lee's rosette construction.
 
   `n` is the symmetry order, `q` the blend weight that swings the key ray and
   `s` how many rotated copies of the key line the unit intersects. The unit is
@@ -8,18 +8,17 @@ defmodule Girihelix.Engine.Figures.Rosette do
   step, each inserted with its x-axis mirror. The whole figure is that unit
   replicated under the symmetry ladder.
 
-  **The constructor stores the clamped `q` and `s`.** The source stores the raw
-  `q` in the field and clamps only inside `buildUnit`, but that clamp is
-  idempotent, so storing the clamped value changes no geometry and keeps the
-  struct's contract (`|q| <= 0.99`) true for every reader. `s` is clamped with
-  Java's integer division, `min(s, (n - 1) / 2)`.
+  **The constructor stores the clamped `q` and `s`.** The raw `q` is not kept:
+  the clamp is idempotent, so storing the clamped value changes no geometry and
+  keeps the struct's contract (`|q| <= 0.99`) true for every reader. `s` is
+  clamped with integer division, `min(s, (n - 1) / 2)`.
 
   **A parallel crossing is skipped, not substituted.** When a step's key line is
-  parallel to its rotated mirror the source's `Intersect` returns `null`, and
-  the source drops that point and carries on; the FIXME documents it. The port
-  reproduces the skip and records the count in the build state's `skipped`
-  field. Only a null **key** point, which the source would dereference, raises
-  `ArgumentError` naming `degenerate_key`.
+  parallel to its rotated mirror the intersection is nil; the build drops that
+  point and carries on, and records the count in the state's `skipped` field.
+  `(n, q, s) = (12, -0.8, 4)` is the canonical trigger, pinned by a test. Only a
+  nil **key** point, which cannot be skipped, raises `ArgumentError` naming
+  `degenerate_key`.
   """
 
   @behaviour Girihelix.Engine.Figures.RadialFigure
@@ -66,19 +65,19 @@ defmodule Girihelix.Engine.Figures.Rosette do
     end
   end
 
-  @doc "The source's `min(max(q, -0.99), 0.99)`."
+  @doc "`min(max(q, -0.99), 0.99)`: the blend weight stays inside the domain."
   @spec clamp_q(float()) :: float()
   def clamp_q(q), do: min(max(q * 1.0, -@q_limit), @q_limit)
 
-  @doc "The source's `min(s, (n - 1) / 2)` with Java's integer division."
+  @doc "`min(s, div(n - 1, 2))`: integer division, so half an odd order rounds down."
   @spec clamp_s(pos_integer(), integer()) :: non_neg_integer()
   def clamp_s(n, s), do: min(s, div(n - 1, 2))
 
-  @doc "A copy of `rosette` with `q` clamped, as `setQ` would store it."
+  @doc "A copy of `rosette` with `q` clamped."
   @spec with_q(t(), float()) :: t()
   def with_q(%__MODULE__{} = rosette, q), do: %{rosette | q: clamp_q(q)}
 
-  @doc "A copy of `rosette` with `s` clamped, as `setS` does."
+  @doc "A copy of `rosette` with `s` clamped against the order."
   @spec with_s(t(), integer()) :: t()
   def with_s(%__MODULE__{} = rosette, s), do: %{rosette | s: clamp_s(rosette.n, s)}
 
@@ -188,7 +187,7 @@ defmodule Girihelix.Engine.Figures.Rosette do
     %{state | frame: frame}
   end
 
-  # The two source branches, in its order: the strict non-negative head first.
+  # The two blend branches, in this order: the strict non-negative head first.
   defp blend(%{frame: frame, q_clamp: q_clamp} = state) when q_clamp >= 0.0 do
     th = frame.th * (1.0 - q_clamp) + :math.pi() * 0.5 * q_clamp
     %{state | frame: %{frame | th: th}}

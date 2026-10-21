@@ -20,13 +20,37 @@ two triages unchanged is a signal it should be closed rather than carried.
 ### `Point.compare_to/2` has no documented sorting idiom (captured 2026-10-17, from the Plan 1a review)
 
 Triaged once (2026-10-19): carried to Plan 3, which has its first caller.
+Triaged twice (2026-10-21): Plan 3 added no `Infer` caller — its figures design
+lists `Infer` as a non-goal — so the entry rolls forward to the plan that
+introduces `Infer`. It stays open rather than closing, because that plan will
+need the sorting idiom.
 
 `Enum.sort(list, &Point.compare_to/2)` raises `CaseClauseError`, because
 `Enum.sort/2` wants a boolean predicate. `Enum.sort_by(&Point.mag2/1)` is *not* a
 faithful substitute — it drops the `1e-14` band. Needs either a documented
-conversion or a `sorter/0` helper, and Plan 3 will need it, since the
-comparator's one caller is in `Infer`. A comparator is exactly the kind of thing
-a spec should pin down.
+conversion or a `sorter/0` helper, since the comparator's one caller is in
+`Infer`. A comparator is exactly the kind of thing a spec should pin down.
+
+### A cached unit if ConnectFigure's double build proves costly (captured 2026-10-21, Plan 3 homogenisation)
+
+`ConnectFigure.new/1` derives the scale with `compute_scale/1`, which builds the
+child's unit, and `build_unit/1` then builds it again through
+`ScaleFigure.build_unit/2`. Plan 3 measured no cost: the units are small and an
+exhibit builds one figure per frame. If the studio re-parameterises a connect
+figure on every keystroke, cache the unit on the figure or pass the already-built
+unit into the scale derivation. Cost: a cache field, its invalidation in
+`child_changed/1`, and a test that a stale child is never served.
+
+### A constructor-level rejection of Star's crash parameters (captured 2026-10-21, Plan 3 homogenisation)
+
+`Star.new/3` accepts parameters whose closure crossing does not exist — the
+canonical case is `(8, 7.02, 3)` — and `build_unit/1` then raises
+`star: degenerate_crossing`. That is the faithful crash, and the workbench shows
+it as a failure frame. If the studio must refuse the parameters at the control
+instead, the constructor needs a geometric feasibility check, which means
+building the figure at construction and accepting a much slower `new/3`. Not
+done now: Plan 3's contract is that a geometric degeneracy is not a parameter
+error.
 
 ### `Faces.Walk` has no iteration cap (captured 2026-10-20, Plan 1c homogenisation)
 

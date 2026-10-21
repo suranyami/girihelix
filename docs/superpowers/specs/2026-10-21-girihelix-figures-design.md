@@ -1,8 +1,8 @@
 # Figures — design (Plan 3)
 
 **Date:** 2026-10-21
-**Status:** approved for implementation by Plan 3. Every decision not inherited
-from an earlier design is marked "my call".
+**Status:** implemented 2026-10-21 (Plan 3). Every decision not inherited from an
+earlier design is marked "my call".
 **Related:** [workbench design](2026-10-16-girihelix-workbench-design.md) ·
 [engine types design](2026-10-17-girihelix-engine-types-design.md) ·
 [domain model design](2026-10-16-girihelix-domain-model-design.md) ·
@@ -488,9 +488,10 @@ optional half-step rotation, and the normalisation.
 - **`rotate_half`** selects every vertex with `y > -1e-7` (the axis and above),
   inserts each one's copy rotated by `-2pi/n`, adds an edge between the copies
   of every edge whose **both** ends were selected, then deletes the originals
-  with `y > 1e-7` strictly. The two different tolerances leave a thin seam of
-  vertices on the axis: they are duplicated in place rather than moved. Handles
-  replace the source's identity-keyed table exactly.
+  with `y > 1e-7` strictly. The two different tolerances leave a thin seam on
+  the axis: the `|y| <= 1e-7` band keeps its originals as well as their rotated
+  copies, rather than being moved wholesale. Handles replace the identity-keyed
+  table exactly.
 - **The half-step rotation** by `pi/n` runs only when the normalised `s` is not
   `1.0`, and is a full `PlanarMap.transform!/2` (positions, ring angles, both
   orders), not a scale.
@@ -510,11 +511,12 @@ unit. That is safe in this port because `build_unit` always returns a new map.
 | `s` | derived `float` | `compute_scale(child)`, then `normalise_s/1`; stored |
 
 `compute_scale/1` is the shared "clamp" function: the constructor calls it to
-set `s`, and the `:clamp` step records the derived value and the fallback that
-produced it. The three fallbacks (no tip, no lower neighbour, failed
-intersection) all give `1.0` and are indistinguishable in the source; the state
-records `:no_tip`, `:no_lower_neighbour` or `:parallel` for the panel, without
-changing the geometry.
+set `s`, and the `:clamp` step records the derived value and whether it is the
+fallback. The three `1.0` fallbacks (no tip at all, a tip with
+no lower neighbour, and a failed intersection) are indistinguishable in the
+derived scale. The build state records only that the scale is `1.0` — the
+`fallback` boolean — for the panel, without changing the geometry; it does not
+claim which of the three produced it.
 
 ### Interface
 
@@ -923,3 +925,25 @@ would visibly jitter.
 - **One harness operation, `figure`, with `map` and `unit` modes, and a
   recursive expression.** `ExplicitFigure` gets no harness operation.
 - **The five exhibits share one map-drawing helper** in the workbench layer.
+- **The exhibits read exactly these engine state keys.** `star` reads `map`,
+  `n`, `d`, `clamp_d`, `di`, `did`, `dfrac`, `is_int`, `clamp_s`, `outer_s`,
+  `a`, `b`, `points` and `top`; `rosette` reads `map`, `n`, `q`, `q_clamp`, `s`,
+  `s_clamp`, `frame` (`tip`, `up_outer`, `bisector`, `stable_isect`, `qtip`,
+  `key_point`, `key_end`), `points` and `skipped`; `scale` reads `map`,
+  `child`, `requested_s`, `figure`, `passthrough`, `tip_pos`, `below`,
+  `endpoint` and `border`; `connect` reads `map`, `child`, `s`, `fallback`,
+  `figure` and `max_x`. The `radial` exhibit owns its state instead and reads
+  `figure`, `unit`, `map` and `transforms`. Every key except the `radial`
+  exhibit's own four is one the engine's `start/…` state defines.
+- **`Exhibits.Figures` finished with a fixed, verified API:** `map_ops/1`,
+  `map_ops/2`, `unit_ops/1`, `vertex_ops/2`, `rows_for/1`, `whole_map/1`,
+  `tip_op/0`, `construction_op/1`, `map_label/2`, `number/1`, `integer/1`,
+  `child_params/1` and `build_child/1`. The midpoint helper lives beside the
+  other number spellings in `Exhibits.Format.midpoint/2`.
+- **Star's canonical crash parameters are `n = 8, d = 7.02, s = 3`.** The
+  closure's `cent` intersection is nil, so `Star.build_unit/1` raises
+  `star: degenerate_crossing`; the `figure-star-crash` golden and the unit test
+  pin the parameters.
+- **ConnectFigure's derived scale records a fallback flag, not a reason.** The
+  three `1.0` paths are geometrically identical, so the build state holds
+  `fallback: true` rather than inventing a reason the engine cannot observe.

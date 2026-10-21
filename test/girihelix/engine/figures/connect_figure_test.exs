@@ -8,8 +8,11 @@ defmodule Girihelix.Engine.Figures.ConnectFigureTest do
 
   alias Girihelix.Engine.Figures.ConnectFigure
   alias Girihelix.Engine.Figures.ExplicitFigure
+  alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.Figures.Rosette
   alias Girihelix.Engine.Figures.ScaleFigure
+  alias Girihelix.Engine.Figures.Star
+  alias Girihelix.Engine.Geometry.Loose
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Steps
@@ -41,6 +44,56 @@ defmodule Girihelix.Engine.Figures.ConnectFigureTest do
     assert_in_delta max_x, 1.0, 1.0e-9
   end
 
+  # The three `1.0` fallbacks are geometrically identical, so each is pinned by
+  # the state that reaches it rather than by the returned number alone.
+  test "compute_scale/1 falls back to 1.0 when the child has no tip at (1, 0)" do
+    child = ScaleFigure.new!(Rosette.new!(8, 0.0, 3), 0.5)
+    unit = Figure.unit(child)
+
+    refute tip(unit)
+    assert ConnectFigure.compute_scale(child) == 1.0
+  end
+
+  test "compute_scale/1 falls back to 1.0 when the tip has no lower neighbour" do
+    child = Star.new!(8, 3.0, 0)
+    unit = Figure.unit(child)
+
+    assert PlanarMap.num_edges(unit) == 0
+    assert tip(unit)
+    refute lower_neighbour(unit, tip(unit))
+    assert ConnectFigure.compute_scale(child) == 1.0
+  end
+
+  test "compute_scale/1 falls back to 1.0 when the rotated ray misses the fixed ray" do
+    # Star(8, 3.0, 2) reaches the crossing test: its tip has a lower neighbour,
+    # but the rotated mirror is parallel to the fixed ray, so the intersection
+    # is nil. This is the third `1.0` path.
+    child = Star.new!(8, 3.0, 2)
+    unit = Figure.unit(child)
+
+    assert tip(unit)
+    assert lower_neighbour(unit, tip(unit))
+    assert ConnectFigure.compute_scale(child) == 1.0
+  end
+
+  test "the fold leaves an axis seam from its two tolerances" do
+    connect = ConnectFigure.new!(Rosette.new!(8, 0.0, 3))
+
+    frames =
+      connect.child
+      |> ConnectFigure.steps(connect.s)
+      |> Steps.run!(ConnectFigure.start(connect.child, connect.s))
+
+    clipped = frame(frames, :scale_clip).state.map
+    folded = frame(frames, :fold).state.map
+
+    # The band |y| <= 1e-7 keeps its originals as well as their rotated copies:
+    # the apex survives the deletion pass and a second axis vertex is added.
+    [apex] = axis(clipped)
+    assert apex in axis(folded)
+    assert length(axis(folded)) == 2
+  end
+
   test "the fold keeps the apex on the axis" do
     connect = ConnectFigure.new!(Rosette.new!(8, 0.0, 3))
     map = ConnectFigure.build_unit(connect)
@@ -65,5 +118,36 @@ defmodule Girihelix.Engine.Figures.ConnectFigureTest do
       |> ConnectFigure.result()
 
     assert stepped == ConnectFigure.build_unit(connect)
+  end
+
+  defp frame(frames, id) do
+    Enum.find(frames, fn frame -> frame.step && frame.step.id == id end)
+  end
+
+  defp tip(map) do
+    Enum.find(PlanarMap.vertices(map), fn vertex ->
+      Loose.equals(PlanarMap.position!(map, vertex), Point.new(1.0, 0.0))
+    end)
+  end
+
+  defp lower_neighbour(map, tip) do
+    map
+    |> PlanarMap.ring!(tip)
+    |> Enum.map(&far_vertex(map, &1, tip))
+    |> Enum.find(fn vertex -> PlanarMap.position!(map, vertex).y < 0.0 end)
+  end
+
+  defp far_vertex(map, edge, vertex) do
+    case PlanarMap.endpoints!(map, edge) do
+      {^vertex, other} -> other
+      {other, _second} -> other
+    end
+  end
+
+  defp axis(map) do
+    map
+    |> PlanarMap.vertices()
+    |> Enum.map(&PlanarMap.position!(map, &1))
+    |> Enum.filter(fn point -> abs(point.y) <= 1.0e-7 end)
   end
 end

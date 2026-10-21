@@ -1,6 +1,6 @@
 defmodule Girihelix.Engine.Figures.Star do
   @moduledoc """
-  The classic `[n/d]s` star construction, a port of Taprats' `Star.java`.
+  The classic `[n/d]s` star construction.
 
   The unit is a symmetric chain of the crossings of one base chord with rotated
   copies of itself. `n` is the symmetry order, `d` the continuous skip and `s`
@@ -12,12 +12,19 @@ defmodule Girihelix.Engine.Figures.Star do
 
   **`outer_s` and `clamp_s` use the pre-increment `di`.** The `dfrac ≈ 1` snap
   rounds `di` up after both have been taken, so that path is one step short and
-  its closure cannot fire. That is faithful to the source, and is pinned by a
-  test.
+  its closure cannot fire. That is the behaviour to reproduce, and it is pinned
+  by a test.
 
-  **A failed intersection raises.** The source stores `null` and dereferences it
-  at the next step; here the two unguarded sites raise `ArgumentError` naming
-  `degenerate_crossing` rather than substituting a point.
+  **The closure crossing uses the raw `d`, not `clamp_d`.** When a star is
+  clamped, its ordinary chord crossings use the clamped skip while `cent` still
+  uses the requested one, so the closure geometry differs from the rest of the
+  unit. The `figure-star-clamped` golden pins it.
+
+  **A failed intersection raises.** The two unguarded sites raise
+  `ArgumentError` naming `degenerate_crossing` rather than substituting a point.
+  The canonical crash case is `(n, d, s) = (8, 7.02, 3)`, where the closure's
+  `cent` intersection is nil; a unit test and the `figure-star-crash` golden pin
+  it.
   """
 
   @behaviour Girihelix.Engine.Figures.RadialFigure
@@ -47,7 +54,7 @@ defmodule Girihelix.Engine.Figures.Star do
   @doc """
   A star of order `n`, skip `d` and step count `s`.
 
-  `d` is stored raw beside its clamped value, and `s` as the source's
+  `d` is stored raw beside its clamped value, and `s` as
   `clamp_s = min(s, di)` using the pre-snap `di`. `n < 3` and `s < 0` are
   refused rather than raising.
   """
@@ -72,11 +79,11 @@ defmodule Girihelix.Engine.Figures.Star do
     end
   end
 
-  @doc "The source's `max(1.0, min(d, 0.5 * n - 0.01))`."
+  @doc "`max(1.0, min(d, 0.5 * n - 0.01))`: the skip stays just inside half the order."
   @spec clamp_d(pos_integer(), float()) :: float()
   def clamp_d(n, d), do: max(1.0, min(d * 1.0, 0.5 * n - 0.01))
 
-  @doc "The source's `min(s, di)`."
+  @doc "`min(s, di)`: the stored step count cannot exceed the skip's integer part."
   @spec clamp_s(integer(), integer()) :: non_neg_integer()
   def clamp_s(s, di), do: min(s, di)
 
@@ -175,7 +182,7 @@ defmodule Girihelix.Engine.Figures.Star do
     }
   end
 
-  # The three snap heads, in the source's order: the strict `<` matters.
+  # The three snap heads, in this order: the strict `<` matters.
   defp snap(did, dfrac) when dfrac < @tol, do: {trunc(did), 0.0, true}
   defp snap(did, dfrac) when 1.0 - dfrac < @tol, do: {trunc(did) + 1, 0.0, true}
   defp snap(did, dfrac), do: {trunc(did), dfrac, false}
@@ -221,7 +228,7 @@ defmodule Girihelix.Engine.Figures.Star do
     ar = RadialFigure.arc(state.did * don)
     br = RadialFigure.arc(-state.dfrac * don)
 
-    # The source's `c` uses the raw d, not clamp_d.
+    # The closure crossing uses the raw d, not clamp_d.
     cent = intersection!(Segment.new!(ar, br), Segment.new!(a, RadialFigure.arc(state.d * don)))
 
     {map, vertex} = PlanarMap.insert_vertex(map, cent)

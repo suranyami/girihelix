@@ -1,16 +1,15 @@
 defmodule Girihelix.Engine.Figures.ScaleFigure do
   @moduledoc """
-  A radial figure scaled by `s` and clipped to the unit n-gon, a port of
-  Taprats' `ScaleFigure.java`.
+  A radial figure scaled by `s` and clipped to the unit n-gon.
 
   The child is stored **by reference**: this struct aliases the caller's figure
   and never mutates it. Every build asks the child for a fresh unit and scales
   that map, so the child's own unit is untouched.
 
   **`s` is normalised at construction.** A value within `1e-7` of `1.0` is
-  stored as exactly `1.0`, which is the source's `Loose.equals` passthrough and
-  makes the step ids' work observable: `:child` returns the child's unit and
-  every later stage is a no-op.
+  stored as exactly `1.0`, which is the tolerance passthrough and makes the step
+  ids' work observable: `:child` returns the child's unit and every later stage
+  is a no-op.
 
   **The non-passthrough build clips instead of scaling the cell.** The unit is
   scaled about the origin, then the edge from the tip at `(s, 0)` outwards is
@@ -18,14 +17,19 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   fill the rest of the unit's half-wedge, each with its x-axis mirror. The tip
   is found by `Loose.equals/2` on positions (squared distance under `1e-10`),
   not by the map's own vertex coalescing. A missing tip or lower neighbour is
-  an `ArgumentError` naming `no_tip` or `no_lower_neighbour`, where the source
-  would dereference `null`.
+  an `ArgumentError` naming `no_tip` or `no_lower_neighbour` rather than
+  carrying a missing neighbour onward.
 
   **The zero-length extension is skipped, not built.** When no n-gon edge is
-  hit the endpoint falls back to the tip, so the source's intersection segment
-  has zero length and its determinant is zero; the source's `getIntersection`
-  returns `null` and its loop breaks. The port skips the loop for that case, so
-  no zero-length `Segment` is built, and still runs the endpoint insertion.
+  hit the endpoint falls back to the tip, so the intersection segment has zero
+  length and its determinant is zero; the intersection returns nil and the loop
+  breaks. The build skips the loop for that case, so no zero-length `Segment` is
+  built, and still runs the endpoint insertion.
+
+  **The endpoint is inserted even when it coalesces onto the chain head.** If
+  the inserted handle is the chain's current top — the `s = 1.5` outward-ray
+  fallback puts the endpoint on the tip itself — no closing edge and no mirror
+  are added. That coalescing is deliberate and pinned by a test.
   """
 
   @behaviour Girihelix.Engine.Figures.RadialFigure
@@ -77,7 +81,7 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   @doc """
   `s` with a value within `Loose.tol/0` of one snapped to exactly `1.0`.
 
-  The source's `Loose.equals(s, 1.0)` is `abs(s - 1.0) < 1e-7`, strictly less.
+  The passthrough test is `abs(s - 1.0) < 1e-7`, strictly less.
   """
   @spec normalise_s(float()) :: float()
   def normalise_s(s) when is_number(s), do: normalise(s * 1.0)
@@ -85,15 +89,14 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   defp normalise(s) when abs(s - 1.0) < @tol, do: 1.0
   defp normalise(s), do: s
 
-  @doc "A copy of `figure` with `s` normalised, as `setS` would store it."
+  @doc "A copy of `figure` with `s` normalised."
   @spec with_s(t(), float()) :: t()
   def with_s(%__MODULE__{} = figure, s), do: %{figure | s: normalise_s(s)}
 
   @doc """
   A copy of `figure` with `child` replaced, rechecking that the child is radial.
 
-  The source's `childChanged` sets a derived scale; this constructor does not
-  derive one, so `s` is kept.
+  This setter keeps `s`; it does not derive a scale from the new child.
   """
   @spec with_child(t(), Figure.t()) :: {:ok, t()} | {:error, reason()}
   def with_child(%__MODULE__{} = figure, child), do: check_child(Figure.radial?(child), figure, child)
@@ -208,7 +211,7 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   end
 
   # The vertices are in the map's tolerant lexicographic order, so among
-  # candidates the smallest-x one wins, as the source's scan does.
+  # candidates the smallest-x one wins.
   defp find_tip!(map) do
     target = Point.new(1.0, 0.0)
 
@@ -259,7 +262,7 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   end
 
   # The first hit in edge order, not the nearest one; the fallback is the tip,
-  # the source's degenerate zero-length extension.
+  # the degenerate zero-length extension.
   defp first_hit(tip_pos, seg_end, border) do
     ray = Segment.new!(tip_pos, seg_end)
     n = length(border)
@@ -272,9 +275,9 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   end
 
   # With the endpoint at the tip the fixed segment is zero-length: the
-  # source's determinant is zero and every intersection is null, so its loop
-  # breaks on the first pass. Skipping the loop is the same outcome without a
-  # `Segment` that cannot exist.
+  # determinant is zero and every intersection is nil, so the loop breaks on
+  # the first pass. Skipping the loop is the same outcome without a `Segment`
+  # that cannot exist.
   defp extend(%{passthrough: true} = state), do: state
 
   defp extend(%{endpoint: endpoint, tip_pos: tip_pos} = state) when endpoint == tip_pos, do: state
@@ -319,8 +322,8 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
     place_endpoint(map, iv, state)
   end
 
-  # Reference equality in the source, which `insert_vertex/2` answers as handle
-  # equality: the endpoint coalesced onto the vertex the chain already reached.
+  # `insert_vertex/2` answers the identity test as handle equality: the endpoint
+  # coalesced onto the vertex the chain already reached.
   defp place_endpoint(map, iv, %{last_top: last_top} = state) when iv == last_top, do: %{state | map: map}
 
   defp place_endpoint(map, iv, state) do

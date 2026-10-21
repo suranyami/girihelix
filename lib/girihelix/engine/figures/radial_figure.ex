@@ -12,12 +12,12 @@ defmodule Girihelix.Engine.Figures.RadialFigure do
   `Tr, Tr^2, ..., Tr^n`, so the unit is never placed untransformed. That matters
   because a real figure's unit is a wedge, not the whole figure: placing it
   under the identity as well would draw it twice, leaving a doubled seam. The
-  last copy carries the rounding of `n` compositions, as the source does.
+  last copy carries the rounding of `n` compositions, deliberately.
 
   `map/1` replicates the unit once under each transform of the ladder into an
   empty map. `PlanarMap.replicate!/3` coalesces vertices within its `1.0e-7`
-  window and does not split edges, which is the source's `mergeSimpleMany`
-  behaviour.
+  window and does not split edges: adjoining copies share their boundary
+  vertices, and no new crossing is invented on a shared edge.
   """
 
   alias Girihelix.Engine.Figures.ConnectFigure
@@ -97,7 +97,7 @@ defmodule Girihelix.Engine.Figures.RadialFigure do
   def unit_ngon(n), do: Enum.map(0..(n - 1), &arc(&1 * don(n)))
 
   @doc """
-  The source's replication transforms: `Tr, Tr^2, ..., Tr^n`.
+  The replication transforms: `Tr, Tr^2, ..., Tr^n`.
 
   Built by composing from a starting `Tr` and prepending each value, so the
   first entry is `Tr` and the identity is never among them.
