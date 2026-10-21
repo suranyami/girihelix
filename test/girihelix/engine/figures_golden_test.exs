@@ -9,7 +9,9 @@ defmodule Girihelix.Engine.FiguresGoldenTest do
   @moduletag :taprats
 
   @scenarios ~w(figure-star-default figure-star-unit figure-star-fractional
-    figure-star-closure figure-star-clamped figure-star-crash)
+    figure-star-closure figure-star-clamped figure-star-crash
+    figure-rosette-default figure-rosette-negative-q figure-rosette-clamped
+    figure-rosette-fixme)
 
   for name <- @scenarios do
     test "matches Taprats: #{name}" do

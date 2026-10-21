@@ -17,6 +17,7 @@ defmodule Girihelix.TapratsHarness do
 
   alias Girihelix.Engine.Faces
   alias Girihelix.Engine.Figures.Figure
+  alias Girihelix.Engine.Figures.Rosette
   alias Girihelix.Engine.Figures.Star
   alias Girihelix.Engine.FillRegion
   alias Girihelix.Engine.Geometry.Point
@@ -104,12 +105,21 @@ defmodule Girihelix.TapratsHarness do
     _exception -> %{figure: {:error, :null}}
   end
 
+  def build_figure({:figure, kind, {:rosette, n, q, s}}) do
+    %{figure: {:ok, kind |> build_rosette(n, q, s) |> dump()}}
+  rescue
+    _exception -> %{figure: {:error, :null}}
+  end
+
   def build_figure({:figure, _kind, expr}) do
     raise ArgumentError, "figure not yet buildable: #{inspect(expr)}"
   end
 
   defp build_star(:map, n, d, s), do: n |> Star.new!(d, s) |> Figure.map()
   defp build_star(:unit, n, d, s), do: n |> Star.new!(d, s) |> Figure.unit()
+
+  defp build_rosette(:map, n, q, s), do: n |> Rosette.new!(q, s) |> Figure.map()
+  defp build_rosette(:unit, n, q, s), do: n |> Rosette.new!(q, s) |> Figure.unit()
 
   defp faces_dump({:ok, colouring}) do
     %{faces: {:ok, %{black: face_corners(colouring.black), white: face_corners(colouring.white)}}}

@@ -293,7 +293,7 @@ defmodule Girihelix.TapratsHarnessTest do
 
   test "build_figure/1 refuses an expression this task cannot build" do
     assert_raise ArgumentError, ~r/figure not yet buildable/, fn ->
-      TapratsHarness.build_figure({:figure, :map, {:rosette, 8, 0.0, 3}})
+      TapratsHarness.build_figure({:figure, :map, {:scale, {:star, 8, 3.0, 2}, 2.0}})
     end
   end
 end
