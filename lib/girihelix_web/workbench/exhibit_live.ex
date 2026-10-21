@@ -214,7 +214,15 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   end
 
   defp pinned_viewport(exhibit, values) do
-    pinned_viewport(exhibit, values, function_exported?(exhibit, :viewport, 1))
+    pinned_viewport(exhibit, values, exports_viewport?(exhibit))
+  end
+
+  # `function_exported?/3` reports false for a module that has not been loaded,
+  # which would silently downgrade a pinned viewport to a fitted one. Loading
+  # first makes the answer depend on the module, not on what happened to be
+  # loaded already.
+  defp exports_viewport?(exhibit) do
+    Code.ensure_loaded?(exhibit) and function_exported?(exhibit, :viewport, 1)
   end
 
   defp pinned_viewport(exhibit, values, true), do: declared_viewport(exhibit.viewport(values))

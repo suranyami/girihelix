@@ -3,10 +3,10 @@ defmodule GirihelixWeb.Workbench.Components.SourcePane do
   Shows the file and lines that built the current frame.
 
   A frame carries the file, line and prose captured by `step/3`, so the pane
-  renders the step's lines exactly as they are on disk, with two lines of
-  context on either side. Lines inside `first..last` are highlighted; the
-  header names the file and the first line, so a reader can find the same call
-  in an editor.
+  renders the step's lines exactly as they are on disk. The resolver finds the
+  call's range and the context window around it; this pane renders that window.
+  Lines inside `first..last` are highlighted; the header names the file and the
+  first line, so a reader can find the same call in an editor.
 
   The lines outside `context_first..context_last` are never rendered: the
   resolver hands over the whole file, and this pane selects the window.

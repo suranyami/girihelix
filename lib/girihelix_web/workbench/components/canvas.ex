@@ -101,10 +101,13 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
 
   defp render_svg(ops, %Viewport{} = viewport, aspect), do: Svg.render(ops, viewport, aspect: aspect, class: @svg_class)
 
-  # `Svg.render/3` is the only producer of this string, and it escapes every
-  # text value it interpolates (`Svg.escape/1`) while emitting fixed element
-  # names and numbers otherwise. It is therefore already safe markup, so it is
-  # tagged the way `Phoenix.HTML.raw/1` tags its argument and interpolated as
-  # markup rather than escaped a second time.
+  # `Svg.render/3` is the only producer of this string. It escapes the label
+  # text (`Svg.escape/1`) and the root class, and emits fixed element names,
+  # numbers and attribute names otherwise. Op option values — `:fill`,
+  # `:stroke`, `:dash` — are written into attributes without escaping, but every
+  # value the workbench passes is an authored constant, never user input. The
+  # string is therefore safe markup here, so it is tagged the way
+  # `Phoenix.HTML.raw/1` tags its argument and interpolated as markup rather
+  # than escaped a second time.
   defp markup(svg), do: {:safe, svg}
 end

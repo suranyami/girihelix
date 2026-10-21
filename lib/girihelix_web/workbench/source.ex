@@ -22,8 +22,8 @@ defmodule GirihelixWeb.Workbench.Source do
 
   Only paths under `lib/` are accepted. A captured path is absolute when the
   code was compiled with `mix`, so it is made relative to the working directory
-  first; that same guard is what keeps `reference/` — the ported Java sources —
-  out of the pane.
+  first. The guard also means the workbench serves girihelix's own source only:
+  a path outside `lib/` is not readable, whatever produced the capture.
   """
 
   alias Girihelix.Engine.Steps

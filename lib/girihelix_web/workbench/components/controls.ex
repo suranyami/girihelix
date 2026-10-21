@@ -29,7 +29,7 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
   @spec controls(map()) :: Phoenix.LiveView.Rendered.t()
   def controls(assigns) do
     ~H"""
-    <form phx-change="params" phx-debounce="200" class="flex flex-col gap-4">
+    <form id="controls" phx-change="params" phx-debounce="200" class="flex flex-col gap-4">
       <.control
         :for={param <- @params}
         param={param}
