@@ -104,14 +104,23 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   defp check_child(true, figure, child), do: {:ok, %{figure | child: child}}
   defp check_child(false, _figure, _child), do: {:error, :not_radial}
 
-  @doc "The state `steps/2` starts from: parameters only, every derived field empty."
+  @doc """
+  The state `steps/2` starts from: parameters only, every derived field empty.
+
+  `start/3` accepts an already-built child unit so a caller such as
+  `ConnectFigure` can reuse the unit it built while deriving the scale. The
+  `:child` step is a no-op when a unit is supplied.
+  """
   @spec start(RadialFigure.t(), float()) :: state()
-  def start(child, s) do
+  def start(child, s), do: start(child, s, nil)
+
+  @spec start(RadialFigure.t(), float(), PlanarMap.t() | nil) :: state()
+  def start(child, s, unit) do
     %{
       child: child,
       requested_s: s,
       figure: nil,
-      map: nil,
+      map: unit,
       passthrough: nil,
       tip: nil,
       tip_pos: nil,
@@ -171,10 +180,19 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
 
   @doc "The unit of `child` scaled by `s` and clipped to the unit n-gon."
   @spec build_unit(RadialFigure.t(), float()) :: PlanarMap.t()
-  def build_unit(child, s) do
+  def build_unit(child, s), do: build_unit(child, s, nil)
+
+  @doc """
+  As `build_unit/2`, reusing `unit` as the child's already-built unit.
+
+  The `:child` step is skipped when `unit` is non-nil, so a caller that has
+  just built the child's unit does not pay for a second build.
+  """
+  @spec build_unit(RadialFigure.t(), float(), PlanarMap.t() | nil) :: PlanarMap.t()
+  def build_unit(child, s, unit) do
     child
     |> steps(s)
-    |> Steps.run!(start(child, s))
+    |> Steps.run!(start(child, s, unit))
     |> Steps.final()
     |> result()
   end
@@ -191,7 +209,8 @@ defmodule Girihelix.Engine.Figures.ScaleFigure do
   end
 
   # The passthrough and the clipped build both start from the child's own fresh
-  # unit; only what comes after differs.
+  # unit; only what comes after differs. A supplied unit is already that map.
+  defp child_unit(%{map: map} = state) when not is_nil(map), do: state
   defp child_unit(state), do: %{state | map: Figure.unit(state.child)}
 
   defp scale(%{passthrough: true} = state), do: state

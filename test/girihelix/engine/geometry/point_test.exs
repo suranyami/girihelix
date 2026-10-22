@@ -75,6 +75,26 @@ defmodule Girihelix.Engine.Geometry.PointTest do
     assert Point.compare_to(a, c) == -1
   end
 
+  test "sorter/0 converts compare_to/2 into a predicate Enum.sort/2 accepts" do
+    points = [Point.new(0.0, 3.0), Point.new(2.0, 0.0), Point.new(0.0, 0.0)]
+
+    assert Enum.sort(points, Point.sorter()) == [
+             Point.new(0.0, 0.0),
+             Point.new(2.0, 0.0),
+             Point.new(0.0, 3.0)
+           ]
+  end
+
+  test "sorter/0 keeps the tolerance band, so a tie is true in both directions" do
+    band = Point.tolerance2()
+    a = Point.new(0.0, 0.0)
+    b = Point.new(:math.sqrt(band * 0.75), 0.0)
+    sorter = Point.sorter()
+
+    assert sorter.(a, b)
+    assert sorter.(b, a)
+  end
+
   test "angles follow the Java conventions" do
     assert Point.angle(Point.new(1.0, 0.0)) == 0.0
     assert Point.angle(Point.new(0.0, 1.0)) == :math.pi() / 2.0

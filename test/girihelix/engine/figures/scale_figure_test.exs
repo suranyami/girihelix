@@ -6,6 +6,7 @@ defmodule Girihelix.Engine.Figures.ScaleFigureTest do
 
   use ExUnit.Case, async: true
 
+  alias Girihelix.Engine.FigureFixtures.Counting
   alias Girihelix.Engine.Figures.ExplicitFigure
   alias Girihelix.Engine.Figures.Rosette
   alias Girihelix.Engine.Figures.ScaleFigure
@@ -114,6 +115,31 @@ defmodule Girihelix.Engine.Figures.ScaleFigureTest do
       |> ScaleFigure.result()
 
     assert stepped == plain
+  end
+
+  test "build_unit/3 uses a supplied child unit and never rebuilds the child" do
+    child = %Counting{pid: self()}
+    unit = Rosette.build_unit(Rosette.new!(8, 0.0, 3))
+
+    assert ScaleFigure.build_unit(child, 1.0, unit) == unit
+    refute_received :child_built
+  end
+
+  test "a clipped build from a supplied unit matches one built from the child" do
+    child = %Counting{pid: self()}
+    unit = Rosette.build_unit(Rosette.new!(8, 0.0, 3))
+
+    assert ScaleFigure.build_unit(child, 0.5, unit) ==
+             ScaleFigure.build_unit(Rosette.new!(8, 0.0, 3), 0.5)
+
+    refute_received :child_built
+  end
+
+  test "start/3 keeps the supplied unit in the state" do
+    child = %Counting{pid: self()}
+    unit = Rosette.build_unit(Rosette.new!(8, 0.0, 3))
+
+    assert ScaleFigure.start(child, 0.5, unit).map == unit
   end
 
   defp frame(frames, id) do

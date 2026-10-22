@@ -21,7 +21,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   alias Girihelix.Engine.Figures.ConnectFigure
   alias Girihelix.Engine.Figures.Figure
   alias Girihelix.Engine.Figures.RadialFigure
-  alias Girihelix.Engine.Figures.ScaleFigure
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.Render.Viewport
@@ -54,14 +53,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   def params, do: Figures.child_params([])
 
   # The stored scale is the derived one, so the panel and the transport show the
-  # number the solver found rather than a requested value. Deriving it can raise
-  # on degenerate in-range geometry, which must not crash the page: the fallback
-  # is one, exactly as the engine's own no-crossing path stores.
+  # number the solver found rather than a requested value. `new!/1` also caches
+  # the child's unit, so the run does not rebuild it. Deriving can raise on
+  # degenerate in-range geometry, which must not crash the page: the fallback is
+  # one, exactly as the engine's own no-crossing path stores, and the nil unit
+  # makes :scale_clip surface the failure as a frame.
   @impl true
   @spec initial(map()) :: ConnectFigure.state()
   def initial(params) do
     child = Figures.build_child(params)
-    ConnectFigure.start(child, derived_s(child))
+    {s, unit} = derived(child)
+    ConnectFigure.start(child, s, unit)
   end
 
   @impl true
@@ -110,12 +112,11 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   # `ArgumentError` is the engine's degenerate-geometry failure; keep the rescue
   # narrow so a real bug still surfaces. `normalise_s/1` is what the constructor
   # applies to the solved value.
-  defp derived_s(child) do
-    child
-    |> ConnectFigure.compute_scale()
-    |> ScaleFigure.normalise_s()
+  defp derived(child) do
+    connect = ConnectFigure.new!(child)
+    {connect.s, connect.unit}
   rescue
-    ArgumentError -> 1.0
+    ArgumentError -> {1.0, nil}
   end
 
   defp ops(state) do
