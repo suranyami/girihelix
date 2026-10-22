@@ -6,6 +6,10 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+  # A nightly run exercises the suite even in a quiet week. The image build is
+  # skipped for scheduled runs, so this never publishes.
+  schedule:
+    - cron: "0 4 * * *"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -27,6 +31,9 @@ jobs:
   test:
     name: Test and gates
     runs-on: ubuntu-latest
+    # The image build runs under QEMU on the arm64 agent, so this job also waits
+    # for it. 120 minutes leaves margin over the 90-minute Buildkite timeout.
+    timeout-minutes: 120
 
     services:
       postgres:
@@ -70,21 +77,56 @@ jobs:
       - name: Run precommit
         run: mix precommit
 
-      # The arm64 image build runs on the homelab Buildkite agent natively —
-      # see .buildkite/pipeline.yml. It is triggered here rather than by its own
-      # webhook so it keeps the old `needs: test` gate: a red suite never
-      # publishes. Pull requests pass PUSH=false, which preserves the previous
-      # behaviour of validating the Dockerfile without pushing an image.
-      - name: Trigger arm64 image build
+      # The multi-arch image build runs on the homelab Buildkite agent — see
+      # .buildkite/pipeline.yml. It is triggered here rather than by its own
+      # webhook so it keeps the test gate, and the wait below makes this GitHub
+      # check red when Buildkite fails. Pull requests pass PUSH=false, which
+      # validates the Dockerfile without pushing an image.
+      - name: Trigger image build
+        id: buildkite
+        if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_API_TOKEN }}
           COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           PUSH: ${{ github.event_name != 'pull_request' }}
         run: |
-          curl -fsS -X POST \
+          response=$(curl -fsS -X POST \
             "https://api.buildkite.com/v2/organizations/${BUILDKITE_ORG}/pipelines/${BUILDKITE_PIPELINE}/builds" \
             -H "Authorization: Bearer ${BUILDKITE_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$(jq -n --arg c "$COMMIT" --arg b "$BRANCH" --arg p "$PUSH" \
-                  '{commit:$c, branch:$b, env:{PUSH:$p}}')"
+                  '{commit:$c, branch:$b, env:{PUSH:$p}}')")
+
+          echo "$response" | jq -r '"Buildkite build: " + .web_url'
+          echo "number=$(echo "$response" | jq -r '.number')" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the Buildkite image build
+        if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_API_TOKEN }}
+          BUILD_NUMBER: ${{ steps.buildkite.outputs.number }}
+        run: |
+          deadline=$((SECONDS + 6600))
+
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            state=$(curl -fsS \
+              -H "Authorization: Bearer ${BUILDKITE_TOKEN}" \
+              "https://api.buildkite.com/v2/organizations/${BUILDKITE_ORG}/pipelines/${BUILDKITE_PIPELINE}/builds/${BUILD_NUMBER}" |
+              jq -r '.state')
+
+            echo "Buildkite build ${BUILD_NUMBER}: ${state}"
+
+            case "$state" in
+              passed) exit 0 ;;
+              failed | canceled | skipping | not_run)
+                echo "::error::Buildkite build ${BUILD_NUMBER} ${state}"
+                exit 1
+                ;;
+            esac
+
+            sleep 30
+          done
+
+          echo "::error::Timed out waiting for Buildkite build ${BUILD_NUMBER}"
+          exit 1
