@@ -1,22 +1,39 @@
-# Native arm64 image build for girihelix.
-#
-# Replaces the `image` job that used docker/setup-qemu-action on an amd64
-# GitHub runner. The homelab agent is arm64 and has the host docker socket, so
-# the same Dockerfile builds natively — no emulation.
+# Multi-arch image build and dev deployment for girihelix.
 #
 # Triggered by the CI workflow in .github/workflows/ci.yml *after* `mix
-# precommit` passes, so a red build never publishes. Pull requests pass
-# PUSH=false to validate the Dockerfile without pushing.
+# precommit` passes, so a red suite never publishes. The arm64 half builds
+# natively on the homelab agent; the amd64 half builds through QEMU binfmt.
+# Pull requests pass PUSH=false to validate the Dockerfile without publishing.
+#
+# The pipeline should be API-triggered only. If Buildkite's GitHub integration
+# also builds pushes/PRs, those webhook builds carry no PUSH and therefore
+# build without publishing; the workflow's build remains the one that gates.
+#
+# Set GIRIHELIX_SECRET_KEY_BASE in this pipeline's environment variables
+# (masked) so the deploy step can render the service file.
 
 steps:
-  - label: ":docker: build arm64 image"
+  - label: ":docker: build amd64 + arm64 image"
     key: image
     agents:
       queue: arm64
     command: .buildkite/build.sh
-    timeout_in_minutes: 30
+    # amd64 compiles under QEMU, so this is much slower than the native build.
+    timeout_in_minutes: 90
     retry:
       automatic:
         # One retry covers a transient registry or docker-daemon blip. A real
         # Dockerfile failure fails twice, which is the signal we want.
         - limit: 1
+
+  # Only a successful main-branch push deploys. Pull-request builds pass
+  # PUSH=false and stop after the image validates.
+  - label: ":rocket: deploy girihelix"
+    depends_on: image
+    if: build.branch == "main" && build.env("PUSH") == "true"
+    agents:
+      queue: arm64
+    command: .buildkite/deploy.sh
+    timeout_in_minutes: 15
+    concurrency: 1
+    concurrency_group: girihelix-deploy
