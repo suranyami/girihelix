@@ -5,7 +5,7 @@ defmodule Girihelix.Engine.Tilings.Construct do
   This is the value behind Taprats' tiling `construct` class: the region to fill
   is laid out in lattice coordinates, every feature of the tiling is sent through
   a binder — a function from feature to figure, or `nil` for "no figure" — and
-  the result, after Task 6, is one welded planar map of the whole pattern.
+  the result is one welded planar map of the whole pattern.
 
   The algorithm is a `Girihelix.Engine.Steps` sequence over one `t:state/0`,
   with the same two entry points `FillRegion` has: a plain `start/3` + `result/1`
@@ -36,16 +36,22 @@ defmodule Girihelix.Engine.Tilings.Construct do
   @typedoc "A function from a tile to its figure, or `nil` for none."
   @type binder :: (Feature.t() -> Figure.t() | nil)
 
-  @typedoc "A fill failure: what `FillRegion.fill/3` rejected the region for."
-  @type reason :: FillRegion.reason()
+  @typedoc """
+  A construction failure: what the place step's fill rejected the region for, an
+  order the replicate or weld sorts could not honour, or a figure that raised.
+  """
+  @type reason ::
+          FillRegion.reason() | :inconsistent_order | {:figure_failed, Exception.t()}
 
   @typedoc """
   The state the steps run over.
 
   `translations` is the lattice's unit cells over the region, in
   `FillRegion`'s row-major order; `bindings` pairs each kept feature with the
-  figure its binder returned; `feature_maps` and `map` stay empty until Task 6
-  builds and welds them; `failure` is the first recorded fill failure.
+  figure its binder returned; `feature_maps` is one whole-feature map per bound
+  feature, each replicated over its placements and the unit translations; `map`
+  is the feature maps welded together, starting from an empty one; `failure` is
+  the first recorded failure.
   """
   @type state :: %{
           tiling: Tiling.t(),
@@ -54,7 +60,7 @@ defmodule Girihelix.Engine.Tilings.Construct do
           translations: [Transform.t()],
           bindings: [{Feature.t(), Figure.t()}],
           feature_maps: [PlanarMap.t()],
-          map: nil | PlanarMap.t(),
+          map: PlanarMap.t(),
           failure: nil | reason()
         }
 
@@ -90,7 +96,7 @@ defmodule Girihelix.Engine.Tilings.Construct do
       translations: [],
       bindings: [],
       feature_maps: [],
-      map: nil,
+      map: PlanarMap.new(),
       failure: nil
     }
   end
@@ -98,6 +104,12 @@ defmodule Girihelix.Engine.Tilings.Construct do
   @doc """
   The stages of the construction as a step sequence over a `t:state/0`: `:place`,
   `:bind`, `:units` and `:weld`.
+
+  The three arguments name the construction, and the caller passes the same
+  three to `start/3`: the steps themselves read the tiling, binder and region
+  from the state `start/3` builds, never from these arguments, so one sequence
+  pairs with one state. This is the workbench's entry point; `construct/3` runs
+  it for the plain callers.
   """
   @spec steps(Tiling.t(), binder(), [Point.t()]) :: [Steps.Step.t()]
   def steps(_tiling, _binder, _region) do
@@ -117,27 +129,53 @@ defmodule Girihelix.Engine.Tilings.Construct do
       step(
         :units,
         "build the feature maps",
-        "Placeholder until Task 6: passes the state through unchanged.",
-        &pass/1
+        "Merges each bound feature's figure over its placements, then the whole over the unit translations, recording an order the sorts could not honour.",
+        &units/1
       ),
       step(
         :weld,
         "weld the feature maps",
-        "Placeholder until Task 6: passes the state through unchanged.",
-        &pass/1
+        "Folds the weld over the feature maps, sewing crossings together and unifying shared vertices, recording an order the sorts could not honour.",
+        &weld/1
       )
     ]
   end
 
   @doc """
   The outcome of a finished `t:state/0`: the welded map, or the recorded failure.
-
-  Task 5's placeholder: an unwelded state reports `{:ok, nil}`. Task 6 welds
-  `feature_maps` into `map` and returns it.
   """
-  @spec result(state()) :: {:ok, PlanarMap.t() | nil} | {:error, reason()}
-  def result(%{failure: nil}), do: {:ok, nil}
+  @spec result(state()) :: {:ok, PlanarMap.t()} | {:error, reason()}
+  def result(%{failure: nil, map: map}), do: {:ok, map}
   def result(%{failure: reason}), do: {:error, reason}
+
+  @doc """
+  Constructs a tiling over a region with figures bound, in one call.
+
+  Runs the `steps/3` sequence from `start/3` over the same three arguments. The
+  welded map comes back as `{:ok, map}`, a recorded failure as
+  `{:error, reason}`, and a figure that raised — through the binder, or building
+  the figure's map — as `{:error, {:figure_failed, exception}}`.
+  """
+  @spec construct(Tiling.t(), binder(), [Point.t()]) :: {:ok, PlanarMap.t()} | {:error, reason()}
+  def construct(%Tiling{} = tiling, binder, region) do
+    case Steps.run(steps(tiling, binder, region), start(tiling, binder, region)) do
+      {:ok, frames} -> frames |> Steps.final() |> result()
+      {:error, %Steps.Failure{exception: exception}} -> {:error, {:figure_failed, exception}}
+    end
+  end
+
+  @doc """
+  As `construct/3`, but returns the bare map and raises: an `ArgumentError`
+  naming a recorded reason, or the wrapped exception of a figure that raised.
+  """
+  @spec construct!(Tiling.t(), binder(), [Point.t()]) :: PlanarMap.t()
+  def construct!(%Tiling{} = tiling, binder, region) do
+    case construct(tiling, binder, region) do
+      {:ok, map} -> map
+      {:error, {:figure_failed, exception}} -> raise exception
+      {:error, reason} -> raise ArgumentError, "construct: #{reason}"
+    end
+  end
 
   # -- place ------------------------------------------------------------------
 
@@ -170,9 +208,57 @@ defmodule Girihelix.Engine.Tilings.Construct do
   defp kept(nil, _feature), do: []
   defp kept(figure, feature), do: [{feature, figure}]
 
-  # -- Task 6 placeholders ------------------------------------------------------
+  # -- units ------------------------------------------------------------------
 
-  defp pass(state), do: state
+  defp units(%{failure: reason} = state) when not is_nil(reason), do: state
+
+  defp units(%{bindings: bindings} = state), do: Enum.reduce(bindings, state, &unit/2)
+
+  defp unit(_binding, %{failure: reason} = state) when not is_nil(reason), do: state
+
+  defp unit({feature, figure}, %{tiling: tiling, translations: translations, feature_maps: maps} = state) do
+    case replicate_figure(tiling, {feature, figure}, translations) do
+      {:ok, map} -> %{state | feature_maps: maps ++ [map]}
+      {:error, reason} -> %{state | failure: reason}
+    end
+  end
+
+  # Per bound feature, the figure's whole map is replicated over the feature's
+  # placements into one unit map, and the unit map is then replicated over the
+  # region's lattice translations into one whole-feature map.
+  defp replicate_figure(tiling, {feature, figure}, translations) do
+    with {:ok, unit} <-
+           PlanarMap.replicate(
+             PlanarMap.new(),
+             Figure.map(figure),
+             Tiling.placements_for(tiling, feature.id)
+           ) do
+      PlanarMap.replicate(PlanarMap.new(), unit, translations)
+    end
+  end
+
+  # -- weld ---------------------------------------------------------------------
+
+  defp weld(%{failure: reason} = state) when not is_nil(reason), do: state
+
+  defp weld(%{feature_maps: maps} = state) do
+    case weld_maps(maps) do
+      {:ok, map} -> %{state | map: map}
+      {:error, reason} -> %{state | failure: reason}
+    end
+  end
+
+  defp weld_maps([]), do: {:ok, PlanarMap.new()}
+  defp weld_maps([first | rest]), do: Enum.reduce(rest, {:ok, first}, &weld_into/2)
+
+  defp weld_into({:ok, receiver}, other) do
+    case PlanarMap.weld(receiver, other) do
+      {:ok, {welded, _mapping}} -> {:ok, welded}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp weld_into({:error, _reason} = error, _other), do: error
 
   # -- region -----------------------------------------------------------------
 
