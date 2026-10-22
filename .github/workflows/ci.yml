@@ -18,6 +18,10 @@ env:
   MIX_ENV: test
   ELIXIR_VERSION: "1.20.3"
   OTP_VERSION: "29.0.5"
+  # The arm64 image build runs on the homelab Buildkite agent. Set these to your
+  # Buildkite org slug and pipeline slug.
+  BUILDKITE_ORG: suranyami-3
+  BUILDKITE_PIPELINE: girihelix
 
 jobs:
   test:
@@ -66,59 +70,21 @@ jobs:
       - name: Run precommit
         run: mix precommit
 
-  image:
-    name: Build container
-    runs-on: ubuntu-latest
-    needs: test
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # The homelab cluster is ARM64 (ROCK 5B+, Turing RK1), so the published
-      # image must carry both architectures. QEMU supplies the arm64 builder on
-      # the amd64 runner.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=sha,format=short
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=raw,value=dev,enable={{is_default_branch}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-
-      # Pull requests build without pushing, so a broken Dockerfile is caught
-      # before merge. Pushes to main publish :dev and the commit SHA; version
-      # tags publish the tag and :latest. Nothing publishes unless the tests
-      # above passed.
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+      # The arm64 image build runs on the homelab Buildkite agent natively —
+      # see .buildkite/pipeline.yml. It is triggered here rather than by its own
+      # webhook so it keeps the old `needs: test` gate: a red suite never
+      # publishes. Pull requests pass PUSH=false, which preserves the previous
+      # behaviour of validating the Dockerfile without pushing an image.
+      - name: Trigger arm64 image build
+        env:
+          BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_API_TOKEN }}
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          PUSH: ${{ github.event_name != 'pull_request' }}
+        run: |
+          curl -fsS -X POST \
+            "https://api.buildkite.com/v2/organizations/${BUILDKITE_ORG}/pipelines/${BUILDKITE_PIPELINE}/builds" \
+            -H "Authorization: Bearer ${BUILDKITE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg c "$COMMIT" --arg b "$BRANCH" --arg p "$PUSH" \
+                  '{commit:$c, branch:$b, env:{PUSH:$p}}')"

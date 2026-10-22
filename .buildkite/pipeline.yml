@@ -1,0 +1,22 @@
+# Native arm64 image build for girihelix.
+#
+# Replaces the `image` job that used docker/setup-qemu-action on an amd64
+# GitHub runner. The homelab agent is arm64 and has the host docker socket, so
+# the same Dockerfile builds natively — no emulation.
+#
+# Triggered by the CI workflow in .github/workflows/ci.yml *after* `mix
+# precommit` passes, so a red build never publishes. Pull requests pass
+# PUSH=false to validate the Dockerfile without pushing.
+
+steps:
+  - label: ":docker: build arm64 image"
+    key: image
+    agents:
+      queue: arm64
+    command: .buildkite/build.sh
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        # One retry covers a transient registry or docker-daemon blip. A real
+        # Dockerfile failure fails twice, which is the signal we want.
+        - limit: 1
