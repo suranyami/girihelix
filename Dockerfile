@@ -41,16 +41,18 @@ RUN mix local.hex --force \
 # set build ENV
 ENV MIX_ENV="prod"
 
-# install mix dependencies
+# install mix dependencies. The Hex package cache is a BuildKit cache mount, so
+# changing mix.lock re-resolves but does not re-download every tarball. The
+# builder's cache persists across runs on the Buildkite agent.
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
+RUN --mount=type=cache,target=/root/.hex mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+RUN --mount=type=cache,target=/root/.hex mix deps.compile
 
 RUN mix assets.setup
 
