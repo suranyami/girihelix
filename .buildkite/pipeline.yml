@@ -1,35 +1,59 @@
 # Multi-arch image build and dev deployment for girihelix.
 #
 # Triggered by the CI workflow in .github/workflows/ci.yml *after* `mix
-# precommit` passes, so a red suite never publishes. The arm64 half builds
-# natively on the homelab agent; the amd64 half builds through QEMU binfmt.
-# Pull requests pass PUSH=false to validate the Dockerfile without publishing.
+# precommit` passes, so a red suite never publishes. The two architectures
+# build in parallel: arm64 natively, amd64 through QEMU binfmt on the arm64
+# agent. A manifest step then assembles the final multi-arch tags.
+# Pull requests pass PUSH=false: both platforms build into the cache, and the
+# manifest and deploy steps do not publish.
 #
 # The pipeline should be API-triggered only. If Buildkite's GitHub integration
 # also builds pushes/PRs, those webhook builds carry no PUSH and therefore
-# build without publishing; the workflow's build remains the one that gates.
+# build without publishing.
 #
 # Set GIRIHELIX_SECRET_KEY_BASE in this pipeline's environment variables
 # (masked) so the deploy step can render the service file.
 
 steps:
-  - label: ":docker: build amd64 + arm64 image"
-    key: image
+  - label: ":docker: build amd64 (QEMU)"
+    key: amd64
     agents:
       queue: arm64
+    env:
+      PLATFORM: linux/amd64
     command: .buildkite/build.sh
     # amd64 compiles under QEMU, so this is much slower than the native build.
     timeout_in_minutes: 90
     retry:
       automatic:
-        # One retry covers a transient registry or docker-daemon blip. A real
-        # Dockerfile failure fails twice, which is the signal we want.
         - limit: 1
 
+  - label: ":docker: build arm64"
+    key: arm64
+    agents:
+      queue: arm64
+    env:
+      PLATFORM: linux/arm64
+    command: .buildkite/build.sh
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - limit: 1
+
+  - label: ":package: assemble multi-arch tags"
+    key: manifest
+    depends_on:
+      - amd64
+      - arm64
+    agents:
+      queue: arm64
+    command: .buildkite/manifest.sh
+    timeout_in_minutes: 10
+
   # Only a successful main-branch push deploys. Pull-request builds pass
-  # PUSH=false and stop after the image validates.
+  # PUSH=false, so the manifest is a no-op and this step is skipped.
   - label: ":rocket: deploy girihelix"
-    depends_on: image
+    depends_on: manifest
     if: build.branch == "main" && build.env("PUSH") == "true"
     agents:
       queue: arm64
