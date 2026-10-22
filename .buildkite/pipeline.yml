@@ -58,6 +58,10 @@ steps:
     agents:
       queue: arm64
     command: .buildkite/deploy.sh
+    # Buildkite Secrets are opt-in per step; this exposes the secret to
+    # deploy.sh as the GIRIHELIX_SECRET_KEY_BASE environment variable.
+    secrets:
+      - GIRIHELIX_SECRET_KEY_BASE
     timeout_in_minutes: 15
     concurrency: 1
     concurrency_group: girihelix-deploy
