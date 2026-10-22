@@ -14,6 +14,8 @@ defmodule Girihelix.Engine.Tilings.ConstructTest do
   alias Girihelix.Engine.Steps
   alias Girihelix.Engine.Tilings.Catalogue
   alias Girihelix.Engine.Tilings.Construct
+  alias Girihelix.Engine.Tilings.Feature
+  alias Girihelix.Engine.Tilings.PlacedFeature
   alias Girihelix.Engine.Tilings.Tiling
 
   test "default_region is the expanded bounding box, not the unit parallelogram" do
@@ -122,6 +124,37 @@ defmodule Girihelix.Engine.Tilings.ConstructTest do
     ]
 
     assert Construct.construct(tiling, fn _ -> nil end, region) == {:error, :too_many_units}
+  end
+
+  test "construct welds every bound feature map into one map" do
+    # Two bound features — the smallest case that folds one weld into another,
+    # which is `Prototype.construct`'s `ret.mergeMap(featuremap)` order.
+    features =
+      Feature.assign_ids([
+        Feature.new(regular: 4, points: []),
+        Feature.new(regular: 6, points: [])
+      ])
+
+    [square, hexagon] = features
+
+    tiling =
+      Tiling.new(
+        name: "two-regular",
+        t1: Point.new(5.0, 0.0),
+        t2: Point.new(0.0, 5.0),
+        features: features,
+        placements: [
+          PlacedFeature.new(square.id, Transform.identity()),
+          # Close enough that the rosettes cross, far enough that no two
+          # periodic copies of one figure overlap.
+          PlacedFeature.new(hexagon.id, Transform.translate(2.0, 0.0))
+        ]
+      )
+
+    binder = fn feature -> if feature.regular, do: Rosette.new!(feature.regular, 0.0, 3) end
+
+    assert {:ok, map} = Construct.construct(tiling, binder, Construct.default_region(tiling))
+    assert PlanarMap.verify(map) == :ok
   end
 
   test "a raising binder is figure_failed, and the stepped path retains a failure frame" do

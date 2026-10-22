@@ -249,7 +249,11 @@ defmodule Girihelix.Engine.Tilings.Construct do
   end
 
   defp weld_maps([]), do: {:ok, PlanarMap.new()}
-  defp weld_maps([first | rest]), do: Enum.reduce(rest, {:ok, first}, &weld_into/2)
+
+  # `Enum.reduce/3` calls its function as `(element, acc)`, so the fold is
+  # spelled out: the accumulated map is `Prototype.construct`'s `ret`, the
+  # receiver of every `mergeMap`, and each later feature map merges into it.
+  defp weld_maps([first | rest]), do: Enum.reduce(rest, {:ok, first}, fn map, acc -> weld_into(acc, map) end)
 
   defp weld_into({:ok, receiver}, other) do
     case PlanarMap.weld(receiver, other) do
