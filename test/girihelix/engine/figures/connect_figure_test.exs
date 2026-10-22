@@ -6,6 +6,7 @@ defmodule Girihelix.Engine.Figures.ConnectFigureTest do
 
   use ExUnit.Case, async: true
 
+  alias Girihelix.Engine.FigureFixtures.Counting
   alias Girihelix.Engine.Figures.ConnectFigure
   alias Girihelix.Engine.Figures.ExplicitFigure
   alias Girihelix.Engine.Figures.Figure
@@ -118,6 +119,34 @@ defmodule Girihelix.Engine.Figures.ConnectFigureTest do
       |> ConnectFigure.result()
 
     assert stepped == ConnectFigure.build_unit(connect)
+  end
+
+  test "new/1 caches the child unit and build_unit/1 does not rebuild the child" do
+    connect = ConnectFigure.new!(%Counting{pid: self()})
+
+    assert_received :child_built
+    refute_received :child_built
+
+    ConnectFigure.build_unit(connect)
+    refute_received :child_built
+  end
+
+  test "child_changed/1 replaces the cached unit" do
+    first = Rosette.new!(8, 0.0, 3)
+    second = Rosette.new!(8, -0.3, 3)
+    connect = ConnectFigure.new!(first)
+    changed = ConnectFigure.child_changed(%{connect | child: second})
+
+    assert changed.unit == Figure.unit(second)
+    assert changed.s == ScaleFigure.normalise_s(ConnectFigure.compute_scale(second))
+    refute changed.unit == connect.unit
+  end
+
+  test "the cached unit produces the same unit as the plain builder" do
+    connect = ConnectFigure.new!(Rosette.new!(8, 0.0, 3))
+
+    assert ConnectFigure.build_unit(connect) ==
+             ConnectFigure.build_unit(connect.child, connect.s)
   end
 
   defp frame(frames, id) do

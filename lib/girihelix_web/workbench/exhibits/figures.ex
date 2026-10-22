@@ -209,7 +209,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Figures do
 
   @doc "The child figure a typed parameter map declares."
   @spec build_child(map()) :: StarFigure.t() | RosetteFigure.t()
-  def build_child(%{child: :star, n: n, d: d, child_s: s}), do: StarFigure.new!(n, d, s)
+  def build_child(%{child: :star, n: n, d: d, child_s: s}), do: StarFigure.build!(n, d, s)
   def build_child(%{child: :rosette, n: n, q: q, child_s: s}), do: RosetteFigure.new!(n, q, s)
 
   @doc "A row's number, or `n/a` when the frame has not set it."

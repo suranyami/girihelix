@@ -44,7 +44,7 @@ defmodule Girihelix.Engine.Figures.Star do
   defstruct [:n, :d, :clamp_d, :s]
 
   @type t :: %__MODULE__{n: pos_integer(), d: float(), clamp_d: float(), s: non_neg_integer()}
-  @type reason :: :invalid_order | :invalid_step_count
+  @type reason :: :invalid_order | :invalid_step_count | :degenerate_crossing
   @type state :: map()
 
   # Read at compile time so the snap's guards can use it: a guard cannot call a
@@ -57,18 +57,58 @@ defmodule Girihelix.Engine.Figures.Star do
   `d` is stored raw beside its clamped value, and `s` as
   `clamp_s = min(s, di)` using the pre-snap `di`. `n < 3` and `s < 0` are
   refused rather than raising.
+
+  The unit is built once here, so a parameter set whose closure crossing does
+  not exist — the canonical case is `(8, 7.02, 3)` — is refused with
+  `{:error, :degenerate_crossing}` instead of raising later from
+  `build_unit/1`. The stepped path deliberately keeps the crash as a failure
+  frame; only the constructor refuses it.
   """
   @spec new(pos_integer(), float(), integer()) :: {:ok, t()} | {:error, reason()}
-  def new(n, d, s), do: build(n, d, s)
+  def new(n, d, s) do
+    with {:ok, star} <- build(n, d, s), do: check_geometry(star)
+  end
 
-  defp build(n, _d, _s) when n < 3, do: {:error, :invalid_order}
-  defp build(_n, _d, s) when s < 0, do: {:error, :invalid_step_count}
+  @doc """
+  The faithful constructor: validates `n` and `s` but does **not** reject a
+  degenerate crossing.
 
-  defp build(n, d, s) do
+  The workbench's failure-frame path starts from parameters and needs the
+  struct that `build_unit/1` will later crash on; `new/3` is the checked
+  constructor for ordinary callers.
+  """
+  @spec build(pos_integer(), float(), integer()) :: {:ok, t()} | {:error, reason()}
+  def build(n, _d, _s) when n < 3, do: {:error, :invalid_order}
+  def build(_n, _d, s) when s < 0, do: {:error, :invalid_step_count}
+
+  def build(n, d, s) do
     clamp_d = clamp_d(n, d)
 
     {:ok, %__MODULE__{n: n, d: d * 1.0, clamp_d: clamp_d, s: clamp_s(s, trunc(:math.floor(clamp_d)))}}
   end
+
+  @doc "`build/3` for a caller that has established the parameters, raising otherwise."
+  @spec build!(pos_integer(), float(), integer()) :: t()
+  def build!(n, d, s) do
+    case build(n, d, s) do
+      {:ok, star} -> star
+      {:error, reason} -> raise ArgumentError, "star: #{reason}"
+    end
+  end
+
+  defp check_geometry(star) do
+    build_unit(star)
+    {:ok, star}
+  rescue
+    error in ArgumentError -> classify(error, __STACKTRACE__)
+  end
+
+  defp classify(%ArgumentError{message: "star: degenerate_crossing"}, _stack), do: {:error, :degenerate_crossing}
+
+  defp classify(error, stack), do: reraise(error, stack)
+
+  # The step path validates n and s but does not repeat the geometry check: it
+  # is the path that must still show the crash as a failure frame.
 
   @doc "`new/3` for a caller that has established the parameters, raising otherwise."
   @spec new!(pos_integer(), float(), integer()) :: t()
@@ -164,7 +204,7 @@ defmodule Girihelix.Engine.Figures.Star do
   # -- the stages -------------------------------------------------------------
 
   defp clamp(state) do
-    figure = new!(state.n, state.d, state.s)
+    figure = build!(state.n, state.d, state.s)
     did = :math.floor(figure.clamp_d)
     {di, dfrac, is_int} = snap(did, figure.clamp_d - did)
     di_pre = trunc(did)

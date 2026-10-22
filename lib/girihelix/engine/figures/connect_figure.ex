@@ -41,10 +41,10 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Steps
 
-  @enforce_keys [:child, :s]
-  defstruct [:child, :s]
+  @enforce_keys [:child, :s, :unit]
+  defstruct [:child, :s, :unit]
 
-  @type t :: %__MODULE__{child: RadialFigure.t(), s: float()}
+  @type t :: %__MODULE__{child: RadialFigure.t(), s: float(), unit: PlanarMap.t()}
   @type reason :: :not_radial
   @type state :: map()
 
@@ -57,11 +57,18 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
 
   A non-radial child is refused with `{:error, :not_radial}` rather than
   raising. The scale is normalised by `ScaleFigure.normalise_s/1`.
+
+  The child's unit is built once and stored on the figure, because deriving
+  the scale needs it and `build_unit/1` would otherwise rebuild it.
   """
   @spec new(Figure.t()) :: {:ok, t()} | {:error, reason()}
   def new(child), do: check_new(Figure.radial?(child), child)
 
-  defp check_new(true, child), do: {:ok, build(child, compute_scale(child))}
+  defp check_new(true, child) do
+    unit = Figure.unit(child)
+    {:ok, build(child, compute_scale(child, unit), unit)}
+  end
+
   defp check_new(false, _child), do: {:error, :not_radial}
 
   @doc "`new/1` for a caller that has established the child is radial, raising otherwise."
@@ -73,11 +80,14 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
     end
   end
 
-  defp build(child, s), do: %__MODULE__{child: child, s: ScaleFigure.normalise_s(s)}
+  defp build(child, s, unit), do: %__MODULE__{child: child, s: ScaleFigure.normalise_s(s), unit: unit}
 
-  @doc "A copy of `connect` with the scale re-derived from its child."
+  @doc "A copy of `connect` with the scale and the cached unit re-derived from its child."
   @spec child_changed(t()) :: t()
-  def child_changed(%__MODULE__{child: child}), do: build(child, compute_scale(child))
+  def child_changed(%__MODULE__{child: child}) do
+    unit = Figure.unit(child)
+    build(child, compute_scale(child, unit), unit)
+  end
 
   @doc """
   The scale that makes the extended tip edges meet on the unit n-gon's inradius.
@@ -88,8 +98,9 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
   failure: no tip with a lower neighbour, or a null crossing.
   """
   @spec compute_scale(RadialFigure.t()) :: float()
-  def compute_scale(%module{} = child) do
-    map = Figure.unit(child)
+  def compute_scale(%_{} = child), do: compute_scale(child, Figure.unit(child))
+
+  defp compute_scale(%module{} = child, map) do
     n = module.n(child)
     tr = RadialFigure.tr(n)
     tip_pos = Point.new(1.0, 0.0)
@@ -156,12 +167,21 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
     end
   end
 
-  @doc "The state `steps/2` starts from: parameters only, every derived field empty."
+  @doc """
+  The state `steps/2` starts from: parameters plus the child unit.
+
+  `start/3` takes the unit `new/1` already built; `start/2` builds it for a
+  caller that did not come through the constructor.
+  """
   @spec start(RadialFigure.t(), float()) :: state()
-  def start(child, s) do
+  def start(child, s), do: start(child, s, Figure.unit(child))
+
+  @spec start(RadialFigure.t(), float(), PlanarMap.t()) :: state()
+  def start(child, s, unit) do
     %{
       child: child,
       s: s,
+      unit: unit,
       figure: nil,
       map: nil,
       fallback: nil,
@@ -207,14 +227,20 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
 
   @impl RadialFigure
   @spec build_unit(t()) :: PlanarMap.t()
-  def build_unit(%__MODULE__{child: child, s: s}), do: build_unit(child, s)
+  def build_unit(%__MODULE__{child: child, s: s, unit: unit}), do: build_unit(child, s, unit)
 
   @doc "The unit of `child` at `s`, folded back to an apex at `(1, 0)`."
   @spec build_unit(RadialFigure.t(), float()) :: PlanarMap.t()
-  def build_unit(child, s) do
+  def build_unit(child, s), do: build_unit(child, s, Figure.unit(child))
+
+  @doc """
+  As `build_unit/2`, reusing `unit` as the child's already-built unit.
+  """
+  @spec build_unit(RadialFigure.t(), float(), PlanarMap.t()) :: PlanarMap.t()
+  def build_unit(child, s, unit) do
     child
     |> steps(s)
-    |> Steps.run!(start(child, s))
+    |> Steps.run!(start(child, s, unit))
     |> Steps.final()
     |> result()
   end
@@ -227,10 +253,10 @@ defmodule Girihelix.Engine.Figures.ConnectFigure do
 
   defp clamp(state) do
     s = ScaleFigure.normalise_s(state.s)
-    %{state | figure: build(state.child, s), s: s, fallback: s == 1.0}
+    %{state | figure: build(state.child, s, state.unit), s: s, fallback: s == 1.0}
   end
 
-  defp scale_clip(state), do: %{state | map: ScaleFigure.build_unit(state.child, state.s)}
+  defp scale_clip(state), do: %{state | map: ScaleFigure.build_unit(state.child, state.s, state.unit)}
 
   defp fold(state), do: %{state | map: rotate_half(state.map, n(state.figure))}
 

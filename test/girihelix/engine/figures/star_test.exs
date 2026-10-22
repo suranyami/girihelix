@@ -103,11 +103,25 @@ defmodule Girihelix.Engine.Figures.StarTest do
     assert stepped == plain
   end
 
-  test "a failed crossing raises rather than substituting a point (n = 8, d = 7.02, s = 3)" do
+  test "the canonical crash parameters are refused by the constructor (n = 8, d = 7.02, s = 3)" do
     # Found by the golden scenario figure-star-crash; the source dereferences a
-    # null here. The reason names the failure.
+    # null here. A caller gets the failure as data, and new!/3 raises it.
+    assert Star.new(8, 7.02, 3) == {:error, :degenerate_crossing}
+
     assert_raise ArgumentError, ~r/degenerate_crossing/, fn ->
-      Star.build_unit(Star.new!(8, 7.02, 3))
+      Star.new!(8, 7.02, 3)
+    end
+  end
+
+  test "the stepped builder still crashes at the closure for the refused parameters" do
+    # The exhibit path starts from the parameters, not the constructor, so it
+    # keeps the faithful failure frame the golden scenario pins.
+    assert_raise ArgumentError, ~r/degenerate_crossing/, fn ->
+      8
+      |> Star.steps(7.02, 3)
+      |> Steps.run!(Star.start(8, 7.02, 3))
+      |> Steps.final()
+      |> Star.result()
     end
   end
 end

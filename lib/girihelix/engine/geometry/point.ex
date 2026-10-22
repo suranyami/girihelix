@@ -133,11 +133,21 @@ defmodule Girihelix.Engine.Geometry.Point do
   The band makes the relation non-transitive: `a` can compare equal to `b`, and
   `b` to `c`, while `a` compares less than `c`. Sorting through this comparator
   is therefore unstable. That is deliberate, and pinned by a test.
-  Note that `Enum.sort/2` wants a boolean predicate, so this comparator is not a
-  drop-in for it; see the test file for the conversion.
+  `Enum.sort/2` wants a boolean predicate, so use `sorter/0` rather than passing
+  this comparator directly.
   """
   @spec compare_to(t(), t()) :: -1 | 0 | 1
   def compare_to(a, b), do: order(mag2(a) - mag2(b))
+
+  @doc """
+  `compare_to/2` as the boolean predicate `Enum.sort/2` expects.
+
+  The conversion is "not greater than", so the comparator's `tolerance2/0`
+  band is preserved: two points inside it satisfy the predicate in both
+  directions, exactly as the comparator reports them equal.
+  """
+  @spec sorter() :: (t(), t() -> boolean())
+  def sorter, do: &(compare_to(&1, &2) != 1)
 
   defp order(diff) when diff < -@tolerance2, do: -1
   defp order(diff) when diff > @tolerance2, do: 1
