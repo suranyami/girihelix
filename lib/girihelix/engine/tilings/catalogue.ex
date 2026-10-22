@@ -7,7 +7,9 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
   declared in the file's `tiling` header. This module is that registry as a
   compile-time index: `priv/tilings/index.json` is decoded with
   `Jason.decode!/1` at compile time into `@entries`/`@names`, and recompiles
-  whenever the index changes (`@external_resource`).
+  whenever the index changes (`@external_resource`). Paths are relative to the
+  project root: the index is read at compile time and the files are read at
+  load time as `priv/tilings/<file>`.
 
   `load/1` reads the named tiling through the parser, sanitising included: the
   two legacy-encoded files (`Mughal.tiling` a cp1252 byte, `pbn_7.tiling` a
@@ -25,6 +27,7 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
   @dir "priv/tilings/"
   @entries Jason.decode!(File.read!("priv/tilings/index.json"))
   @names Enum.map(@entries, & &1["name"])
+  @name_options Enum.map(@names, &String.to_atom/1)
 
   @doc """
   Lists the catalogue names, in index (name) order.
@@ -39,7 +42,7 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
   60 atoms like `:"4.5"` and `:"Mughal I'timad"`.
   """
   @spec name_options() :: [atom()]
-  def name_options, do: Enum.map(@names, &String.to_atom/1)
+  def name_options, do: @name_options
 
   @doc """
   Loads the tiling with the given name.
