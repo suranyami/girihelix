@@ -70,9 +70,11 @@ defmodule Girihelix.Engine.Tilings.Parser do
 
   @token_regex ~r{"([^"]*)"|//[^\n]*|#[^\n]*|%[^\n]*|/\*[\s\S]*?\*/|[^\s"]+}
 
-  # The number forms of the format: optional sign, mantissa with an optional
-  # dot (E notation included), as in the shipped files' `-1.1E-14`.
-  @number_regex ~r{^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$}
+  # The number forms of the format: optional sign, a mantissa whose dot needs a
+  # digit on both sides (E notation included), as in the shipped files'
+  # `-1.1E-14`. A truncated number (`"1."`) or one without an integer part
+  # (`".5"`) matches nothing, so it is data (`:invalid_number`), not a crash.
+  @number_regex ~r{^[-+]?(\d+\.\d+([eE][-+]?\d+)?|\d+([eE][-+]?\d+)?)$}
 
   defp tokenize(text) do
     matches = Regex.scan(@token_regex, text)
@@ -148,14 +150,17 @@ defmodule Girihelix.Engine.Tilings.Parser do
   defp number_parsed(true, word, rest), do: {:ok, to_float(word), rest}
   defp number_parsed(false, _word, _rest), do: {:error, :invalid_number}
 
-  # `String.to_float/1` covers the decimal and E-notation forms the shipped
-  # files use; a bare integer (`"4"`, which Java's Double accepts) falls back
-  # to `String.to_integer/1`. The branch is on a matched boolean, so it splits
-  # across heads.
-  defp to_float(word), do: bare_integer(Regex.match?(~r{^[-+]?\d+$}, word), word)
+  # `@number_regex` has already validated the shape, so conversion cannot
+  # crash: a dotted mantissa converts directly, a whole number scales by one,
+  # and a whole number with an exponent is given the decimal point
+  # `String.to_float/1` requires (`"1e5"` -> `"1.0e5"`, still exact).
+  defp to_float(word), do: dotted(Regex.match?(~r{\d+\.\d+}, word), word)
 
-  defp bare_integer(true, word), do: String.to_integer(word) * 1.0
-  defp bare_integer(false, word), do: String.to_float(word)
+  defp dotted(true, word), do: String.to_float(word)
+  defp dotted(false, word), do: exponent(Regex.match?(~r{[eE]}, word), word)
+
+  defp exponent(true, word), do: String.to_float(Regex.replace(~r{[eE]}, word, ".0e"))
+  defp exponent(false, word), do: String.to_integer(word) * 1.0
 
   defp features(0, tokens, acc), do: {:ok, Enum.reverse(acc), tokens}
 

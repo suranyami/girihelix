@@ -8,6 +8,7 @@ defmodule Girihelix.Engine.Tilings.ParserTest do
 
   alias Girihelix.Engine.Geometry.Loose
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.Tilings.Parser
 
   @four_five "reference/1.1.12/tilings/4.5.tiling"
@@ -55,5 +56,47 @@ defmodule Girihelix.Engine.Tilings.ParserTest do
     assert {:ok, tiling} = Parser.parse(text)
     assert String.valid?(tiling.description)
     assert tiling.description =~ "bad"
+  end
+
+  test "rejects a truncated number instead of crashing" do
+    text = ~s(tiling "x" 1\n0.0 1.0\n1.0 0.0\nregular 4 1\n1. 0.0 0.0 0.0 1.0 0.0\n)
+    assert Parser.parse(text) == {:error, :invalid_number}
+  end
+
+  test "rejects a number without an integer part instead of crashing" do
+    text =
+      ~s(tiling "x" 1\n0.0 1.0\n1.0 0.0\npolygon 2 1\n.5 0.0\n1.0 0.5\n1. 0.0 0.0 0.0 1.0 0.0\n)
+
+    assert Parser.parse(text) == {:error, :invalid_number}
+  end
+
+  test "parses a polygon feature with its points and placements" do
+    text = """
+    tiling "p" 1
+    1.0 0.0
+    0.0 1.0
+    polygon 3 2
+    0.0 0.0
+    1.0 0.0
+    0.0 1.0
+    1.0 0.0 0.0
+    0.0 1.0 0.0
+    1.0 0.0 0.5
+    0.25 -1.0 0.25
+    """
+
+    assert {:ok, tiling} = Parser.parse(text)
+
+    assert tiling.name == "p"
+    assert [feature] = tiling.features
+    assert feature.regular == nil
+    assert feature.points == [Point.new(0.0, 0.0), Point.new(1.0, 0.0), Point.new(0.0, 1.0)]
+
+    assert Enum.map(tiling.placements, & &1.feature_id) == [0, 0]
+
+    assert Enum.map(tiling.placements, & &1.transform) == [
+             Transform.new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+             Transform.new(1.0, 0.0, 0.5, 0.25, -1.0, 0.25)
+           ]
   end
 end
