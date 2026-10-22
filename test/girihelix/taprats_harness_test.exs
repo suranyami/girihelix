@@ -3,6 +3,7 @@ defmodule Girihelix.TapratsHarnessTest do
 
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
+  alias Girihelix.Engine.PlanarMap
   alias Girihelix.TapratsHarness
 
   test "parse_script/1 reads every operation and ignores comments" do
@@ -289,6 +290,88 @@ defmodule Girihelix.TapratsHarnessTest do
   test "build_figure/1 maps a Star failure to the null error" do
     assert TapratsHarness.build_figure({:figure, :map, {:star, 8, 7.02, 3}}) ==
              %{figure: {:error, :null}}
+  end
+
+  test "parse_script/1 reads a construct op" do
+    assert TapratsHarness.parse_script("construct map 4.5\n") == [{:construct, :map, "4.5"}]
+  end
+
+  test "parse_dump/1 reads and canonicalises the construct dump" do
+    text = """
+    construct ok
+    vertices 2
+    v 1.0 0.0
+    v -1.0 0.0
+    edges 1
+    e 0 1
+    rings
+    r 0 0
+    r 1 0
+    verify true
+    """
+
+    assert TapratsHarness.parse_dump(text) == %{
+             construct: %{
+               vertices: [{-1.0, 0.0}, {1.0, 0.0}],
+               edges: [{{-1.0, 0.0}, {1.0, 0.0}}],
+               rings: [[{-1.0, 0.0}], [{1.0, 0.0}]],
+               verify: true
+             }
+           }
+  end
+
+  test "canonical/1 sorts positions, edge pairs and ring cycles" do
+    {map, a} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(0.0, 0.0))
+    {map, b} = PlanarMap.insert_vertex(map, Point.new(1.0, 5.0e-13))
+    {map, c} = PlanarMap.insert_vertex(map, Point.new(0.5, 1.0))
+
+    map =
+      map
+      |> PlanarMap.insert_edge!(a, b)
+      |> PlanarMap.insert_edge!(b, c)
+      |> PlanarMap.insert_edge!(c, a)
+
+    assert TapratsHarness.canonical(map) == %{
+             vertices: [{0.0, 0.0}, {0.5, 1.0}, {1.0, 0.0}],
+             edges: [
+               {{0.0, 0.0}, {0.5, 1.0}},
+               {{0.0, 0.0}, {1.0, 0.0}},
+               {{0.5, 1.0}, {1.0, 0.0}}
+             ],
+             rings: [
+               [{0.0, 0.0}, {0.5, 1.0}],
+               [{0.0, 0.0}, {1.0, 0.0}],
+               [{0.5, 1.0}, {1.0, 0.0}]
+             ],
+             verify: true
+           }
+  end
+
+  test "compare/2 compares construct dumps and reports the first differing component" do
+    base = %{
+      vertices: [{0.0, 0.0}, {1.0, 0.0}],
+      edges: [{{0.0, 0.0}, {1.0, 0.0}}],
+      rings: [[]],
+      verify: true
+    }
+
+    assert TapratsHarness.compare(%{construct: base}, %{construct: base}) == :ok
+
+    assert {:error, ["construct vertex count: expected 2, got 1"]} =
+             TapratsHarness.compare(%{construct: base}, %{
+               construct: %{base | vertices: [{0.0, 0.0}], rings: [[]]}
+             })
+
+    changed = %{
+      base
+      | vertices: [{0.0, 0.0}, {1.0, 1.0}],
+        edges: [{{0.0, 0.0}, {2.0, 0.0}}],
+        rings: [[]]
+    }
+
+    # Both components differ, so only the first is reported.
+    assert {:error, ["construct vertex: expected {1.0, 0.0}, got {1.0, 1.0}"]} =
+             TapratsHarness.compare(%{construct: base}, %{construct: changed})
   end
 
   test "build_figure/1 builds a connect expression" do
