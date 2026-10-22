@@ -11,7 +11,9 @@
 #   anything else     -> sha-<short>
 #
 # PUSH=false builds both platforms into the cache without publishing, which is
-# how pull requests validate the Dockerfile without pushing an image.
+# how pull requests validate the Dockerfile without pushing an image. PUSH must
+# be set explicitly: a webhook-triggered build (no PUSH) never publishes, so a
+# direct GitHub integration build cannot get ahead of the test gate.
 set -euo pipefail
 
 IMG="${IMAGE:-ghcr.io/suranyami/girihelix}"
@@ -40,11 +42,11 @@ docker buildx use "$BUILDER"
 docker buildx inspect --bootstrap >/dev/null
 
 echo "--- :docker: building $IMG for $PLATFORMS on $(uname -m)"
-if [ "${PUSH:-true}" = "true" ]; then
+if [ "${PUSH:-false}" = "true" ]; then
   : "${GHCR_TOKEN:?GHCR_TOKEN is not set — add it to the agent environment}"
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-suranyami}" --password-stdin
   docker buildx build --platform "$PLATFORMS" --push "${args[@]}" .
 else
   docker buildx build --platform "$PLATFORMS" --output type=cacheonly "${args[@]}" .
-  echo "PUSH=$PUSH — built both platforms, not pushed"
+  echo "PUSH=${PUSH:-false} — built both platforms, not pushed"
 fi

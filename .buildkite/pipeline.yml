@@ -5,6 +5,10 @@
 # natively on the homelab agent; the amd64 half builds through QEMU binfmt.
 # Pull requests pass PUSH=false to validate the Dockerfile without publishing.
 #
+# The pipeline should be API-triggered only. If Buildkite's GitHub integration
+# also builds pushes/PRs, those webhook builds carry no PUSH and therefore
+# build without publishing; the workflow's build remains the one that gates.
+#
 # Set GIRIHELIX_SECRET_KEY_BASE in this pipeline's environment variables
 # (masked) so the deploy step can render the service file.
 
