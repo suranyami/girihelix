@@ -25,6 +25,7 @@ defmodule GirihelixWeb.Workbench.Registry do
   alias GirihelixWeb.Workbench.Exhibits.Rosette
   alias GirihelixWeb.Workbench.Exhibits.Scale
   alias GirihelixWeb.Workbench.Exhibits.Star
+  alias GirihelixWeb.Workbench.Exhibits.Tiling
   alias GirihelixWeb.Workbench.Exhibits.Transform
 
   @exhibits [
@@ -41,7 +42,8 @@ defmodule GirihelixWeb.Workbench.Registry do
     Scale,
     Connect,
     Radial,
-    Catalogue
+    Catalogue,
+    Tiling
   ]
 
   @doc "Every registered exhibit, in display order."
