@@ -24,7 +24,14 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
 
   @external_resource "priv/tilings/index.json"
 
-  @dir "priv/tilings/"
+  # Directory-relative names work from the project root only. A release's
+  # working directory holds the release, not the app's priv/ tree (it lives
+  # at <release>/lib/<app>-<version>/priv/), so runtime reads resolve through
+  # :code.priv_dir/1 — the code path works in dev, test and release alike.
+  # The compile-time index read stays relative: compilation always happens
+  # from the project root.
+  @priv_dir :code.priv_dir(:girihelix)
+  defp tilings_dir, do: @priv_dir |> :filename.join(~c"tilings") |> List.to_string()
   @entries Jason.decode!(File.read!("priv/tilings/index.json"))
   @names Enum.map(@entries, & &1["name"])
   @name_options Enum.map(@names, &String.to_atom/1)
@@ -55,7 +62,7 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
   @spec load(String.t()) :: {:ok, Tiling.t()} | {:error, :unknown_tiling | term()}
   def load(name) do
     case entry(name) do
-      %{"file" => file} -> Parser.parse_file(@dir <> file)
+      %{"file" => file} -> Parser.parse_file(tilings_dir() <> "/" <> file)
       nil -> {:error, :unknown_tiling}
     end
   end
