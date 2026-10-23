@@ -63,6 +63,27 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
+  # LiveView sockets are origin-checked against `url[:host]` alone. A service
+  # fronted by more than one public hostname (an ingress vanity domain along
+  # the canonical one, say) needs the extras listed explicitly. PHX_EXTRA_ORIGINS
+  # is comma-separated; an entry with a scheme is used verbatim, a bare
+  # hostname is assumed https. Set it to that service's ingress domains only —
+  # this is the origin allow-list for LiveView websockets.
+  origins =
+    "PHX_EXTRA_ORIGINS"
+    |> System.get_env("")
+    |> String.split(",", trim: true)
+    |> Enum.map(fn
+      "http" <> _ = origin -> origin
+      hostname -> "https://" <> hostname
+    end)
+
+  check_origin =
+    case origins do
+      [] -> nil
+      _ -> ["https://" <> host | origins]
+    end
+
   config :girihelix, Girihelix.Repo,
     # ssl: true,
     url: database_url,
@@ -73,6 +94,7 @@ if config_env() == :prod do
 
   config :girihelix, GirihelixWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
+    check_origin: check_origin,
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
