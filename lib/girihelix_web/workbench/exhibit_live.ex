@@ -26,7 +26,6 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   import GirihelixWeb.Workbench.Components.Canvas, only: [canvas: 1]
   import GirihelixWeb.Workbench.Components.Controls, only: [controls: 1]
-  import GirihelixWeb.Workbench.Components.Navigation, only: [rail_drawer: 1]
   import GirihelixWeb.Workbench.Components.ReproducePane, only: [reproduce_pane: 1]
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
@@ -111,58 +110,66 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} wide nav_groups={@groups} nav_active={@exhibit.category()}>
-      <.rail_drawer groups={@groups} active_slug={@exhibit.slug()}>
-        <div class="flex flex-col gap-3">
-          <.exhibit_header exhibit={@exhibit} />
+    <Layouts.app
+      flash={@flash}
+      wide
+      nav_groups={@groups}
+      nav_active={@exhibit.category()}
+      nav_slug={@exhibit.slug()}
+    >
+      <div class="flex flex-col gap-3">
+        <.exhibit_header exhibit={@exhibit} />
 
-          <p :if={@failure} role="alert" class="alert alert-error">
-            Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-          </p>
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
 
-          <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-            <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-            <aside class="w-80 shrink-0">
-              <.controls params={@param_defs} values={@values} />
-            </aside>
-          </div>
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <aside class="w-80 shrink-0">
+            <.controls params={@param_defs} values={@values} />
+          </aside>
         </div>
-      </.rail_drawer>
+      </div>
     </Layouts.app>
     """
   end
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} wide nav_groups={@groups} nav_active={@exhibit.category()}>
-      <.rail_drawer groups={@groups} active_slug={@exhibit.slug()}>
-        <div class="flex flex-col gap-3">
-          <.exhibit_header exhibit={@exhibit} />
+    <Layouts.app
+      flash={@flash}
+      wide
+      nav_groups={@groups}
+      nav_active={@exhibit.category()}
+      nav_slug={@exhibit.slug()}
+    >
+      <div class="flex flex-col gap-3">
+        <.exhibit_header exhibit={@exhibit} />
 
-          <p :if={@failure} role="alert" class="alert alert-error">
-            Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-          </p>
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
 
-          <section id="transport" class="min-w-0">
-            <.transport index={@index} count={@count} step={@step} failure={@failure} />
+        <section id="transport" class="min-w-0">
+          <.transport index={@index} count={@count} step={@step} failure={@failure} />
+        </section>
+
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <section id="picture" class="min-w-0 flex-1">
+            <.canvas drawing={@drawing} viewport={@viewport} />
           </section>
 
-          <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-            <section id="picture" class="min-w-0 flex-1">
-              <.canvas drawing={@drawing} viewport={@viewport} />
-            </section>
-
-            <aside class="w-80 shrink-0">
-              <.controls params={@param_defs} values={@values} />
-            </aside>
-          </div>
-
-          <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-            <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-            <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
-          </div>
+          <aside class="w-80 shrink-0">
+            <.controls params={@param_defs} values={@values} />
+          </aside>
         </div>
-      </.rail_drawer>
+
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
+        </div>
+      </div>
     </Layouts.app>
     """
   end

@@ -37,21 +37,44 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ "discover faces"
   end
 
-  test "the rail draws itself with every exhibit, titles only", %{conn: conn} do
+  test "the rail draws itself with the current category's exhibits, titles only", %{conn: conn} do
     {:ok, view, html} = live(conn, "/workbench/point")
 
     assert has_element?(view, ".drawer-side")
-    assert has_element?(view, ~s(label.drawer-button[for="rail-drawer"]))
     assert has_element?(view, ~s(.drawer-side .drawer-overlay))
 
-    assert html =~ ~p"/workbench/loose"
-    assert html =~ ~p"/workbench/transform"
-    assert html =~ ~p"/workbench/rosette"
+    assert has_element?(view, ~s(.drawer-side a[href="/workbench/loose"]))
+    assert has_element?(view, ~s(.drawer-side a[href="/workbench/transform"]))
 
     # Titles only: the summary appears once, in the exhibit's header — never
     # inside the rail. An apostrophe is HTML-escaped, so the needle stops
     # before it.
     assert occurrences(html, "coordinates, magnitude, angle and quarter turn") == 1
+  end
+
+  test "the rail lists only the current category's exhibits", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/tiling")
+
+    for slug <- ["catalogue", "tiling", "instancing"] do
+      assert has_element?(view, ~s(.drawer-side a[href="/workbench/#{slug}"]))
+    end
+
+    for slug <- ["point", "loose", "star", "rosette"] do
+      refute has_element?(view, ~s(.drawer-side a[href="/workbench/#{slug}"]))
+    end
+  end
+
+  test "the top navbar carries the rail's toggle", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/point")
+
+    assert has_element?(view, ~s(.drawer-content header label[for="rail-drawer"]))
+  end
+
+  test "a closed rail shows each exhibit's name, not its first letter", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/tiling")
+
+    assert has_element?(view, ~s(.drawer-side a [data-rail-label=short]), "Instancing")
+    refute has_element?(view, ".drawer-side .badge")
   end
 
   test "the current exhibit is highlighted in the rail", %{conn: conn} do

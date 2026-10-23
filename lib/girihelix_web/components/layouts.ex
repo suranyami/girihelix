@@ -5,6 +5,8 @@ defmodule GirihelixWeb.Layouts do
   """
   use GirihelixWeb, :html
 
+  import GirihelixWeb.Workbench.Components.Navigation, only: [rail_drawer: 1]
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -44,19 +46,18 @@ defmodule GirihelixWeb.Layouts do
     default: nil,
     doc: "the active category, highlighted in the top navbar"
 
+  attr :nav_slug, :string,
+    default: nil,
+    doc: "the active exhibit's slug; scopes the rail drawer to its category"
+
   slot :inner_block, required: true
 
-  def app(assigns) do
+  # Pages without nav_groups (error pages, plain forms) render the classic
+  # brand-only header; the workbench pages get the drawer-wrapped chrome.
+  def app(%{nav_groups: nil} = assigns) do
     ~H"""
     <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href={~p"/"} class="flex w-fit items-center gap-3">
-          <span class="text-lg font-semibold tracking-tight">Girihelix</span>
-        </a>
-      </div>
-      <div class="flex-none flex items-center gap-2">
-        <.navbar_categories groups={@nav_groups} active={@nav_active} />
-      </div>
+      <a href={~p"/"} class="text-lg font-semibold tracking-tight">Girihelix</a>
     </header>
 
     <main class={main_class(@wide)}>
@@ -64,6 +65,32 @@ defmodule GirihelixWeb.Layouts do
         {render_slot(@inner_block)}
       </div>
     </main>
+
+    <.flash_group flash={@flash} />
+    """
+  end
+
+  def app(assigns) do
+    ~H"""
+    <.rail_drawer groups={@nav_groups} active_slug={@nav_slug}>
+      <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
+        <label
+          for="rail-drawer"
+          aria-label="toggle sidebar"
+          class="btn btn-square btn-ghost drawer-button"
+        >
+          <.icon name="hero-bars-3" class="size-6" />
+        </label>
+        <a href={~p"/"} class="text-lg font-semibold tracking-tight">Girihelix</a>
+        <.navbar_categories groups={@nav_groups} active={@nav_active} />
+      </header>
+
+      <main class={main_class(@wide)}>
+        <div class={inner_class(@wide)}>
+          {render_slot(@inner_block)}
+        </div>
+      </main>
+    </.rail_drawer>
 
     <.flash_group flash={@flash} />
     """
@@ -94,9 +121,10 @@ defmodule GirihelixWeb.Layouts do
   defp category_aria(category, category) when not is_nil(category), do: "page"
   defp category_aria(_category, _active), do: nil
 
-  # The workbench uses the whole window with a small fixed gutter; the rest of
-  # the app keeps the narrow centred column.
-  defp main_class(true), do: "px-6 py-3 sm:px-8"
+  # The workbench uses the whole window with a real gutter, so the content
+  # never touches the rail; the rest of the app keeps the narrow centred
+  # column.
+  defp main_class(true), do: "px-6 py-4 sm:px-10"
   defp main_class(false), do: "px-4 py-20 sm:px-6 lg:px-8"
 
   defp inner_class(true), do: "space-y-4"

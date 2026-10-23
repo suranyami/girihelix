@@ -35,6 +35,18 @@ defmodule GirihelixWeb.Workbench.IndexLiveTest do
     refute has_element?(view, ~s(header nav[aria-label=Categories] a[aria-current=page]))
   end
 
+  test "the index rail lists the categories, linking each one's first exhibit", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench")
+
+    for {_category, exhibits} <- Registry.grouped() do
+      first = hd(exhibits)
+
+      assert has_element?(view, ~s(.drawer-side a[href="/workbench/#{first.slug()}"]))
+    end
+
+    refute has_element?(view, ~s(.drawer-side a[href="/workbench/faces"]))
+  end
+
   test "no Exhibits link and no theme toggle remain on the page", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/workbench")
 
