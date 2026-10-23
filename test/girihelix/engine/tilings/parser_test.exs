@@ -11,8 +11,10 @@ defmodule Girihelix.Engine.Tilings.ParserTest do
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.Tilings.Parser
 
-  @four_five "reference/1.1.12/tilings/4.5.tiling"
-  @six_five "reference/1.1.12/tilings/6.5.tiling"
+  # The vendored catalogue copies (priv/tilings/, committed) rather than the
+  # git-ignored reference/ originals — CI has no reference/ checkout.
+  @four_five "priv/tilings/4.5.tiling"
+  @six_five "priv/tilings/6.5.tiling"
 
   test "parses 4.5 with its two generators, three features and seven placements" do
     assert {:ok, tiling} = Parser.parse_file(@four_five)
