@@ -35,6 +35,18 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ "discover faces"
   end
 
+  test "the side rail lists the exhibit's siblings under the right category", %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/workbench/point")
+
+    assert html =~ ~p"/workbench/loose"
+    assert html =~ ~p"/workbench/transform"
+    refute html =~ ~s(href="/workbench/rosette")
+
+    assert html =~ ~p"/workbench?category=geometry"
+    assert html =~ ~p"/workbench?category=figures"
+    assert html =~ ~p"/workbench?category=tilings"
+  end
+
   test "the URL clamps a parameter and carries the frame", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/workbench/point?x=99.0&y=4.0")
     assert html =~ ~s(value="5.0")

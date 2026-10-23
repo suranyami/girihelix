@@ -25,6 +25,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   use GirihelixWeb, :live_view
 
   import GirihelixWeb.Workbench.Components.Canvas, only: [canvas: 1]
+  import GirihelixWeb.Workbench.Components.Chrome, only: [category_nav: 1, exhibit_rail: 1]
   import GirihelixWeb.Workbench.Components.Controls, only: [controls: 1]
   import GirihelixWeb.Workbench.Components.ReproducePane, only: [reproduce_pane: 1]
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
@@ -77,10 +78,21 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
         viewport: viewport(exhibit, values, drawing),
         source: source(frame, failure),
         snippet: exhibit.reproduce(values),
-        page_title: exhibit.title()
+        page_title: exhibit.title(),
+        groups: Registry.grouped(),
+        rail: rail_for(Registry.grouped(), exhibit)
       )
 
     {:noreply, socket}
+  end
+
+  # The side-rail entries: the exhibit's category's exhibit list. A category
+  # with a single member yields a one-item rail, which is still the honest map.
+  defp rail_for(groups, exhibit) do
+    case List.keyfind(groups, exhibit.category(), 0) do
+      {_category, exhibits} -> exhibits
+      nil -> []
+    end
   end
 
   @impl true
@@ -111,17 +123,26 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     ~H"""
     <Layouts.app flash={@flash} wide>
       <div class="flex flex-col gap-3">
-        <.exhibit_header exhibit={@exhibit} />
+        <.category_nav groups={@groups} active={@exhibit.category()} />
 
-        <p :if={@failure} role="alert" class="alert alert-error">
-          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-        </p>
-
-        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-          <aside class="w-80 shrink-0">
-            <.controls params={@param_defs} values={@values} />
+        <div class="flex gap-6">
+          <aside class="hidden w-56 shrink-0 lg:block">
+            <.exhibit_rail exhibits={@rail} active_slug={@exhibit.slug()} />
           </aside>
+          <div class="min-w-0 flex-1 flex flex-col gap-3">
+            <.exhibit_header exhibit={@exhibit} />
+
+            <p :if={@failure} role="alert" class="alert alert-error">
+              Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+            </p>
+
+            <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+              <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+              <aside class="w-80 shrink-0">
+                <.controls params={@param_defs} values={@values} />
+              </aside>
+            </div>
+          </div>
         </div>
       </div>
     </Layouts.app>
@@ -132,29 +153,38 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     ~H"""
     <Layouts.app flash={@flash} wide>
       <div class="flex flex-col gap-3">
-        <.exhibit_header exhibit={@exhibit} />
+        <.category_nav groups={@groups} active={@exhibit.category()} />
 
-        <p :if={@failure} role="alert" class="alert alert-error">
-          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-        </p>
-
-        <section id="transport" class="min-w-0">
-          <.transport index={@index} count={@count} step={@step} failure={@failure} />
-        </section>
-
-        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-          <section id="picture" class="min-w-0 flex-1">
-            <.canvas drawing={@drawing} viewport={@viewport} />
-          </section>
-
-          <aside class="w-80 shrink-0">
-            <.controls params={@param_defs} values={@values} />
+        <div class="flex gap-6">
+          <aside class="hidden w-56 shrink-0 lg:block">
+            <.exhibit_rail exhibits={@rail} active_slug={@exhibit.slug()} />
           </aside>
-        </div>
+          <div class="min-w-0 flex-1 flex flex-col gap-3">
+            <.exhibit_header exhibit={@exhibit} />
 
-        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-          <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
+            <p :if={@failure} role="alert" class="alert alert-error">
+              Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+            </p>
+
+            <section id="transport" class="min-w-0">
+              <.transport index={@index} count={@count} step={@step} failure={@failure} />
+            </section>
+
+            <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+              <section id="picture" class="min-w-0 flex-1">
+                <.canvas drawing={@drawing} viewport={@viewport} />
+              </section>
+
+              <aside class="w-80 shrink-0">
+                <.controls params={@param_defs} values={@values} />
+              </aside>
+            </div>
+
+            <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+              <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+              <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
+            </div>
+          </div>
         </div>
       </div>
     </Layouts.app>
