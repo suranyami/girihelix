@@ -3,34 +3,42 @@ defmodule GirihelixWeb.Workbench.IndexLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GirihelixWeb.Workbench.Registry
+
   test "the index lists every exhibit", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/workbench")
-
-    assert html =~ "Workbench"
-    assert html =~ "loose"
-    assert html =~ ~p"/workbench/faces"
-    assert render(view) =~ "Geometry"
-  end
-
-  test "the navbar links every category", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/workbench")
 
-    assert html =~ ~p"/workbench?category=geometry"
-    assert html =~ ~p"/workbench?category=figures"
-    assert html =~ ~p"/workbench?category=tilings"
+    assert html =~ "Girihelix"
+    assert html =~ "loose"
+    assert html =~ ~p"/workbench/faces"
+    assert html =~ "Geometry"
+    assert html =~ "Tilings"
   end
 
-  test "a category param scopes the directory to one category", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/workbench?category=figures")
+  test "the navbar links every category to its first exhibit", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench")
+    nav = ~s(header nav[aria-label=Categories])
 
-    assert html =~ "Rosette"
-    refute html =~ ~p"/workbench/point"
+    for {category, exhibits} <- Registry.grouped() do
+      first = hd(exhibits)
+      label = Phoenix.Naming.humanize(category)
+
+      assert has_element?(view, nav, label)
+
+      assert has_element?(view, ~s(#{nav} a[href="/workbench/#{first.slug()}"]), label)
+    end
   end
 
-  test "an unknown category shows the full directory", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/workbench?category=nonsense")
+  test "the index highlights no category", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench")
 
-    assert html =~ "Point"
-    assert html =~ "Rosette"
+    refute has_element?(view, ~s(header nav[aria-label=Categories] a[aria-current=page]))
+  end
+
+  test "no Exhibits link and no theme toggle remain on the page", %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/workbench")
+
+    refute html =~ "Exhibits"
+    refute html =~ "data-phx-theme"
   end
 end

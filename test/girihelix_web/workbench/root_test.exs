@@ -3,6 +3,7 @@ defmodule GirihelixWeb.Workbench.RootTest do
 
   test "GET / renders the workbench index", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Workbench"
+    assert html_response(conn, 200) =~ "Girihelix"
+    assert html_response(conn, 200) =~ "Geometry"
   end
 end

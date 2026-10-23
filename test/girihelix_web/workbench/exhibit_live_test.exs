@@ -3,6 +3,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GirihelixWeb.Workbench.Registry
+
   test "an exhibit mounts with all four panes", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/workbench/point")
 
@@ -35,16 +37,52 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ "discover faces"
   end
 
-  test "the side rail lists the exhibit's siblings under the right category", %{conn: conn} do
-    {:ok, _view, html} = live(conn, "/workbench/point")
+  test "the rail draws itself with every exhibit, titles only", %{conn: conn} do
+    {:ok, view, html} = live(conn, "/workbench/point")
+
+    assert has_element?(view, ".drawer-side")
+    assert has_element?(view, ~s(label.drawer-button[for="rail-drawer"]))
+    assert has_element?(view, ~s(.drawer-side .drawer-overlay))
 
     assert html =~ ~p"/workbench/loose"
     assert html =~ ~p"/workbench/transform"
-    refute html =~ ~s(href="/workbench/rosette")
+    assert html =~ ~p"/workbench/rosette"
 
-    assert html =~ ~p"/workbench?category=geometry"
-    assert html =~ ~p"/workbench?category=figures"
-    assert html =~ ~p"/workbench?category=tilings"
+    # Titles only: the summary appears once, in the exhibit's header — never
+    # inside the rail. An apostrophe is HTML-escaped, so the needle stops
+    # before it.
+    assert occurrences(html, "coordinates, magnitude, angle and quarter turn") == 1
+  end
+
+  test "the current exhibit is highlighted in the rail", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/point")
+
+    assert has_element?(view, ~s(.drawer-side a[aria-current=page]), "Point")
+  end
+
+  test "the rail highlights a category's first exhibit when you land on it", %{conn: conn} do
+    for {_category, exhibits} <- Registry.grouped() do
+      {:ok, view, _html} = live(conn, ~p"/workbench/#{hd(exhibits).slug()}")
+      title = hd(exhibits).title()
+
+      assert has_element?(view, ~s(.drawer-side a[aria-current=page]), title)
+    end
+  end
+
+  test "the top navbar marks the exhibit's category as the active one", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/point")
+
+    assert has_element?(
+             view,
+             ~s(header nav[aria-label=Categories] a[aria-current=page]),
+             "Geometry"
+           )
+  end
+
+  test "the Workbench back link is gone", %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/workbench/point")
+
+    refute html =~ "&larr;"
   end
 
   test "the URL clamps a parameter and carries the frame", %{conn: conn} do
@@ -73,4 +111,6 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   test "an unknown slug is a 404", %{conn: conn} do
     assert_raise GirihelixWeb.Workbench.NotFound, fn -> live(conn, "/workbench/nope") end
   end
+
+  defp occurrences(html, needle), do: length(String.split(html, needle)) - 1
 end
