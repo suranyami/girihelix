@@ -1,4 +1,4 @@
-defmodule GirihelixWeb.Workbench.Components.Chrome do
+defmodule GirihelixWeb.Workbench.Components.Navigation do
   @moduledoc """
   The workbench's persistent navigation.
 

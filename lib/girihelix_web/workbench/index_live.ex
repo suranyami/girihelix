@@ -9,7 +9,7 @@ defmodule GirihelixWeb.Workbench.IndexLive do
 
   use GirihelixWeb, :live_view
 
-  import GirihelixWeb.Workbench.Components.Chrome, only: [category_nav: 1]
+  import GirihelixWeb.Workbench.Components.Navigation, only: [category_nav: 1]
 
   alias GirihelixWeb.Workbench.Registry
   alias Phoenix.LiveView.Socket

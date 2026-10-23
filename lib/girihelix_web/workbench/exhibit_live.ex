@@ -25,8 +25,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   use GirihelixWeb, :live_view
 
   import GirihelixWeb.Workbench.Components.Canvas, only: [canvas: 1]
-  import GirihelixWeb.Workbench.Components.Chrome, only: [category_nav: 1, exhibit_rail: 1]
   import GirihelixWeb.Workbench.Components.Controls, only: [controls: 1]
+  import GirihelixWeb.Workbench.Components.Navigation, only: [category_nav: 1, exhibit_rail: 1]
   import GirihelixWeb.Workbench.Components.ReproducePane, only: [reproduce_pane: 1]
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
