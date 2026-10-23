@@ -43,8 +43,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Transform do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Transform — an affine map of a shape"
+  def title, do: "Transform"
 
+  @impl true
+  def byline, do: "an affine map of a shape"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "Six scalars move, scale, rotate, shear or flip the unit square."

@@ -43,8 +43,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Intersect do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Intersect — where two segments cross"
+  def title, do: "Intersect"
 
+  @impl true
+  def byline, do: "where two segments cross"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "Two segments, their parameter pair and the crossing of their lines."

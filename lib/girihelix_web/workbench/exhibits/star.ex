@@ -46,8 +46,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Star — the [n/d]s construction"
+  def title, do: "Star"
 
+  @impl true
+  def byline, do: "the [n/d]s construction"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A chord and its rotated copies, mirrored into a symmetric unit."

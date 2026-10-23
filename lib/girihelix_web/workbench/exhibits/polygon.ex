@@ -60,8 +60,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Polygon do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Polygon — vertices, area and containment"
+  def title, do: "Polygon"
 
+  @impl true
+  def byline, do: "vertices, area and containment"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A square, triangle or star with its area, closed path and probe."

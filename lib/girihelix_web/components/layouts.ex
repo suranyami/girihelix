@@ -5,6 +5,8 @@ defmodule GirihelixWeb.Layouts do
   """
   use GirihelixWeb, :html
 
+  import GirihelixWeb.Workbench.Components.Navigation, only: [rail_drawer: 1]
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -35,22 +37,28 @@ defmodule GirihelixWeb.Layouts do
     default: false,
     doc: "use the full window width with a small fixed margin, for the workbench"
 
+  attr :nav_groups, :list,
+    default: nil,
+    doc:
+      "the `{category, exhibits}` pairs from Registry.grouped/0; when passed, the top navbar carries one link per category, to its first exhibit"
+
+  attr :nav_active, :atom,
+    default: nil,
+    doc: "the active category, highlighted in the top navbar"
+
+  attr :nav_slug, :string,
+    default: nil,
+    doc: "the active exhibit's slug; scopes the rail drawer to its category"
+
   slot :inner_block, required: true
 
-  def app(assigns) do
+  # Pages without nav_groups (error pages, plain forms) render the classic
+  # brand-only header; the workbench pages get the side navbar and the
+  # categories.
+  def app(%{nav_groups: nil} = assigns) do
     ~H"""
     <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href={~p"/"} class="flex w-fit items-center gap-3">
-          <img src={~p"/images/logo.svg"} width="28" />
-          <span class="text-lg font-semibold tracking-tight">Girihelix</span>
-          <span class="badge badge-ghost badge-sm">Workbench</span>
-        </a>
-      </div>
-      <div class="flex-none flex items-center gap-2">
-        <a href={~p"/workbench"} class="btn btn-ghost btn-sm">Exhibits</a>
-        <.theme_toggle />
-      </div>
+      <a href={~p"/"} class="text-lg font-semibold tracking-tight">Girihelix</a>
     </header>
 
     <main class={main_class(@wide)}>
@@ -63,9 +71,57 @@ defmodule GirihelixWeb.Layouts do
     """
   end
 
-  # The workbench uses the whole window with a small fixed gutter; the rest of
-  # the app keeps the narrow centred column.
-  defp main_class(true), do: "px-6 py-3 sm:px-8"
+  def app(assigns) do
+    ~H"""
+    <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
+      <label for="rail-drawer" aria-label="toggle sidebar" class="btn btn-square btn-ghost">
+        <.icon name="hero-bars-3" class="size-6" />
+      </label>
+      <a href={~p"/"} class="pr-6 text-lg font-semibold tracking-tight">Girihelix</a>
+      <.navbar_categories groups={@nav_groups} active={@nav_active} />
+    </header>
+
+    <.rail_drawer groups={@nav_groups} active_slug={@nav_slug}>
+      <main class={main_class(@wide)}>
+        <div class={inner_class(@wide)}>
+          {render_slot(@inner_block)}
+        </div>
+      </main>
+    </.rail_drawer>
+
+    <.flash_group flash={@flash} />
+    """
+  end
+
+  # The workbench's top navbar carries the categories; every other page that
+  # uses the layout calls `app/1` without them and gets just the brand.
+  defp navbar_categories(%{groups: nil} = assigns), do: ~H""
+
+  defp navbar_categories(assigns) do
+    ~H"""
+    <nav class="flex items-center gap-1" aria-label="Categories">
+      <.link
+        :for={{category, exhibits} <- @groups}
+        navigate={~p"/workbench/#{hd(exhibits).slug()}"}
+        class={category_class(category, @active)}
+        aria-current={category_aria(category, @active)}
+      >
+        {Phoenix.Naming.humanize(category)}
+      </.link>
+    </nav>
+    """
+  end
+
+  defp category_class(category, category) when not is_nil(category), do: "btn btn-primary btn-sm"
+  defp category_class(_category, _active), do: "btn btn-ghost btn-sm"
+
+  defp category_aria(category, category) when not is_nil(category), do: "page"
+  defp category_aria(_category, _active), do: nil
+
+  # The workbench uses the whole window with a real gutter, so the content
+  # never touches the rail; the rest of the app keeps the narrow centred
+  # column.
+  defp main_class(true), do: "px-6 py-4 sm:px-10"
   defp main_class(false), do: "px-4 py-20 sm:px-6 lg:px-8"
 
   defp inner_class(true), do: "space-y-4"
@@ -116,43 +172,6 @@ defmodule GirihelixWeb.Layouts do
         {gettext("Attempting to reconnect")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
-    </div>
-    """
-  end
-
-  @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-
-  See <head> in root.html.heex which applies the theme before page load.
-  """
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 [[data-theme-source=system]_&]:!left-0 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
     </div>
     """
   end

@@ -65,8 +65,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Faces do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Faces — discovering and two-colouring a planar map"
+  def title, do: "Faces"
 
+  @impl true
+  def byline, do: "discovering and two-colouring a planar map"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A planar map's faces, coloured so faces sharing an edge differ."

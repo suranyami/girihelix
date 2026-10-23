@@ -41,6 +41,9 @@ defmodule GirihelixWeb.Workbench.Exhibit do
   @doc "The heading shown on the exhibit page."
   @callback title() :: String.t()
 
+  @doc "The tag-line under the page header's title: the old title's text after the em-dash."
+  @callback byline() :: String.t()
+
   @doc "One sentence describing what the exhibit shows."
   @callback summary() :: String.t()
 

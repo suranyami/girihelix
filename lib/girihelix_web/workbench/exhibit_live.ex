@@ -26,7 +26,6 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   import GirihelixWeb.Workbench.Components.Canvas, only: [canvas: 1]
   import GirihelixWeb.Workbench.Components.Controls, only: [controls: 1]
-  import GirihelixWeb.Workbench.Components.Navigation, only: [category_nav: 1, exhibit_rail: 1]
   import GirihelixWeb.Workbench.Components.ReproducePane, only: [reproduce_pane: 1]
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
@@ -79,20 +78,10 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
         source: source(frame, failure),
         snippet: exhibit.reproduce(values),
         page_title: exhibit.title(),
-        groups: Registry.grouped(),
-        rail: rail_for(Registry.grouped(), exhibit)
+        groups: Registry.grouped()
       )
 
     {:noreply, socket}
-  end
-
-  # The side-rail entries: the exhibit's category's exhibit list. A category
-  # with a single member yields a one-item rail, which is still the honest map.
-  defp rail_for(groups, exhibit) do
-    case List.keyfind(groups, exhibit.category(), 0) do
-      {_category, exhibits} -> exhibits
-      nil -> []
-    end
   end
 
   @impl true
@@ -121,28 +110,25 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} wide>
+    <Layouts.app
+      flash={@flash}
+      wide
+      nav_groups={@groups}
+      nav_active={@exhibit.category()}
+      nav_slug={@exhibit.slug()}
+    >
       <div class="flex flex-col gap-3">
-        <.category_nav groups={@groups} active={@exhibit.category()} />
+        <.exhibit_header exhibit={@exhibit} />
 
-        <div class="flex gap-6">
-          <aside class="hidden w-56 shrink-0 lg:block">
-            <.exhibit_rail exhibits={@rail} active_slug={@exhibit.slug()} />
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
+
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <aside class="w-80 shrink-0">
+            <.controls params={@param_defs} values={@values} />
           </aside>
-          <div class="min-w-0 flex-1 flex flex-col gap-3">
-            <.exhibit_header exhibit={@exhibit} />
-
-            <p :if={@failure} role="alert" class="alert alert-error">
-              Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-            </p>
-
-            <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-              <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-              <aside class="w-80 shrink-0">
-                <.controls params={@param_defs} values={@values} />
-              </aside>
-            </div>
-          </div>
         </div>
       </div>
     </Layouts.app>
@@ -151,40 +137,37 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} wide>
+    <Layouts.app
+      flash={@flash}
+      wide
+      nav_groups={@groups}
+      nav_active={@exhibit.category()}
+      nav_slug={@exhibit.slug()}
+    >
       <div class="flex flex-col gap-3">
-        <.category_nav groups={@groups} active={@exhibit.category()} />
+        <.exhibit_header exhibit={@exhibit} />
 
-        <div class="flex gap-6">
-          <aside class="hidden w-56 shrink-0 lg:block">
-            <.exhibit_rail exhibits={@rail} active_slug={@exhibit.slug()} />
+        <p :if={@failure} role="alert" class="alert alert-error">
+          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+        </p>
+
+        <section id="transport" class="min-w-0">
+          <.transport index={@index} count={@count} step={@step} failure={@failure} />
+        </section>
+
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <section id="picture" class="min-w-0 flex-1">
+            <.canvas drawing={@drawing} viewport={@viewport} />
+          </section>
+
+          <aside class="w-80 shrink-0">
+            <.controls params={@param_defs} values={@values} />
           </aside>
-          <div class="min-w-0 flex-1 flex flex-col gap-3">
-            <.exhibit_header exhibit={@exhibit} />
+        </div>
 
-            <p :if={@failure} role="alert" class="alert alert-error">
-              Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-            </p>
-
-            <section id="transport" class="min-w-0">
-              <.transport index={@index} count={@count} step={@step} failure={@failure} />
-            </section>
-
-            <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-              <section id="picture" class="min-w-0 flex-1">
-                <.canvas drawing={@drawing} viewport={@viewport} />
-              </section>
-
-              <aside class="w-80 shrink-0">
-                <.controls params={@param_defs} values={@values} />
-              </aside>
-            </div>
-
-            <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-              <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-              <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
-            </div>
-          </div>
+        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+          <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
         </div>
       </div>
     </Layouts.app>
@@ -196,10 +179,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   defp exhibit_header(assigns) do
     ~H"""
     <header class="flex flex-col gap-1">
-      <.link navigate={~p"/workbench"} class="text-sm opacity-70 hover:underline">
-        &larr; Workbench
-      </.link>
       <h1 class="text-xl font-semibold">{@exhibit.title()}</h1>
+      <p class="text-sm italic opacity-70">{@exhibit.byline()}</p>
       <p class="text-sm opacity-70">{@exhibit.summary()}</p>
     </header>
     """
