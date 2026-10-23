@@ -49,8 +49,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Instancing — one tiling, bound to a figure, welded into a pattern"
+  def title, do: "Instancing"
 
+  @impl true
+  def byline, do: "one tiling, bound to a figure, welded into a pattern"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "Every regular tile bound to a figure, replicated over the lattice, welded into one map."

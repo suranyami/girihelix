@@ -38,8 +38,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Connect — the solved scale"
+  def title, do: "Connect"
 
+  @impl true
+  def byline, do: "the solved scale"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A child scaled so its extended tip edges meet, with no s to choose."

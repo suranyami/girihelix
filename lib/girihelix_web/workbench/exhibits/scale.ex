@@ -41,8 +41,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Scale do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Scale — the child unit scaled and clipped"
+  def title, do: "Scale"
 
+  @impl true
+  def byline, do: "the child unit scaled and clipped"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A child figure scaled out and clipped back to the unit n-gon."

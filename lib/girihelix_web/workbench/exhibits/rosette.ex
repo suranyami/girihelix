@@ -37,8 +37,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Rosette — Lee's key line and its rotated copies"
+  def title, do: "Rosette"
 
+  @impl true
+  def byline, do: "Lee's key line and its rotated copies"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A blended key ray mirrored into a unit and replicated n times."

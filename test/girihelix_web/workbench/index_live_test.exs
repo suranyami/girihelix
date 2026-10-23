@@ -41,10 +41,10 @@ defmodule GirihelixWeb.Workbench.IndexLiveTest do
     for {_category, exhibits} <- Registry.grouped() do
       first = hd(exhibits)
 
-      assert has_element?(view, ~s(.drawer-side a[href="/workbench/#{first.slug()}"]))
+      assert has_element?(view, ~s(#rail-root aside a[href="/workbench/#{first.slug()}"]))
     end
 
-    refute has_element?(view, ~s(.drawer-side a[href="/workbench/faces"]))
+    refute has_element?(view, ~s(#rail-root aside a[href="/workbench/faces"]))
   end
 
   test "no Exhibits link and no theme toggle remain on the page", %{conn: conn} do

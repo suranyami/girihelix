@@ -56,8 +56,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "PlanarMap — welding and replication"
+  def title, do: "PlanarMap"
 
+  @impl true
+  def byline, do: "welding and replication"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "Two squares welded at their crossings, or one spoke copied six times."

@@ -32,8 +32,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Point do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Point — position as a vector"
+  def title, do: "Point"
 
+  @impl true
+  def byline, do: "position as a vector"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A point's coordinates, magnitude, angle and quarter turn."

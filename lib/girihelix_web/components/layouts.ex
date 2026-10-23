@@ -53,7 +53,8 @@ defmodule GirihelixWeb.Layouts do
   slot :inner_block, required: true
 
   # Pages without nav_groups (error pages, plain forms) render the classic
-  # brand-only header; the workbench pages get the drawer-wrapped chrome.
+  # brand-only header; the workbench pages get the side navbar and the
+  # categories.
   def app(%{nav_groups: nil} = assigns) do
     ~H"""
     <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
@@ -72,19 +73,15 @@ defmodule GirihelixWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <.rail_drawer groups={@nav_groups} active_slug={@nav_slug}>
-      <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
-        <label
-          for="rail-drawer"
-          aria-label="toggle sidebar"
-          class="btn btn-square btn-ghost drawer-button"
-        >
-          <.icon name="hero-bars-3" class="size-6" />
-        </label>
-        <a href={~p"/"} class="text-lg font-semibold tracking-tight">Girihelix</a>
-        <.navbar_categories groups={@nav_groups} active={@nav_active} />
-      </header>
+    <header class="navbar border-b border-base-300 px-4 sm:px-6 lg:px-8">
+      <label for="rail-drawer" aria-label="toggle sidebar" class="btn btn-square btn-ghost">
+        <.icon name="hero-bars-3" class="size-6" />
+      </label>
+      <a href={~p"/"} class="pr-6 text-lg font-semibold tracking-tight">Girihelix</a>
+      <.navbar_categories groups={@nav_groups} active={@nav_active} />
+    </header>
 
+    <.rail_drawer groups={@nav_groups} active_slug={@nav_slug}>
       <main class={main_class(@wide)}>
         <div class={inner_class(@wide)}>
           {render_slot(@inner_block)}

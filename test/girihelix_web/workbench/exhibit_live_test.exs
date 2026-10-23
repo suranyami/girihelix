@@ -40,47 +40,62 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   test "the rail draws itself with the current category's exhibits, titles only", %{conn: conn} do
     {:ok, view, html} = live(conn, "/workbench/point")
 
-    assert has_element?(view, ".drawer-side")
-    assert has_element?(view, ~s(.drawer-side .drawer-overlay))
+    assert has_element?(view, "#rail-root aside")
 
-    assert has_element?(view, ~s(.drawer-side a[href="/workbench/loose"]))
-    assert has_element?(view, ~s(.drawer-side a[href="/workbench/transform"]))
+    assert has_element?(view, ~s(#rail-root aside a[href="/workbench/loose"]))
+    assert has_element?(view, ~s(#rail-root aside a[href="/workbench/transform"]))
 
     # Titles only: the summary appears once, in the exhibit's header — never
     # inside the rail. An apostrophe is HTML-escaped, so the needle stops
     # before it.
     assert occurrences(html, "coordinates, magnitude, angle and quarter turn") == 1
+
+    # The rail shows the exhibit's title, short by construction: the byline
+    # (the old title's tag-line) appears once, under the header's title.
+    assert occurrences(html, "position as a vector") == 1
+    refute html =~ " — "
+
+    # And the page never pins the old long title anywhere, rails included.
+    refute html =~ "Point — position as a vector"
   end
 
   test "the rail lists only the current category's exhibits", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/tiling")
 
     for slug <- ["catalogue", "tiling", "instancing"] do
-      assert has_element?(view, ~s(.drawer-side a[href="/workbench/#{slug}"]))
+      assert has_element?(view, ~s(#rail-root aside a[href="/workbench/#{slug}"]))
     end
 
     for slug <- ["point", "loose", "star", "rosette"] do
-      refute has_element?(view, ~s(.drawer-side a[href="/workbench/#{slug}"]))
+      refute has_element?(view, ~s(#rail-root aside a[href="/workbench/#{slug}"]))
     end
   end
 
   test "the top navbar carries the rail's toggle", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/point")
 
-    assert has_element?(view, ~s(.drawer-content header label[for="rail-drawer"]))
+    assert has_element?(view, ~s(header label[for="rail-drawer"]))
+
+    # The checkbox alone owns the rail's state: the persistence hook sits on
+    # the rail root, and a label is all it takes to toggle it — no daisyUI
+    # drawer structure anywhere.
+    assert has_element?(view, ~s(#rail-root[phx-hook=RailDrawer]))
+    assert has_element?(view, ~s(#rail-root input.peer#rail-drawer))
+    refute has_element?(view, ".drawer")
   end
 
   test "a closed rail shows each exhibit's name, not its first letter", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/tiling")
 
-    assert has_element?(view, ~s(.drawer-side a [data-rail-label=short]), "Instancing")
-    refute has_element?(view, ".drawer-side .badge")
+    assert has_element?(view, "#rail-root aside a", "Instancing")
+    refute has_element?(view, "#rail-root aside .badge")
+    refute has_element?(view, "#rail-root aside [data-rail-label]")
   end
 
   test "the current exhibit is highlighted in the rail", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/point")
 
-    assert has_element?(view, ~s(.drawer-side a[aria-current=page]), "Point")
+    assert has_element?(view, ~s(#rail-root aside a[aria-current=page]), "Point")
   end
 
   test "the rail highlights a category's first exhibit when you land on it", %{conn: conn} do
@@ -88,7 +103,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
       {:ok, view, _html} = live(conn, ~p"/workbench/#{hd(exhibits).slug()}")
       title = hd(exhibits).title()
 
-      assert has_element?(view, ~s(.drawer-side a[aria-current=page]), title)
+      assert has_element?(view, ~s(#rail-root aside a[aria-current=page]), title)
     end
   end
 

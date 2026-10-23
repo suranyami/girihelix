@@ -30,8 +30,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Catalogue do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Catalogue — every shipped tiling"
+  def title, do: "Catalogue"
 
+  @impl true
+  def byline, do: "every shipped tiling"
   @impl true
   def summary, do: "One row per shipped tiling: its tile and placement counts."
 

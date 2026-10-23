@@ -180,6 +180,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     ~H"""
     <header class="flex flex-col gap-1">
       <h1 class="text-xl font-semibold">{@exhibit.title()}</h1>
+      <p class="text-sm italic opacity-70">{@exhibit.byline()}</p>
       <p class="text-sm opacity-70">{@exhibit.summary()}</p>
     </header>
     """

@@ -42,8 +42,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Radial do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Radial — the symmetry ladder"
+  def title, do: "Radial"
 
+  @impl true
+  def byline, do: "the symmetry ladder"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "One unit copied n times under the ladder, and the map those copies coalesce into."

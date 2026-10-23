@@ -38,8 +38,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Tiling do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Tiling — one tiling's vectors, unit cell and outlines"
+  def title, do: "Tiling"
 
+  @impl true
+  def byline, do: "one tiling's vectors, unit cell and outlines"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "The two translation vectors closed into the unit cell, every placed tile outlined."

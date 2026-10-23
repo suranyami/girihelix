@@ -34,8 +34,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Loose do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "Loose — the tolerance surface"
+  def title, do: "Loose"
 
+  @impl true
+  def byline, do: "the tolerance surface"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "Two tolerances, and the squared-distance trap between them."

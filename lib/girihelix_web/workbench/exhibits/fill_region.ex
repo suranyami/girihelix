@@ -37,8 +37,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.FillRegion do
 
   @impl true
   @spec title() :: String.t()
-  def title, do: "FillRegion — tiling a region with lattice translates"
+  def title, do: "FillRegion"
 
+  @impl true
+  def byline, do: "tiling a region with lattice translates"
   @impl true
   @spec summary() :: String.t()
   def summary, do: "A rectangle scanned row by row and filled with lattice cells."
