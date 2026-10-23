@@ -12,9 +12,11 @@ defmodule Girihelix.Engine.Tilings.ParserTest do
   alias Girihelix.Engine.Tilings.Parser
 
   # The vendored catalogue copies (priv/tilings/, committed) rather than the
-  # git-ignored reference/ originals — CI has no reference/ checkout.
-  @four_five "priv/tilings/4.5.tiling"
-  @six_five "priv/tilings/6.5.tiling"
+  # git-ignored reference/ originals — CI has no reference/ checkout. The
+  # absolute path is baked at compile time, when the cwd is the project root,
+  # so the tests survive another test moving the cwd while they run.
+  @four_five Path.absname("priv/tilings/4.5.tiling")
+  @six_five Path.absname("priv/tilings/6.5.tiling")
 
   test "parses 4.5 with its two generators, three features and seven placements" do
     assert {:ok, tiling} = Parser.parse_file(@four_five)
