@@ -64,6 +64,24 @@ defmodule Girihelix.Engine.Tilings.ConstructTest do
     assert feature.regular == 4
   end
 
+  # The known flaw, kept deliberately: an unbound feature is skipped silently —
+  # no binding, no figure map, no failure — and the weld welds nothing.
+  test "the :bind step skips every feature the binder answers nil for" do
+    tiling = Catalogue.load!("4.5")
+    binder = fn _feature -> nil end
+
+    state =
+      tiling
+      |> Construct.steps(binder, Construct.default_region(tiling))
+      |> Steps.run!(Construct.start(tiling, binder, Construct.default_region(tiling)))
+      |> Steps.final()
+
+    assert state.bindings == []
+    assert state.feature_maps == []
+    assert PlanarMap.num_vertices(state.map) == 0
+    assert Construct.result(state) == {:ok, state.map}
+  end
+
   test "construct merges one feature per placement and the periodic copies, then welds" do
     tiling = Catalogue.load!("4.5")
     binder = fn feature -> if feature.regular, do: Rosette.new!(feature.regular, 0.0, 3) end

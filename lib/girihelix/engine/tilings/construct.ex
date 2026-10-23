@@ -2,8 +2,8 @@ defmodule Girihelix.Engine.Tilings.Construct do
   @moduledoc """
   Places a tiling's tiles over a region and binds each tile to its figure.
 
-  This is the value behind Taprats' tiling `construct` class: the region to fill
-  is laid out in lattice coordinates, every feature of the tiling is sent through
+  The construction is faithful: the region to fill is laid out in lattice
+  coordinates, every feature of the tiling is sent through
   a binder — a function from feature to figure, or `nil` for "no figure" — and
   the result is one welded planar map of the whole pattern.
 
@@ -123,7 +123,7 @@ defmodule Girihelix.Engine.Tilings.Construct do
       step(
         :bind,
         "bind the figures",
-        "Maps every feature through the binder and keeps the non-nil bindings.",
+        "Maps every feature through the binder, keeping the non-nil bindings; a feature the binder answers nil for is skipped silently.",
         &bind/1
       ),
       step(
@@ -251,8 +251,8 @@ defmodule Girihelix.Engine.Tilings.Construct do
   defp weld_maps([]), do: {:ok, PlanarMap.new()}
 
   # `Enum.reduce/3` calls its function as `(element, acc)`, so the fold is
-  # spelled out: the accumulated map is `Prototype.construct`'s `ret`, the
-  # receiver of every `mergeMap`, and each later feature map merges into it.
+  # spelled out: the accumulated map is the receiver of every merge, and each
+  # later feature map merges into it.
   defp weld_maps([first | rest]), do: Enum.reduce(rest, {:ok, first}, fn map, acc -> weld_into(acc, map) end)
 
   defp weld_into({:ok, receiver}, other) do

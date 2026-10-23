@@ -2,8 +2,7 @@ defmodule Girihelix.Engine.Tilings.Parser do
   @moduledoc """
   The `.tiling` text format, parsed into `Tiling` values.
 
-  This is the faithful port of Taprats' tiling file reader (`Tiling.readTiling`,
-  backed by a Java `StreamTokenizer`): the file is a flat token stream — the
+  The parser is faithful to the format: the file is a flat token stream — the
   header, the two lattice generators, the features with their placement
   transforms, then the quoted description and author. Nothing is format-aware
   beyond the keyword and the quote character, so whitespace and line breaks
@@ -11,7 +10,7 @@ defmodule Girihelix.Engine.Tilings.Parser do
   strings are resolved while scanning.
 
   **Failures are data.** Where Taprats throws an `IOException` (or silently
-  desynchronises), the port returns `{:error, reason}` tokens: a stream that
+  desynchronises), the parser returns `{:error, reason}` tokens: a stream that
   does not start with the `tiling` keyword is `:not_a_tiling`, an unknown
   feature keyword is `{:bad_keyword, token}`, a short token stream is
   `:truncated`, and a token that is not a number is `:invalid_number` — the
@@ -21,7 +20,7 @@ defmodule Girihelix.Engine.Tilings.Parser do
   **Description and author are sanitised.** Two shipped files carry non-UTF-8
   bytes (`Mughal.tiling` a cp1252 one, `pbn_7.tiling` a MacRoman one), so both
   strings are rebuilt as valid UTF-8, replacing each invalid byte with U+FFFD.
-  Missing description or author at end of file are `nil`, as in Taprats.
+  Missing description or author at end of file are `nil`.
 
   The sanitising happens before scanning: Elixir's `Regex` scans unicode text
   and rejects a subject with invalid sequences, while the format's tokens are
@@ -63,10 +62,9 @@ defmodule Girihelix.Engine.Tilings.Parser do
 
   # Scanning
   #
-  # Taprats' StreamTokenizer: quoted strings are single tokens, the four
-  # comment styles are honoured outside them, and everything else splits on
-  # whitespace. One regex covers both, so a comment marker inside a quoted
-  # string stays part of the string.
+  # Quoted strings are single tokens, the four comment styles are honoured
+  # outside them, and everything else splits on whitespace. One regex covers
+  # both, so a comment marker inside a quoted string stays part of the string.
 
   @token_regex ~r{"([^"]*)"|//[^\n]*|#[^\n]*|%[^\n]*|/\*[\s\S]*?\*/|[^\s"]+}
 

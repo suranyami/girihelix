@@ -3,11 +3,11 @@ defmodule Girihelix.Engine.Tilings.Tiling do
   A whole tiling: its name, its two lattice generators, its tiles, and where
   they are placed.
 
-  This is the value behind Taprats' tiling `tiling` class: `t1` and `t2` span
+  This is the value the `.tiling` files parse into: `t1` and `t2` span
   the translational unit cell — the parallelogram `unit_cell/1` spells out — and
   `features` with `placements` describe what repeats under those translations.
-  A later task parses `.tiling` files into this struct; meanwhile every field is
-  a plain value, so `new/1` is total and returns the struct directly.
+  Every field is a plain value, so `new/1` is total and returns the struct
+  directly.
 
   `placements_for/2` answers the one question the consumers of a tiling ask:
   which placements carry a given tile.

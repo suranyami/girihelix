@@ -3,7 +3,7 @@ defmodule Girihelix.Engine.Tilings.Feature do
   A tile of a tiling: its catalogue id, whether it is a regular polygon, and its
   points.
 
-  This is the value behind Taprats' tiling `feature` class: `id` comes from the
+  This is the value the catalogue's descriptions become: `id` comes from the
   catalogue once `assign_ids/1` has deduplicated across descriptions, `regular`
   is a symmetry order when the tile is a regular polygon — and a polygon that
   stores its own points carries `nil` — and `points` is the tile's outline in
@@ -11,7 +11,7 @@ defmodule Girihelix.Engine.Tilings.Feature do
 
   **A regular feature computes its points on demand.** A constructor that only
   knows a symmetry order stores no outline at all; `points/1` then generates the
-  polygon that Taprats' `RegularFeature` draws: the vertices of the regular
+  polygon a regular tile carries: the vertices of the regular
   `n`-gon whose edge midpoint sits at radius `1 / cos(pi / n)`, starting a half
   step along the circle. `points/1` is therefore total for any feature, and
   callers never keep a second copy of the outline in sync.

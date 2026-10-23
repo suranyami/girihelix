@@ -3,8 +3,8 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
   The shipped tiling catalogue: every `.tiling` file under `priv/tilings/`,
   indexed at compile time.
 
-  Taprats keeps its `KnownTilings` registry keyed by tiling name — the name
-  declared in the file's `tiling` header. This module is that registry as a
+  The registry is keyed by tiling name — the name
+  declared in the file's `tiling` header. This module holds it as a
   compile-time index: `priv/tilings/index.json` is decoded with
   `Jason.decode!/1` at compile time into `@entries`/`@names`, and recompiles
   whenever the index changes (`@external_resource`). Paths are relative to the
