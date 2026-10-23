@@ -67,8 +67,11 @@ if config_env() == :prod do
   # fronted by more than one public hostname (an ingress vanity domain along
   # the canonical one, say) needs the extras listed explicitly. PHX_EXTRA_ORIGINS
   # is comma-separated; an entry with a scheme is used verbatim, a bare
-  # hostname is assumed https. Set it to that service's ingress domains only —
-  # this is the origin allow-list for LiveView websockets.
+  # hostname is assumed https.
+  #
+  # The list is ALWAYS set (PHX_HOST first) — never nil: Phoenix rejects a nil
+  # check_origin at transport-config time, so an absent env var must degrade to
+  # the single-host list, which is Phoenix's own default.
   origins =
     "PHX_EXTRA_ORIGINS"
     |> System.get_env("")
@@ -78,11 +81,7 @@ if config_env() == :prod do
       hostname -> "https://" <> hostname
     end)
 
-  check_origin =
-    case origins do
-      [] -> nil
-      _ -> ["https://" <> host | origins]
-    end
+  check_origin = ["https://" <> host | origins]
 
   config :girihelix, Girihelix.Repo,
     # ssl: true,
