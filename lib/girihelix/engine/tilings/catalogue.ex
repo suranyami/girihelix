@@ -26,12 +26,16 @@ defmodule Girihelix.Engine.Tilings.Catalogue do
 
   # Directory-relative names work from the project root only. A release's
   # working directory holds the release, not the app's priv/ tree (it lives
-  # at <release>/lib/<app>-<version>/priv/), so runtime reads resolve through
-  # :code.priv_dir/1 — the code path works in dev, test and release alike.
-  # The compile-time index read stays relative: compilation always happens
-  # from the project root.
-  @priv_dir :code.priv_dir(:girihelix)
-  defp tilings_dir, do: @priv_dir |> :filename.join(~c"tilings") |> List.to_string()
+  # at <release>/lib/<app>-<version>/priv/), so reads resolve through
+  # :code.priv_dir/1 — evaluated at RUNTIME: the same call written as a module
+  # attribute freezes the builder's _build path into the beam inside a release
+  # image, where that path does not exist. Dev/test resolve through Mix's priv
+  # symlink; the compile-time index read stays relative because compilation
+  # always happens from the project root.
+  defp tilings_dir do
+    :girihelix |> :code.priv_dir() |> :filename.join(~c"tilings") |> List.to_string()
+  end
+
   @entries Jason.decode!(File.read!("priv/tilings/index.json"))
   @names Enum.map(@entries, & &1["name"])
   @name_options Enum.map(@names, &String.to_atom/1)
