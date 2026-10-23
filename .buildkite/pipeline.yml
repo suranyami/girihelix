@@ -54,7 +54,7 @@ steps:
   # PUSH=false, so the manifest is a no-op and this step is skipped.
   - label: ":rocket: deploy girihelix"
     depends_on: manifest
-    if: build.branch == "main" && build.env("PUSH") == "true"
+    if: build.branch == "main"
     agents:
       queue: arm64
     command: .buildkite/deploy.sh
