@@ -16,6 +16,7 @@ defmodule GirihelixWeb.Workbench.Registry do
   alias GirihelixWeb.Workbench.Exhibits.Connect
   alias GirihelixWeb.Workbench.Exhibits.Faces
   alias GirihelixWeb.Workbench.Exhibits.FillRegion
+  alias GirihelixWeb.Workbench.Exhibits.Instancing
   alias GirihelixWeb.Workbench.Exhibits.Intersect
   alias GirihelixWeb.Workbench.Exhibits.Loose
   alias GirihelixWeb.Workbench.Exhibits.PlanarMap
@@ -43,7 +44,8 @@ defmodule GirihelixWeb.Workbench.Registry do
     Connect,
     Radial,
     Catalogue,
-    Tiling
+    Tiling,
+    Instancing
   ]
 
   @doc "Every registered exhibit, in display order."
