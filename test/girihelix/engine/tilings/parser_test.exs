@@ -58,6 +58,50 @@ defmodule Girihelix.Engine.Tilings.ParserTest do
     assert tiling.description =~ "bad"
   end
 
+  test "duplicates share one id, and the distinct one does not" do
+    text = """
+    tiling "dup" 3
+    1.0 0.0
+    0.0 1.0
+    regular 4 1
+    1.0 0.0 0.0 0.0 1.0 0.0
+    regular 4 2
+    1.0 0.0 0.0 0.0 1.0 0.0
+    0.5 0.0 0.0 0.0 0.5 0.0
+    regular 6 1
+    1.0 0.0 0.0 0.0 1.0 0.0
+    """
+
+    assert {:ok, tiling} = Parser.parse(text)
+
+    # Three declarations come back as three features: de-duplication is by id,
+    # not by list position, so the repeat of `regular 4` keeps its own entry.
+    assert [first, second, third] = tiling.features
+    assert first.regular == 4
+    assert second.regular == 4
+    assert third.regular == 6
+    assert [first.id, second.id, third.id] == [0, 0, 1]
+
+    assert Enum.map(tiling.placements, & &1.feature_id) == [0, 0, 0, 1]
+
+    assert Enum.map(tiling.placements, & &1.transform) == [
+             Transform.new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+             Transform.new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+             Transform.new(0.5, 0.0, 0.0, 0.0, 0.5, 0.0),
+             Transform.new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+           ]
+  end
+
+  test "rejects a regular side count of zero instead of deferring the crash" do
+    text = ~s(tiling "x" 1\n0.0 1.0\n1.0 0.0\nregular 0 1\n1.0 0.0 0.0 0.0 1.0 0.0\n)
+    assert Parser.parse(text) == {:error, :invalid_number}
+  end
+
+  test "rejects a negative regular side count instead of deferring the crash" do
+    text = ~s(tiling "x" 1\n0.0 1.0\n1.0 0.0\nregular -1 1\n1.0 0.0 0.0 0.0 1.0 0.0\n)
+    assert Parser.parse(text) == {:error, :invalid_number}
+  end
+
   test "rejects a truncated number instead of crashing" do
     text = ~s(tiling "x" 1\n0.0 1.0\n1.0 0.0\nregular 4 1\n1. 0.0 0.0 0.0 1.0 0.0\n)
     assert Parser.parse(text) == {:error, :invalid_number}

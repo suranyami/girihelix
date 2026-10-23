@@ -60,6 +60,49 @@ would resolve every step to `:unavailable`. Pin a project-root setting at compil
 time from `__DIR__` if the workbench ever needs to run outside a project-root
 cwd.
 
+### Instancing lacks its region-size parameter (2026-10-23, Plan 4 review)
+
+The instancing exhibit's params are `tiling` and `figure` only, and both
+`initial/1` and `steps/1` hardwire `Construct.default_region/1`, so the region
+the exhibit fills is fixed. The spec's Catalogue & Instancing exhibit names a
+region-size parameter the reader can turn. Adding it costs one `Param`
+(`:region` or a scalar multiplier over `default_region/1`) and threading it
+through `initial/1`, `steps/1` and `reproduce/1`.
+
+### The catalogue panel lacks its totals row (2026-10-23, Plan 4 review)
+
+The catalogue exhibit renders one row per shipped `.tiling` file and stops — the
+spec's Testing → Catalogue section asks for a totals row summing the tile and
+placement counts across the catalogue. Adding it is a `panel_rows/1` addition
+summing the parsed rows' counts, one placeholder decision for parse-failed rows.
+
+### Rows omit `cells` and `features bound` (2026-10-23, Plan 4 review)
+
+The tiling and instancing exhibits report their step state without a `cells`
+count (unit cells the fill produced) or a `features bound` count (bindings kept
+by the `:bind` step; the useful one for reading a run). Both are already in
+`Construct.state` (`translations` and `bindings`), so the rows would be one
+field each plus a panel-row decision in the catalogue panel.
+
+### `priv/tilings/` needs `:code.priv_dir/1` (2026-10-23, Plan 4 review)
+
+`Catalogue` reads `priv/tilings/index.json` and the shipped `.tiling` files
+through paths relative to the process cwd at compile time (`@dir`, the
+`@external_resource`) and at load time. That holds under `mix`, and a release
+started in its project root works today for the same reason the source resolver
+above does; a release started elsewhere would read nothing, or fail
+`File.read!/1`. Resolve the read paths with `:code.priv_dir(:girihelix)` when the
+workbench is first run from a release started outside a project-root cwd.
+
+### Jason is compile-time-only in the engine (2026-10-23, Plan 4 review)
+
+`Girihelix.Engine.Tilings.Catalogue` decodes `priv/tilings/index.json` with
+`Jason.decode!/1` at compile time, so the engine holds no runtime Jason
+dependency — the plan mandated Jason over the stdlib `JSON` module then. Record
+the ruling and act on it when the catalogue is next touched: move the decode to
+stdlib `JSON` (no dependency), or keep Jason under an explicit documented
+allowance.
+
 ## Closed
 
 - **`Point.compare_to/2` had no documented sorting idiom** (Plan 1a review).

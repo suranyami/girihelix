@@ -85,7 +85,9 @@ defmodule Girihelix.Engine.Tilings.Feature do
   Each feature is compared, in order, against the representatives already
   assigned, using `equal?/2`; the first match shares that representative's id,
   and a feature matching none is appended with the next unused id. Features come
-  back in input order carrying stable ids, one per distinct tile.
+  back in input order carrying stable ids, one per distinct tile. The
+  de-duplication the spec names is by id, not by list position: the list keeps
+  every feature, and duplicates are identified only by sharing one id.
   """
   @spec assign_ids([t()]) :: [t()]
   def assign_ids(features) do

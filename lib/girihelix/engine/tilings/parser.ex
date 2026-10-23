@@ -172,6 +172,7 @@ defmodule Girihelix.Engine.Tilings.Parser do
 
   defp parse_feature(["regular" | rest]) do
     with {:ok, sides, rest} <- integer_token(rest),
+         {:ok, rest} <- positive_sides(sides, rest),
          {:ok, count, rest} <- integer_token(rest),
          {:ok, transforms, rest} <- transforms(count, rest, []) do
       {:ok, Feature.new(regular: sides, points: []), transforms, rest}
@@ -189,6 +190,12 @@ defmodule Girihelix.Engine.Tilings.Parser do
 
   defp parse_feature([other | _rest]), do: {:error, {:bad_keyword, other}}
   defp parse_feature([]), do: {:error, :truncated}
+
+  # A side count is stored verbatim, and `Feature.points/1` divides by it at
+  # draw time — so a `regular 0` or worse would load and only crash later. The
+  # side count is a number, so the failure is `:invalid_number`.
+  defp positive_sides(sides, rest) when sides > 0, do: {:ok, rest}
+  defp positive_sides(_sides, _rest), do: {:error, :invalid_number}
 
   defp points(0, tokens, acc), do: {:ok, Enum.reverse(acc), tokens}
 

@@ -9,6 +9,7 @@ defmodule Girihelix.Engine.Tilings.ConstructTest do
   alias Girihelix.Engine.Figures.Rosette
   alias Girihelix.Engine.Geometry.Loose
   alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.Geometry.Segment
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Steps
@@ -173,6 +174,38 @@ defmodule Girihelix.Engine.Tilings.ConstructTest do
 
     assert {:ok, map} = Construct.construct(tiling, binder, Construct.default_region(tiling))
     assert PlanarMap.verify(map) == :ok
+  end
+
+  # Reflections get a hand-built unit test, not a catalogue golden: a placement
+  # whose transform flips orientation (determinant below zero, here
+  # `reflect_through_line/1` across the line x = 3) must construct and verify
+  # like any other. The line is chosen so the mirrored tile lands at a distinct
+  # spot — a rosette reflects onto itself through an edge-midpoint axis, which
+  # would lay coincident edges into the map.
+  test "a reflected placement constructs a verified map" do
+    [square] = features = Feature.assign_ids([Feature.new(regular: 4, points: [])])
+
+    reflect =
+      Transform.reflect_through_line(Segment.new!(Point.new(3.0, 0.0), Point.new(3.0, 1.0)))
+
+    tiling =
+      Tiling.new(
+        name: "reflected",
+        t1: Point.new(10.0, 0.0),
+        t2: Point.new(0.0, 10.0),
+        features: features,
+        placements: [
+          PlacedFeature.new(square.id, Transform.identity()),
+          PlacedFeature.new(square.id, reflect)
+        ]
+      )
+
+    binder = fn %Feature{regular: sides} -> Rosette.new!(sides, 0.0, 3) end
+
+    assert {:ok, map} = Construct.construct(tiling, binder, Construct.default_region(tiling))
+    assert PlanarMap.verify(map) == :ok
+    assert PlanarMap.num_vertices(map) > 0
+    assert PlanarMap.num_edges(map) > 0
   end
 
   test "a raising binder is figure_failed, and the stepped path retains a failure frame" do
