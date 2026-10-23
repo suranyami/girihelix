@@ -1,7 +1,7 @@
 # Catalogue and instancing — design (Plan 4)
 
 **Date:** 2026-10-22
-**Status:** draft for builder review
+**Status:** implemented 2026-10-22 (Plan 4)
 **Porting source:** Taprats 1.1.12 (changeset `b6c172`)
 **Depends on:** Plans 1b/1c (`PlanarMap`, `FillRegion`, the Taprats harness), Plan 2 (workbench framework), Plan 3 (figures)
 **Follows:** the domain model design (`2026-10-16-girihelix-domain-model-design.md`) and the workbench plan series (`2026-10-16-girihelix-workbench-design.md`, Plan 4 row)

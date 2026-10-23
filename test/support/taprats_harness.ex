@@ -13,6 +13,14 @@ defmodule Girihelix.TapratsHarness do
   line. That is deliberate: the input is a local test file, so a malformed
   line is a bug in the file, not data a caller supplied, and there is nobody
   to return an error tuple to.
+
+  The `construct` operation pins a whole constructed tiling against Taprats:
+  the Java driver reads `reference/1.1.12/tilings/<name>.tiling`, binds
+  `Rosette(n, 0.0, 3)` to every regular feature and constructs over the
+  default region; this side parses the same file, binds the same rosettes and
+  compares the two maps **canonically** — sorted rounded positions, edge
+  position pairs and ring cycles — because Java's hash iteration order is
+  unspecified and feeds which noise-y vertex of a coincident cluster survives.
   """
 
   alias Girihelix.Engine.Faces
@@ -25,6 +33,7 @@ defmodule Girihelix.TapratsHarness do
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
+  alias Girihelix.TapratsHarness.Canonical
 
   @tolerance 1.0e-12
   @fixtures_dir "reference/oracle/fixtures"
@@ -36,6 +45,12 @@ defmodule Girihelix.TapratsHarness do
           vertices: [corner()],
           edges: [{non_neg_integer(), non_neg_integer()}],
           rings: [[non_neg_integer()]],
+          verify: verify()
+        }
+  @type canonical_map :: %{
+          vertices: [corner()],
+          edges: [{corner(), corner()}],
+          rings: [[corner()]],
           verify: verify()
         }
   @type faces_dump :: %{
@@ -50,8 +65,22 @@ defmodule Girihelix.TapratsHarness do
           | {:scale, figure_expr(), float()}
           | {:connect, figure_expr()}
   @type figure_dump :: %{figure: {:ok, map_dump()} | {:error, :null}}
-  @type dump :: map_dump() | faces_dump() | cells_dump() | figure_dump()
-  @type op :: tuple()
+  @type dump ::
+          map_dump() | faces_dump() | cells_dump() | figure_dump() | %{construct: canonical_map()}
+  @type op ::
+          {:dump, String.t()}
+          | {:faces, String.t()}
+          | {:fill, [Point.t()], Point.t(), Point.t()}
+          | {:vertex, String.t(), float(), float()}
+          | {:edge, String.t(), non_neg_integer(), non_neg_integer()}
+          | {:remove, String.t(), non_neg_integer()}
+          | {:replicate, String.t(), String.t(), [Transform.t()]}
+          | {:transform, String.t(), Transform.t()}
+          | {:scale, String.t(), float()}
+          | {:translate, String.t(), float(), float()}
+          | {:weld, String.t(), String.t()}
+          | {:figure, :map | :unit, figure_expr()}
+          | {:construct, :map, String.t()}
 
   @doc "The directory holding the Taprats fixtures."
   @spec fixtures_dir() :: String.t()
@@ -89,6 +118,8 @@ defmodule Girihelix.TapratsHarness do
   defp run([{:fill, region, t1, t2}], _state), do: region |> FillRegion.fill(t1, t2) |> fill_dump()
 
   defp run([{:figure, kind, expr}], _state), do: build_figure({:figure, kind, expr})
+
+  defp run([{:construct, :map, name}], _state), do: Canonical.construct(name)
 
   defp run([op | rest], state), do: run(rest, step(op, state))
 
@@ -234,6 +265,13 @@ defmodule Girihelix.TapratsHarness do
 
   defp index_of(handles), do: handles |> Enum.with_index() |> Map.new()
 
+  @doc """
+  The canonical form of a constructed map: the construct half lives in
+  `Girihelix.TapratsHarness.Canonical`.
+  """
+  @spec canonical(PlanarMap.t()) :: Canonical.canonical_map()
+  def canonical(map), do: Canonical.canonical(map)
+
   # -- script parsing ---------------------------------------------------------
 
   @doc "Parses an operation script into one tuple per operation."
@@ -252,6 +290,7 @@ defmodule Girihelix.TapratsHarness do
   defp parse_op(line), do: line |> String.split() |> op(line)
 
   defp op(["dump", map], _line), do: {:dump, map}
+  defp op(["construct", "map", name], _line), do: {:construct, :map, name}
   defp op([map, "faces"], _line), do: {:faces, map}
 
   defp op(["fill" | spec], line) do
@@ -370,12 +409,21 @@ defmodule Girihelix.TapratsHarness do
       ["faces error " <> word] -> %{faces: {:error, face_error(word)}}
       ["fill ok" | rest] -> %{cells: {:ok, Enum.map(rest, &cell/1)}}
       ["fill error " <> word] -> %{cells: {:error, fill_error(word)}}
-      ["figure ok" | rest] -> %{figure: {:ok, parse_map_dump(rest)}}
-      ["figure unit ok" | rest] -> %{figure: {:ok, parse_map_dump(rest)}}
-      ["figure error null"] -> %{figure: {:error, :null}}
-      _other -> parse_map_dump(lines)
+      lines -> parse_figure_dump(lines)
     end
   end
+
+  # The figure and construct dumps carry their own headers; anything else is a
+  # bare map dump.
+  defp parse_figure_dump(["figure ok" | rest]), do: %{figure: {:ok, parse_map_dump(rest)}}
+  defp parse_figure_dump(["figure unit ok" | rest]), do: %{figure: {:ok, parse_map_dump(rest)}}
+  defp parse_figure_dump(["figure error null"]), do: %{figure: {:error, :null}}
+
+  defp parse_figure_dump(["construct ok" | rest]) do
+    %{construct: Canonical.canonical_from_dump(parse_map_dump(rest))}
+  end
+
+  defp parse_figure_dump(lines), do: parse_map_dump(lines)
 
   defp parse_map_dump(lines) do
     items = Enum.map(lines, &dump_item/1)
@@ -461,6 +509,12 @@ defmodule Girihelix.TapratsHarness do
 
   def compare(%{figure: expected}, %{figure: actual}), do: expected |> figure_errors(actual) |> result()
 
+  def compare(%{construct: expected}, %{construct: actual}),
+    do: expected |> Canonical.construct_errors(actual) |> result()
+
+  def compare(%{construct: _expected}, actual),
+    do: {:error, ["dump shape: expected construct, got #{inspect(Map.keys(actual))}"]}
+
   def compare(%{faces: _expected}, actual), do: {:error, ["dump shape: expected faces, got #{inspect(Map.keys(actual))}"]}
 
   def compare(%{cells: _expected}, actual), do: {:error, ["dump shape: expected cells, got #{inspect(Map.keys(actual))}"]}
@@ -539,14 +593,11 @@ defmodule Girihelix.TapratsHarness do
 
   defp point_errors(i, expected, actual), do: ["vertex #{i}: expected #{inspect(expected)}, got #{inspect(actual)}"]
 
+  defp verify_errors(expected, actual), do: Canonical.verify_errors(expected, actual)
+
   defp exact_errors(_label, same, same), do: []
 
   defp exact_errors(label, expected, actual), do: ["#{label}: expected #{inspect(expected)}, got #{inspect(actual)}"]
-
-  defp verify_errors(_expected, :unchecked), do: []
-  defp verify_errors(true, true), do: []
-  defp verify_errors(true, actual), do: ["verify: expected true, got #{inspect(actual)}"]
-  defp verify_errors(_expected, _actual), do: []
 
   # -- numbers ----------------------------------------------------------------
 

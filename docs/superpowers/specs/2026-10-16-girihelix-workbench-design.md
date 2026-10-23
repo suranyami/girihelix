@@ -1,7 +1,7 @@
 # girihelix workbench — design
 
 **Date:** 2026-10-16
-**Status:** Plan 3 implemented 2026-10-21; Plans 4–7 remain.
+**Status:** Plans 2, 3 and 4 implemented; Plans 5–7 remain.
 **Related:** [domain model design](2026-10-16-girihelix-domain-model-design.md) ·
 [porting specification](../../algorithm-analysis.md) ·
 [porting notes](../../porting-notes/)
@@ -352,7 +352,7 @@ seven plans, and two boundaries move.
 | 1 | Engine foundation and geometry — `Steps`, `Loose`, `Point`, `Transform`, `Intersect`, `Polygon`, `Map`, `Faces`, `FillRegion` | Pure geometry authored as steps, golden-tested | gains `Steps`, loses literal transliteration as a goal |
 | 2 | Workbench foundation — draw ops, SVG serializer, viewport, exhibit behaviour, `/workbench`, controls, transport, source and reproduce panes, geometry exhibits | A publishable workbench over the geometry layer | new — **done 2026-10-21** |
 | 3 | Figures — `Figure`, `RadialFigure`, `Star`, `Rosette`, `ScaleFigure`, `ConnectFigure` | `Star(8, 3.0, 2)` builds its vertices, and you can watch it do so | gains exhibits — **done 2026-10-21** |
-| 4 | Catalogue and instancing — engine `Tiling`, `Feature`, `PlacedFeature`, `construct`, `.tiling` data and parser | Tiling plus figures to a constructed map you can step through | gains exhibits |
+| 4 | Catalogue and instancing — engine `Tiling`, `Feature`, `PlacedFeature`, `construct`, `.tiling` data and parser | Tiling plus figures to a constructed map you can step through | gains exhibits — **done 2026-10-22** |
 | 5 | Render styles — `Plain`, `Filled`, `Outline` over the shared draw ops, face two-colouring | Constructed map to SVG, matching Taprats' geometry | consumes the Plan 2 serializer instead of defining it |
 | 6 | Ash layer — resources, figure union type, migrations, catalogue seeding | A Design round-trips through Postgres | unchanged |
 | 7 | Studio — tiling picker, figure controls, style, preview, save and load | The domain spec's success criterion 1 | was the LiveView showcase |
@@ -360,7 +360,7 @@ seven plans, and two boundaries move.
 Plan 1's remainder, after `Steps` and the geometry value types, became Plans 1b
 (`PlanarMap` and the Taprats reference harness) and 1c (`Faces`, `FillRegion` and
 `Rect`). **Plan 1 is complete as of 2026-10-20. Plans 2 and 3 are complete as of
-2026-10-21.**
+2026-10-21. Plan 4 is complete as of 2026-10-22.**
 
 `Steps` lands in Plan 1 rather than Plan 2 because it decides how Plan 1's
 algorithms are written; introducing it later would mean rewriting them. The SVG
