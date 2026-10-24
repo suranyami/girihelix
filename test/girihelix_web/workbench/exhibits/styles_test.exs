@@ -11,13 +11,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     params |> Styles.steps() |> Steps.run!(Styles.initial(params)) |> List.last()
   end
 
-  test "identifies itself and declares the four parameters" do
+  test "identifies itself and declares the five parameters" do
     assert Styles.slug() == "styles"
     assert Styles.category() == :styles
     assert Styles.title() != ""
     assert Styles.summary() != ""
 
-    assert [tiling, figure, style, palette] = Styles.params()
+    assert [tiling, figure, style, palette, tiles] = Styles.params()
     assert {tiling.name, tiling.default} == {:tiling, :"8.5"}
 
     assert {figure.name, figure.options, figure.default} ==
@@ -28,6 +28,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
 
     assert {palette.name, palette.default} == {:palette, :"253"}
     assert length(palette.options) == 348
+
+    assert {tiles.name, tiles.type, tiles.default} == {:tiles, :boolean, false}
   end
 
   test "the default run ends with a paint step and a painted drawing" do
@@ -65,6 +67,28 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     # `Plain` over an empty map succeeds with no ops, so the panel falls back to
     # the construct drawing and reports no failure.
     assert {"failure", "none"} in rows
+  end
+
+  test "the tile overlay is off by default and sits under the figure" do
+    params = defaults()
+    assert params.tiles == false
+
+    off = last_frame(params)
+    {:both, off_ops, _rows} = Styles.draw(off, params)
+    refute Enum.any?(off_ops, &match?({:polygon, _, :fill, [fill: "#2563eb", opacity: 0.12]}, &1))
+
+    on_params = %{params | tiles: true}
+    on = last_frame(on_params)
+    {:both, on_ops, _rows} = Styles.draw(on, on_params)
+    assert Enum.any?(on_ops, &match?({:polygon, _, :fill, [fill: "#2563eb", opacity: 0.12]}, &1))
+    assert Enum.any?(on_ops, &match?({:polygon, _, :fill, [fill: "#1b3644"]}, &1))
+  end
+
+  test "the overlay composes background, then tile, then figure" do
+    params = %{defaults() | style: :plain, tiles: true}
+    {:both, [background, tile | _rest], _rows} = Styles.draw(last_frame(params), params)
+    assert {:polygon, _, :fill, [fill: _]} = background
+    assert {:polygon, _, :fill, [fill: _tint, opacity: 0.12]} = tile
   end
 
   test "a one-colour palette still paints" do

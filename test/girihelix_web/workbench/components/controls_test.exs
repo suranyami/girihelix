@@ -42,7 +42,7 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
     assert html =~ ">7.5</span>"
   end
 
-  test "controls render a boolean select and fall back to the declared default" do
+  test "controls render a checked boolean checkbox from the declared default" do
     params = [
       %Param{name: :closed, type: :boolean, default: true, doc: "closed"}
     ]
@@ -50,6 +50,17 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
     html = render_component(&Controls.controls/1, params: params, values: %{})
 
     assert html =~ ~s(name="closed")
-    assert html =~ ~s(<option selected value="true">)
+    assert html =~ ~s(type="checkbox")
+    assert html =~ ~s(type="hidden" name="closed" value="false")
+    assert html =~ ~s(checked)
+  end
+
+  test "a boolean renders a checkbox that sends false when cleared" do
+    param = %Param{name: :tiles, type: :boolean, default: false, doc: "overlay"}
+    html = render_component(&Controls.controls/1, params: [param], values: %{tiles: false})
+
+    assert html =~ ~s(type="checkbox")
+    assert html =~ ~s(type="hidden" name="tiles" value="false")
+    refute html =~ ~s(checked)
   end
 end

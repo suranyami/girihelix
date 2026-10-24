@@ -9,6 +9,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   static structure `Instancing` shows, so a reader can step through the
   construction before the finished picture.
 
+  With `tiles` on, the faint lattice overlay is composited between the style's
+  background and its figure, so the tile boundaries stay legible under the
+  paint.
+
   A map the style cannot paint still draws. An unbound run leaves the map empty,
   so `Filled` reports `:no_faces` and the panel falls back to the construct
   drawing; the same fallback covers an empty painting, such as `Plain` over an
@@ -106,6 +110,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
         options: Palette.options(),
         default: :"253",
         doc: "The Wada colour combination the style's palette roles come from."
+      },
+      %Param{
+        name: :tiles,
+        type: :boolean,
+        default: false,
+        doc: "Draws the faint lattice tile overlay beneath the figure."
       }
     ]
   end
@@ -130,7 +140,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
   def draw(%Steps.Frame{state: state}, params) do
-    {ops, faces} = picture(state)
+    {ops, faces} = picture(state, params)
     {:both, ops, rows(state, params, faces)}
   end
 
@@ -158,16 +168,23 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   # A painted result with ops is the picture; frame zero, an empty painting and
   # a retained failure frame all fall back to the shared construct structure.
-  # The background is composed beneath the geometry, above nothing else yet.
-  defp picture(state) do
+  # The background is composed beneath the tile overlay, and the overlay beneath
+  # the figure, so the lattice reads under the painting in every frame.
+  defp picture(state, params) do
     case Map.get(state, :paint) do
       {:ok, %{background: background, ops: [_ | _] = ops, faces: faces}} ->
-        {List.wrap(background) ++ ops, faces}
+        {List.wrap(background) ++ overlay(state, params) ++ ops, faces}
 
       _absent_or_failed ->
-        {Tilings.structure_ops(state), nil}
+        {overlay(state, params) ++ Tilings.structure_ops(state), nil}
     end
   end
+
+  defp overlay(%{tiling: tiling, translations: translations}, %{tiles: true}) do
+    Tilings.tile_ops(tiling, translations)
+  end
+
+  defp overlay(_state, _params), do: []
 
   defp rows(%{tiling: %Tiling{name: name}, map: map} = state, params, faces) do
     [

@@ -14,7 +14,10 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
   The current value is repeated beside the slider, so a clamped value is legible
   without reading the URL.
 
-  A `:boolean` and an `:enum` use `<.input type="select">`. Select values are
+  A `:boolean` is a checkbox, preceded by a hidden input carrying `"false"`:
+  an unchecked checkbox sends nothing, so the hidden value is what makes
+  "cleared" reach the server as `false` rather than as an absent parameter. An
+  `:enum` uses `<.input type="select">`. Select values are
   strings on the wire, so each value is stringified before it is handed to the
   input; a missing value falls back to the parameter's declared default.
   """
@@ -67,12 +70,14 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
     ~H"""
     <div>
       <.control_label param={@param} />
-      <.input
-        type="select"
+      <input type="hidden" name={@param.name} value="false" />
+      <input
+        type="checkbox"
         id={@param.name}
         name={@param.name}
-        value={to_string(@value)}
-        options={[{"true", "true"}, {"false", "false"}]}
+        value="true"
+        checked={@value}
+        class="checkbox checkbox-sm"
       />
     </div>
     """
