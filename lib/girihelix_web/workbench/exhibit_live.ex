@@ -1,6 +1,7 @@
 defmodule GirihelixWeb.Workbench.ExhibitLive do
   @moduledoc """
-  One exhibit, with its picture, controls, source and reproduction side by side.
+  One exhibit: a header row carrying the transport, the picture, the controls and
+  the panel, and the source and reproduction behind one collapsed disclosure.
 
   **The URL is the state.** The slug chooses the exhibit, the declared
   parameters travel in their own query keys, and `frame` names the index into
@@ -25,7 +26,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   **A run is a task; a frame is not.** Building a run can take minutes for a
   heavy tiling, so `handle_params/3` starts it with `start_async/3` and renders
-  a loading state with the previous picture still on screen. The task reports
+  the finished page's skeleton — the same header, grid and controls — with the
+  previous picture still on screen or an empty framed canvas when there is none.
+  The task reports
   each step to this process as `{:run_progress, index, total, label}`. Moving
   through the frames of the run it already holds never starts a task: the URL's
   parameters name the run, the assigned `:run_key` says whether they still do,
@@ -37,7 +40,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   use GirihelixWeb, :live_view
 
-  import GirihelixWeb.Workbench.Components.Canvas, only: [canvas: 1]
+  import GirihelixWeb.Workbench.Components.Canvas, only: [canvas: 1, panel: 1]
   import GirihelixWeb.Workbench.Components.Controls, only: [controls: 1]
   import GirihelixWeb.Workbench.Components.ReproducePane, only: [reproduce_pane: 1]
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
@@ -164,47 +167,41 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     {:noreply, push_patch(socket, to: ~p"/workbench/#{socket.assigns.exhibit.slug()}?#{query}")}
   end
 
+  # A run in flight has no frame index yet, but the page it renders has the same
+  # header, grid and controls as a finished one. The canvas slot keeps the
+  # previous picture when there is one and an empty framed canvas otherwise, and
+  # the panel it will fill is already there with `n/a` values and the previous
+  # run's labels, so nothing below the header moves when the run lands.
   @impl true
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
-    ~H"""
-    <Layouts.app
-      flash={@flash}
-      wide
-      nav_groups={@groups}
-      nav_active={@exhibit.category()}
-      nav_slug={@exhibit.slug()}
-    >
-      <div class="flex flex-col gap-3">
-        <.exhibit_header exhibit={@exhibit} />
+    assigns =
+      assign(assigns,
+        plot: assigns.drawing || {:canvas, []},
+        panel_rows: placeholder_rows(assigns.drawing),
+        transcript_index: 0,
+        transcript_snippet: assigns.snippet || ""
+      )
 
-        <section id="transport" class="min-w-0">
-          <.transport
-            index={@index}
-            count={@count}
-            step={@step}
-            failure={@failure}
-            loading={@loading}
-            progress={@progress}
-          />
-        </section>
-
-        <div :if={@drawing} class="min-w-0">
-          <.canvas drawing={@drawing} viewport={@viewport} />
-        </div>
-
-        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-          <aside class="w-80 shrink-0">
-            <.controls params={@param_defs} values={@values} />
-          </aside>
-        </div>
-      </div>
-    </Layouts.app>
-    """
+    page(assigns)
   end
 
   def render(assigns) do
+    assigns =
+      assign(assigns,
+        plot: assigns.drawing,
+        panel_rows: drawing_panel_rows(assigns.drawing),
+        transcript_index: assigns.index,
+        transcript_snippet: assigns.snippet
+      )
+
+    page(assigns)
+  end
+
+  # Both render heads reach the same block structure: one header row carrying
+  # the transport, the picture in the flexible column, the controls and then the
+  # panel in the right column, and the code behind one collapsed disclosure.
+  defp page(assigns) do
     ~H"""
     <Layouts.app
       flash={@flash}
@@ -213,47 +210,65 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       nav_active={@exhibit.category()}
       nav_slug={@exhibit.slug()}
     >
-      <div class="flex flex-col gap-3">
-        <.exhibit_header exhibit={@exhibit} />
+      <div class="flex flex-col gap-2">
+        <header class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div class="flex min-w-0 flex-col gap-1">
+            <h1 class="text-xl font-semibold">{@exhibit.title()}</h1>
+            <p class="text-sm italic opacity-70">{@exhibit.byline()}</p>
+            <p class="text-sm opacity-70">{@exhibit.summary()}</p>
+          </div>
 
-        <p :if={@failure} role="alert" class="alert alert-error">
-          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-        </p>
+          <section id="transport" class="min-w-0 shrink-0">
+            <.transport
+              index={@index}
+              count={@count}
+              step={@step}
+              failure={@failure}
+              loading={@loading}
+              progress={@progress}
+            />
+          </section>
+        </header>
 
-        <section id="transport" class="min-w-0">
-          <.transport index={@index} count={@count} step={@step} failure={@failure} />
-        </section>
-
-        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
+        <div class="flex flex-col gap-2 lg:flex-row xl:items-start">
           <section id="picture" class="min-w-0 flex-1">
-            <.canvas drawing={@drawing} viewport={@viewport} />
+            <.canvas drawing={@plot} viewport={@viewport} />
           </section>
 
-          <aside class="w-80 shrink-0">
+          <aside class="flex w-80 shrink-0 flex-col gap-2">
             <.controls params={@param_defs} values={@values} />
+            <.panel :if={@panel_rows != []} rows={@panel_rows} />
           </aside>
         </div>
 
-        <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
-          <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
-          <div class="w-80 shrink-0"><.reproduce_pane snippet={@snippet} index={@index} /></div>
-        </div>
+        <details class="border-t border-base-300 pt-2">
+          <summary class="cursor-pointer text-sm font-semibold">
+            Show source and reproduce
+          </summary>
+          <div class="mt-2 flex flex-col gap-2 lg:flex-row xl:items-start">
+            <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
+            <div class="w-80 shrink-0">
+              <.reproduce_pane snippet={@transcript_snippet} index={@transcript_index} />
+            </div>
+          </div>
+        </details>
       </div>
     </Layouts.app>
     """
   end
 
-  attr :exhibit, :atom, required: true
+  # The right column's panel belongs to a `:both` drawing; a `:panel` drawing's
+  # table is the picture itself and stays in the main column.
+  defp drawing_panel_rows({:both, _ops, rows}), do: rows
+  defp drawing_panel_rows(_drawing), do: []
 
-  defp exhibit_header(assigns) do
-    ~H"""
-    <header class="flex flex-col gap-1">
-      <h1 class="text-xl font-semibold">{@exhibit.title()}</h1>
-      <p class="text-sm italic opacity-70">{@exhibit.byline()}</p>
-      <p class="text-sm opacity-70">{@exhibit.summary()}</p>
-    </header>
-    """
+  # While a run builds, the previous frame's labels are the skeleton for the
+  # rows it will replace, so the right column does not change height.
+  defp placeholder_rows({:both, _ops, rows}) do
+    Enum.map(rows, fn {label, _value} -> {label, "n/a"} end)
   end
+
+  defp placeholder_rows(_drawing), do: []
 
   defp fetch!(slug) do
     case Registry.get(slug) do

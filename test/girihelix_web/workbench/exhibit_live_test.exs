@@ -196,6 +196,39 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert %{cells: 1} = Run.build(Styles, %{params | tiling: :"Girih Star"}, nil)
   end
 
+  test "the header carries the transport and the panel follows the controls", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    html = await_run(view)
+
+    assert html =~ ~s(id="transport")
+    assert html =~ ~s(id="controls")
+    assert html =~ ~s(id="panel")
+
+    transport = elem(:binary.match(html, ~s(id="transport")), 0)
+    controls = elem(:binary.match(html, ~s(id="controls")), 0)
+    panel = elem(:binary.match(html, ~s(id="panel")), 0)
+    assert controls < panel
+    assert transport < controls
+  end
+
+  test "the source and reproduce panes are collapsed by default", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    html = await_run(view)
+
+    assert html =~ "<details"
+    refute html =~ ~s(<details open)
+    assert html =~ "Show source and reproduce"
+  end
+
+  @tag :heavy
+  @tag timeout: 900_000
+  test "the loading branch keeps the canvas slot", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
+    assert has_element?(view, "#canvas")
+    assert has_element?(view, "#run-progress")
+    render_async(view, @run_timeout)
+  end
+
   test "an unknown slug is a 404", %{conn: conn} do
     assert_raise GirihelixWeb.Workbench.NotFound, fn -> live(conn, "/workbench/nope") end
   end

@@ -45,7 +45,7 @@ The fix is a **fixed viewport** framing the periodic interior of the patch:
 - The serializer's root `viewBox` is the fixed window. The SVG root is made overflow-visible and the canvas wrapper clips, so the ops outside the window are still in the markup and panning or zooming can reveal the fringe.
 - The patch is enlarged beyond `Construct.default_region/1`: a span helper constructs a grid of unit cells large enough that the visible-cell window sits inside the periodic interior. The default build targets two cells (roughly a five-by-five-cell patch). **The span adapts to the tiling:** the exhibit measures the constructed one-cell map and, when it exceeds a vertex budget, builds one cell and shows one cell instead, because the heaviest catalogue tilings take tens of seconds at five cells. The exact budget is calibrated so `8.5` keeps two cells and `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` use one.
 
-Seamlessness is pinned by a property test, not by eye, for the two-cell windows of `8.5` and `6.5 flower`: every vertex of those windowed regions has a counterpart translated by `t1` and by `t2` within the constructed patch (rounded positions compared as sets). `7.6` and `3-8-4-6` do not hold this property at either span and are recorded in `docs/backlog.md` rather than asserted.
+Seamlessness is pinned by a property test, not by eye, for the two-cell windows of `8.5` and `6.5 flower`: every vertex of those windowed regions has a counterpart translated by `t1` and by `t2` within the constructed patch (rounded positions compared as sets). `7.6` does not hold this property at either span, and `3-8-4-6` misses at the one-cell span; both are recorded in `docs/backlog.md` rather than asserted.
 
 ## Face colouring: every island
 

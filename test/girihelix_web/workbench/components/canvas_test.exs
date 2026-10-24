@@ -34,8 +34,11 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
         viewport: %Viewport{left: 0.0, top: 0.0, width: 1.0, scale: 1.0}
       )
 
+    # The picture half only: the page places the panel, drawn by `panel/1`.
     assert html =~ "<svg"
-    assert html =~ "b"
+    refute html =~ ~s(id="panel")
+
+    assert render_component(&Canvas.panel/1, rows: [{"b", "2"}]) =~ "b"
   end
 
   test "canvas labels both regions and sizes the SVG to its box" do
@@ -46,8 +49,9 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
       )
 
     assert html =~ ~s(id="canvas")
-    assert html =~ ~s(id="panel")
-    assert html =~ ~s(class="w-full h-auto overflow-visible")
+    refute html =~ ~s(id="panel")
+    assert render_component(&Canvas.panel/1, rows: [{"b", "2"}]) =~ ~s(id="panel")
+    assert html =~ ~s(class="w-full h-auto max-h-[70vh] overflow-visible")
 
     html =
       render_component(&Canvas.canvas/1,
@@ -67,7 +71,7 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
         ] do
       html = render_component(&Canvas.canvas/1, drawing: drawing, viewport: nil)
 
-      assert html =~ ~s(class="w-full h-auto overflow-visible")
+      assert html =~ ~s(class="w-full h-auto max-h-[70vh] overflow-visible")
       assert html =~ ~r/<div[^>]*id="canvas"[^>]*class="[^"]*overflow-hidden/
     end
   end
