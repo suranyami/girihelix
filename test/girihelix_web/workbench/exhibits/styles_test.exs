@@ -86,9 +86,19 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
 
   test "the overlay composes background, then tile, then figure" do
     params = %{defaults() | style: :plain, tiles: true}
-    {:both, [background, tile | _rest], _rows} = Styles.draw(last_frame(params), params)
+
+    {:both, [background, tile, tile_stroke | rest], _rows} =
+      Styles.draw(last_frame(params), params)
+
     assert {:polygon, _, :fill, [fill: _]} = background
     assert {:polygon, _, :fill, [fill: _tint, opacity: 0.12]} = tile
+    assert {:polygon, _, :stroke, [stroke: _, width: 0.75, opacity: 0.5]} = tile_stroke
+
+    # Every overlay op precedes the figure: strip the remaining tile polygons,
+    # then the first figure op is `Plain`'s line.
+    assert {[_ | _], [figure | _]} = Enum.split_while(rest, &match?({:polygon, _, _, _}, &1))
+
+    assert {:line, _, _, _} = figure
   end
 
   test "a one-colour palette still paints" do

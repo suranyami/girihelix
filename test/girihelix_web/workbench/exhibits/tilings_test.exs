@@ -17,6 +17,11 @@ defmodule GirihelixWeb.Workbench.Exhibits.TilingsTest do
 
     assert length(Enum.uniq(fills)) == min(length(tiling.features), 5)
     assert Enum.any?(ops, &match?({:polygon, _, :stroke, _}, &1))
+
+    assert Enum.any?(
+             ops,
+             &match?({:polygon, _, :stroke, [stroke: _, width: 0.75, opacity: 0.5]}, &1)
+           )
   end
 
   test "frame zero uses the identity translation" do

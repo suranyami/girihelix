@@ -61,6 +61,7 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
 
     assert html =~ ~s(type="checkbox")
     assert html =~ ~s(type="hidden" name="tiles" value="false")
+    assert html =~ ~r/type="hidden" name="tiles" value="false".*type="checkbox"/s
     refute html =~ ~s(checked)
   end
 end
