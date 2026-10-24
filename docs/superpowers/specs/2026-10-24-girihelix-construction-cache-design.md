@@ -84,6 +84,14 @@ The disk tier stores a `:"__version__"` entry. On boot, a mismatch with the curr
 - Workbench: a palette change, a style change and the `tiles` toggle each leave the construction build count unchanged and update the panel/drawing; frame navigation stays instant.
 - Disk disabled: an unwritable cache dir leaves the page working.
 
+## Resolved after builder check
+
+1. **Painting leaves the steps.** `Steps` becomes `place`, `bind`, `units`, `weld`; the style/palette paint moves into the styles exhibit's `draw/2`, applied to the frame's map on every draw. The transport shows the four construct steps; the paint frame disappears, and its source highlighting is no longer a step. This is what makes a `{tiling, figure}` cache key honest: frames never contain a style.
+2. **The cache is generic, keyed by an exhibit-declared identity.** `Exhibit` gains an optional `construct_key(params) :: term()`; `Styles` returns `{:styles, tiling, figure}`, `Instancing` returns `{:instancing, tiling, figure}`, and an exhibit without the callback is not cached. `ExhibitLive`'s `run_key` is `{slug, construct_key || values}`, so an exhibit switch can never look like a reuse.
+3. **Frames are stored compact.** A cached state keeps only `tiling`, `translations`, `map` and `failure`, plus the step metadata the transport and source pane read; `bindings`, `feature_maps`, `binder` and `region` are dropped, because no draw, row or viewport reads them. An entry whose external size exceeds the disk cap is kept memory-only and reported as such.
+4. **Face colouring has an explicit seam.** It is cached in the entry and injected into the params handed to `draw/2` as `:cached_faces` (the exhibit contract stays "frame plus params"). The async build computes it when the requested style is `:filled`; a later switch to `:filled` with no cached colouring starts a second short async phase that computes, stores and redraws — never a synchronous block in the LiveView.
+5. **Dev and test isolation.** The disk tier is enabled in `prod` only; `dev` and `test` use the memory tier, so editing the engine cannot serve build from an older frame shape. The cache exposes `reset/0`, and its ETS name and DETS file are injectable so unit tests start an isolated instance; the LiveView tests reset the global cache in setup. Keys still carry the schema version and `Application.spec(:girihelix, :vsn)` for production.
+
 ## Decisions taken (our calls)
 
 1. ETS + DETS two-tier, not Mnesia or Postgres, for the reasons above.
