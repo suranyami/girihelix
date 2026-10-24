@@ -9,11 +9,12 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   alias GirihelixWeb.Workbench.Run
 
   # A run is asynchronous now, so every assertion about its result waits for
-  # the task rather than reading the loading render. The budget is generous:
-  # the heaviest catalogue tilings take minutes at one cell.
+  # the task rather than reading the loading render. A light exhibit settles in
+  # well under a second; only the heavy tiling test takes the large budget.
+  @light_timeout 30_000
   @run_timeout 300_000
 
-  defp await_run(view), do: render_async(view, @run_timeout)
+  defp await_run(view), do: render_async(view, @light_timeout)
 
   test "an exhibit mounts with all four panes", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/point")
@@ -171,7 +172,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   @tag :heavy
   @tag timeout: 900_000
   test "a large tiling renders asynchronously with progress", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/workbench/styles?tiling=3-8-4-6")
+    {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
 
     assert has_element?(view, "#run-progress")
     assert render_async(view, @run_timeout) =~ ~s(id="canvas")
@@ -180,7 +181,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
   test "navigating frames reuses the finished frames", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/styles")
-    render_async(view, @run_timeout)
+    await_run(view)
 
     html = render_click(view, "go", %{"to" => "prev"})
     refute has_element?(view, "#run-progress")

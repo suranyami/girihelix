@@ -107,7 +107,22 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   end
 
   def handle_async(:run, {:exit, reason}, socket) do
-    {:noreply, assign(socket, loading: false, progress: nil, failure: Run.generic_failure(reason))}
+    # The previous picture belongs to a run this task was replacing, so it must
+    # not stand beside a failure that has no frames; clear everything the page
+    # would otherwise attribute to the failed run.
+    {:noreply,
+     assign(socket,
+       loading: false,
+       progress: nil,
+       failure: Run.generic_failure(reason),
+       frames: nil,
+       index: nil,
+       count: nil,
+       step: nil,
+       drawing: nil,
+       viewport: nil,
+       source: {:error, :no_step}
+     )}
   end
 
   @impl true
@@ -287,7 +302,17 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     parent = self()
 
     socket
-    |> assign(loading: true, progress: nil, index: nil, requested_frame: requested)
+    |> assign(
+      loading: true,
+      progress: nil,
+      index: nil,
+      # A run in flight has no frames yet. Clearing these is what stops a
+      # same-key patch during the run from reusing the previous run's frames,
+      # which no longer belong to the assigned `run_key`.
+      frames: nil,
+      count: nil,
+      requested_frame: requested
+    )
     |> cancel_async(:run)
     |> start_async(:run, fn -> run_task(exhibit, values, requested, parent) end)
   end
