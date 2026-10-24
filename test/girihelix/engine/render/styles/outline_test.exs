@@ -12,8 +12,8 @@ defmodule Girihelix.Engine.Render.Styles.OutlineTest do
     {map, [a, b]} = two_vertices()
     map = PlanarMap.insert_edge!(map, a, b)
 
-    assert {:ok, %{ops: [background, ribbon], faces: nil}} =
-             Outline.paint(map, Palette.roles!(:"253"))
+    assert {:ok, %{background: background, ops: [ribbon], faces: nil}} =
+             Outline.paint(map, Palette.roles!(:"253", [:edge, :background]))
 
     assert {:polygon, _, :fill, [fill: "#f2ff26"]} = background
     assert {:polygon, points, :fill, [fill: "#340059"]} = ribbon
@@ -73,8 +73,8 @@ defmodule Girihelix.Engine.Render.Styles.OutlineTest do
   test "a ribbon over a junction is six points, mitred at the joint" do
     {map, _vertices} = v_junction()
 
-    assert {:ok, %{ops: [_background, ribbon | _], faces: nil}} =
-             Outline.paint(map, Palette.roles!(:"253"))
+    assert {:ok, %{background: _background, ops: [ribbon | _], faces: nil}} =
+             Outline.paint(map, Palette.roles!(:"253", [:edge, :background]))
 
     assert {:polygon, points, :fill, [fill: "#340059"]} = ribbon
     assert length(points) == 6
@@ -103,8 +103,8 @@ defmodule Girihelix.Engine.Render.Styles.OutlineTest do
   end
 
   test "an empty map paints nothing" do
-    assert Outline.paint(PlanarMap.new(), Palette.roles!(:"253")) ==
-             {:ok, %{ops: [], faces: nil}}
+    assert Outline.paint(PlanarMap.new(), Palette.roles!(:"253", [:edge, :background])) ==
+             {:ok, %{background: nil, ops: [], faces: nil}}
   end
 
   defp two_vertices do

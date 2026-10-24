@@ -97,6 +97,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
                "&GirihelixWeb.Workbench.Exhibits.Instancing.rosette_binder/1, " <>
                "Girihelix.Engine.Tilings.Construct.default_region(" <>
                "Girihelix.Engine.Tilings.Catalogue.load!(\"8.5\"))), " <>
-               "Girihelix.Engine.Render.Palette.roles!(:\"253\"))"
+               "Girihelix.Engine.Render.Palette.roles!(:\"253\", [:edge, :darker, :lighter]))"
   end
 end

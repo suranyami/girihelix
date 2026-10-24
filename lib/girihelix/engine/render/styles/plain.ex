@@ -24,7 +24,7 @@ defmodule Girihelix.Engine.Render.Styles.Plain do
       |> PlanarMap.edges()
       |> Enum.map(&line(map, &1, stroke))
 
-    {:ok, %{ops: Style.background(ops, roles), faces: nil}}
+    {:ok, %{background: Style.background(ops, roles), ops: ops, faces: nil}}
   end
 
   defp line(map, edge, stroke) do

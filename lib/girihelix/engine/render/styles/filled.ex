@@ -36,7 +36,7 @@ defmodule Girihelix.Engine.Render.Styles.Filled do
         polygons(black, roles.darker) ++
         boundary(map, roles.edge)
 
-    {:ok, %{ops: ops, faces: length(black) + length(white)}}
+    {:ok, %{background: nil, ops: ops, faces: length(black) + length(white)}}
   end
 
   defp painted({:error, reason}, _map, _roles), do: {:error, reason}

@@ -32,10 +32,10 @@ defmodule Girihelix.Engine.Render.Styles.FilledTest do
   test "white faces are light, black faces are dark, then the boundary is stroked" do
     map = split_parallel()
 
-    assert {:ok, %{ops: [light, dark | boundary], faces: 2}} =
-             Filled.paint(map, Palette.roles!(:"253"))
+    assert {:ok, %{background: nil, ops: [light, dark | boundary], faces: 2}} =
+             Filled.paint(map, Palette.roles!(:"253", [:edge, :darker, :lighter]))
 
-    assert {:polygon, light_points, :fill, [fill: "#ff7340"]} = light
+    assert {:polygon, light_points, :fill, [fill: "#f2ff26"]} = light
     assert {:polygon, dark_points, :fill, [fill: "#1b3644"]} = dark
 
     # Two faces along the doubled y = 0 edge, each bounded by the same three
@@ -51,17 +51,20 @@ defmodule Girihelix.Engine.Render.Styles.FilledTest do
   end
 
   test "a one-colour palette still fills and strokes" do
-    assert {:ok, %{ops: ops, faces: 2}} = Filled.paint(split_parallel(), Palette.roles!(:"5"))
+    assert {:ok, %{ops: ops, faces: 2}} =
+             Filled.paint(split_parallel(), Palette.roles!(:"5", [:edge, :darker, :lighter]))
+
     fills = for {:polygon, _, :fill, [fill: hex]} <- ops, do: hex
-    assert Enum.uniq(fills) == ["#328e13"]
+    assert Enum.uniq(fills) == ["#4fdf1e", "#153d08"]
   end
 
   test "an inconsistent colouring is an error tuple" do
-    assert Filled.paint(square_diagonal(), Palette.roles!(:"253")) ==
+    assert Filled.paint(square_diagonal(), Palette.roles!(:"253", [:edge, :darker, :lighter])) ==
              {:error, :filling_conflict}
   end
 
   test "a map with no faces is an error tuple" do
-    assert Filled.paint(PlanarMap.new(), Palette.roles!(:"253")) == {:error, :no_faces}
+    assert Filled.paint(PlanarMap.new(), Palette.roles!(:"253", [:edge, :darker, :lighter])) ==
+             {:error, :no_faces}
   end
 end

@@ -4,9 +4,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   The exhibit runs `Construct`'s step sequence exactly as `Instancing` does, then
   adds one terminal `:paint` step: the chosen style reads the welded map and the
-  four colours the palette resolves to, and returns the draw ops and the number
-  of faces it filled. Frame zero and the construct's intermediate frames draw the
-  same static structure `Instancing` shows, so a reader can step through the
+  palette roles it declares, and returns the draw ops and the number of faces it
+  filled. Frame zero and the construct's intermediate frames draw the same
+  static structure `Instancing` shows, so a reader can step through the
   construction before the finished picture.
 
   A map the style cannot paint still draws. An unbound run leaves the map empty,
@@ -105,7 +105,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
         type: :enum,
         options: Palette.options(),
         default: :"253",
-        doc: "The Wada colour combination the style's four roles come from."
+        doc: "The Wada colour combination the style's palette roles come from."
       }
     ]
   end
@@ -151,15 +151,21 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
       ")), " <>
       "Girihelix.Engine.Render.Palette.roles!(" <>
       inspect(palette) <>
+      ", " <>
+      inspect(Style.roles(style)) <>
       "))"
   end
 
   # A painted result with ops is the picture; frame zero, an empty painting and
   # a retained failure frame all fall back to the shared construct structure.
+  # The background is composed beneath the geometry, above nothing else yet.
   defp picture(state) do
     case Map.get(state, :paint) do
-      {:ok, %{ops: [_ | _] = ops, faces: faces}} -> {ops, faces}
-      _absent_or_failed -> {Tilings.structure_ops(state), nil}
+      {:ok, %{background: background, ops: [_ | _] = ops, faces: faces}} ->
+        {List.wrap(background) ++ ops, faces}
+
+      _absent_or_failed ->
+        {Tilings.structure_ops(state), nil}
     end
   end
 
@@ -197,13 +203,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
     step(
       :paint,
       "paint the map",
-      "Runs the chosen style over the constructed map with the palette's four roles; a map the style cannot paint records the reason.",
+      "Runs the chosen style over the constructed map with the palette roles the style declares; a map the style cannot paint records the reason.",
       fn state -> Map.put(state, :paint, paint_map(style, state.map, palette)) end
     )
   end
 
   defp paint_map(style, map, palette) do
-    case Palette.roles(palette) do
+    case Palette.roles(palette, Style.roles(style)) do
       {:ok, roles} -> Style.paint(style, map, roles)
       {:error, reason} -> {:error, reason}
     end

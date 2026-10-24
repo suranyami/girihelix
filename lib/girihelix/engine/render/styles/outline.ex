@@ -25,7 +25,7 @@ defmodule Girihelix.Engine.Render.Styles.Outline do
   def paint(map, %{edge: hex} = roles) do
     ops = map |> PlanarMap.edges() |> Enum.map(&ribbon(map, &1, hex))
 
-    {:ok, %{ops: Style.background(ops, roles), faces: nil}}
+    {:ok, %{background: Style.background(ops, roles), ops: ops, faces: nil}}
   end
 
   defp ribbon(map, edge, hex) do

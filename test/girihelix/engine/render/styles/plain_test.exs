@@ -18,7 +18,7 @@ defmodule Girihelix.Engine.Render.Styles.PlainTest do
   test "one line per edge in the edge colour, over a background" do
     map = one_edge()
 
-    assert {:ok, %{ops: [background | lines], faces: nil}} = Plain.paint(map, roles())
+    assert {:ok, %{background: background, ops: lines, faces: nil}} = Plain.paint(map, roles())
     assert {:polygon, _, :fill, [fill: "#eeeeee"]} = background
 
     # Every emitted op after the background is a line with the edge's ends,
@@ -34,6 +34,6 @@ defmodule Girihelix.Engine.Render.Styles.PlainTest do
   end
 
   test "an empty map paints nothing" do
-    assert Plain.paint(PlanarMap.new(), roles()) == {:ok, %{ops: [], faces: nil}}
+    assert Plain.paint(PlanarMap.new(), roles()) == {:ok, %{background: nil, ops: [], faces: nil}}
   end
 end
