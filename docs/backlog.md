@@ -119,16 +119,67 @@ or a welded figure map cannot be painted directly. The design names this as a
 follow-up: it needs a figure-focused exhibit over the existing binders plus the
 same terminal paint step.
 
-### Palette labels in the controls (captured 2026-10-24, Plan 5 homogenisation)
+### Construct/weld construction scales superlinearly with the patch (captured 2026-10-24, styles presentation)
 
-The palette enum renders each combination as its raw number (`253`), because
-`Palette.options/0` returns digit atoms. A reader cannot tell what a combination
-looks like before choosing it. Fixing it needs the param layer to carry a
-display label per option, or the palette control to resolve a combination's
-colours for a swatch.
+`Construct.construct/3` plus `PlanarMap.weld/2` take roughly 83–90 s for a
+one-cell `3-8-4-6` run (`patch_region/2` with `1`, a three-by-three patch) and
+roughly 47–50 s for `Girih Star` at the five-cell patch. The styles exhibit's
+adaptive span keeps the heaviest catalogue tilings at one cell, but `3-8-4-6`
+is still tens of seconds even there, so selecting it in the workbench blocks a
+reader for that long even with the asynchronous run. Fixing it means profiling
+the replication and weld hot paths and reducing their growth with map size; the
+goldens must stay byte-identical. A wider visible window — the three-cell
+option the design considered — is deferred until this is addressed, because a
+wider window only multiplies the same cost.
+
+### No construction cache (captured 2026-10-24, styles presentation)
+
+Every change to `{slug, values}` rebuilds the run, so changing only the style or
+palette re-constructs and re-welds a map that cannot depend on them. A cache
+keyed by `{tiling, figure, region}` — with the adaptive span in the key — would
+make those changes instant. Cost: an owner for the cache (process, ETS or
+persistent term), an eviction policy, and a test that a palette change does not
+run the construction steps again.
+
+### The seam property does not hold for `7.6` or `3-8-4-6` (captured 2026-10-24, styles presentation)
+
+The seam test covers `8.5` and `6.5 flower`. Extended by hand, `7.6` is
+non-periodic at both the one- and two-cell spans, and `3-8-4-6` misses for 1 of
+2,202 windowed vertices. Both are construction facts, not window arithmetic, so
+the shipped test keeps its two cases rather than weakening the assertion.
+Validating them needs either a construction fix or an explicit exclusion with
+the measured miss recorded in the test.
+
+### Canvas pan is unclamped and zoom buttons are bound per element (captured 2026-10-24, styles presentation)
+
+`CanvasZoom` clamps scale to `[0.6, 8.0]` but lets a pan translate the content
+arbitrarily far into blank space, and it attaches a click listener to each
+`[data-zoom]` button found at mount, so a button added by a later LiveView patch
+would be inert. Fixing it means a translation clamp derived from the content
+bounds and the canvas rect (or a stated blank margin), and one delegated click
+listener on the hook element. Cost: a JS-only change with a manual gesture check.
+
+### Palette rows render eagerly and the list has no search (captured 2026-10-24, styles presentation)
+
+The picker resolves all 348 combinations' colours and renders 348 radio rows on
+every controls render, and a reader can only scroll. Precompute the row data
+(compile time or a cached list) or window the scroll container, and add a search
+or filter over the combination number and its colours. Cost: a data-shape change
+in `Controls`, or a small JS hook for windowing, plus a filter input.
 
 ## Closed
 
+- **The star binder's fixed skip degenerated polygonal stars** (styles
+  presentation). Closed 2026-10-24: `Instancing.star_skip/1` chooses the skip
+  from the tile's side count — `3` for three or four sides, `div(sides - 1, 2)`
+  otherwise — so a hexagon is a hexagram rather than three diameters through its
+  centre, while the square keeps its cross-shaped star. The binder passes
+  `star_skip(sides) * 1.0` to keep `Star.build!/3`'s float contract. Pinned in
+  `instancing_test.exs`.
+- **Palette labels in the controls** (Plan 5 homogenisation). Closed 2026-10-24:
+  the `:palette` control resolves each combination's colours and renders them as
+  swatches beside the number, so a reader can see a combination before choosing
+  it (`controls_test.exs`, Task 8).
 - **Jason is compile-time-only in the engine** (Plan 4 review). Closed
   2026-10-24: new engine data modules use the standard library's `JSON` module;
   `Tilings.Catalogue` keeps Jason until it is next touched.

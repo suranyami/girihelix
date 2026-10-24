@@ -633,9 +633,13 @@ flaws to keep; its decisions are at the end of this section.
    can pass. `{:error, :filling_conflict}` means a conflict was seen, not that
    the map is provably two-colourable. Pinned by the conflict goldens.
 7. **A face with no coloured neighbour is black.** The seed is therefore always
-   black, and two parallel edges give two black faces. Pinned by the golden
-   `faces-two-corner` and the unit test "two parallel edges give two two-corner
-   faces".
+   black. Two parallel edges expose a registration flaw: `neighbour!/3` cannot
+   tell the two edges apart, so discovery walks one side twice and keeps three
+   two-corner faces for two geometric sides. Because every face island is now
+   seeded — the multi-island rule, which diverges from Taprats' single seed —
+   the duplicate is coloured too, white against the first side's black, rather
+   than left undecided. Pinned by the golden `faces-two-corner` and the unit
+   test "two parallel edges give two-corner faces".
 
 Two decisions diverge deliberately:
 

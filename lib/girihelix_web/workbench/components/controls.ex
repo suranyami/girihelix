@@ -111,7 +111,10 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
 
     ~H"""
     <fieldset>
-      <legend><.control_label param={@param} /></legend>
+      <legend class="label mb-1">
+        <span class="font-semibold">{@param.name}</span>
+        <span :if={@param.doc} class="opacity-70">{@param.doc}</span>
+      </legend>
       <div class="max-h-72 overflow-y-auto">
         <label
           :for={{option, colours} <- @combinations}

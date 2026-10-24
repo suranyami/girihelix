@@ -1,7 +1,7 @@
 # Styles presentation — design (Plan 5 follow-up)
 
 **Date:** 2026-10-24
-**Status:** draft for builder review
+**Status:** accepted — 2026-10-24
 **Depends on:** Plan 5 (render styles — `Palette`, `Style`, the `:styles` exhibit). Plan 5 lives on `feat/render-styles`; implement this on a branch based on it, or on `main` once it has merged.
 **Follows:** `2026-10-23-girihelix-render-styles-design.md` and the workbench design (`2026-10-16-girihelix-workbench-design.md`)
 
@@ -20,7 +20,7 @@ Plan 5 made a constructed figure weave presentable, but the page is hard to insp
 ## Non-goals
 
 - An infinite canvas or an SVG `<pattern>`; the patch is finite and pan/zoom is clamped.
-- Colouring the tile mosaic as the subject; tiles stay scaffolding beneath the figure.
+- Colouring the tile mosaic as the subject; tiles are only a faint overlay above the figure, so the composition stays background → figure → tiles.
 - Palette search or filtering by base colour; the list scrolls.
 - Changing the three styles' draw vocabulary or the `Filled`/`Outline`/`Plain` geometry.
 - A region-size parameter for `Instancing`; that stays on the backlog.
@@ -107,7 +107,7 @@ The controls component renders a `:palette` parameter as:
 
 - **Seam:** the periodicity property test above, for at least the default tiling and one flower tiling (`6.5 flower`).
 - **Faces:** a hand-built map with two disconnected triangles colours both islands; a conflicting component still returns `:filling_conflict`; existing face goldens updated where the island rule changes counts.
-- **Overlay:** off by default; on prepends one fill per placed tile at every lattice translation, with distinct fills per `feature_id`; the figure ops still follow.
+- **Overlay:** off by default; on appends one fill per placed tile at every lattice translation, with distinct fills per `feature_id`, after the figure ops, so the composition is background → figure → tiles.
 - **Viewport:** fixed, centred, contained inside the patch bounds; not `:fit`.
 - **Palette:** `:palette` round-trips through `Param.decode/2` and `Param.encode/2`; the controls render one row per combination with the right number of swatches; selecting one updates the exhibit.
 - **Canvas:** the component test asserts the hook attribute and the zoom/reset controls; drag/pinch behaviour is checked manually in the browser.
@@ -124,11 +124,16 @@ The controls component renders a `:palette` parameter as:
 6. Palette roles are declared by content and missing tones are derived by shifting lightness; no colour is recycled.
 7. No new dependencies and no change to the serializer's draw-op vocabulary; the root class and overflow are presentation only.
 
-## Left to the builder
+## Implementation record
 
-- The patch-span helper and the window fraction for two versus three cells, and the performance measurement that chooses between them.
-- The five overlay tints and their opacity, and whether they follow the theme.
-- Hook gesture thresholds, clamp values, and how the buttons are styled and positioned.
-- Whether the palette list renders eagerly or needs windowing at 348 rows.
-- The precise seam-property test construction (which vertices, which translations, rounding).
-- The HSL lightness step and clamps for derived tones.
+The calls the draft left open, as shipped.
+
+- **The adaptive span is measured, not guessed.** `Run.build/4` probes every run at one cell and measures the probe's final map with `PlanarMap.count_vertices/1`. Above `@vertex_budget 2_000` the probe *is* the run and its frames are kept; otherwise the probe is discarded and the exhibit runs again at two cells. The budget was calibrated with the rosette binder on one-cell `patch_region/2` maps, which are three-by-three patches: `8.5` 1,392 vertices, `7.6` 4,321 and `6.5 flower` 6,164. `8.5` therefore keeps two cells, while `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` drop to one. A probe that raises proves nothing about the span, so it is repeated at two cells and that run's failure is reported.
+- **Visible cells stay at two, and no three-cell window shipped.** Task 4's timing showed a wider window would not change construction cost, and the largest tiling was already impractical at five cells; the fix for that is the adaptive span plus the construction scaling noted in `docs/backlog.md`, not a wider window.
+- **The viewport formula.** `Styles.viewport/2` takes the last frame's state, `cell = max(|t1|, |t2|)`, and pins a window of `cells * cell / @canvas_aspect` map units (`@canvas_aspect 0.75`) at scale `@nominal_width / width` (`@nominal_width 1000.0`), centred on the constructed map's vertex bounds. An empty map falls back to the structure ops' bounds, and neither gives `Viewport.fit(nil)`. The pinned viewport is computed once per run from the frames in hand.
+- **A run is a task; a frame is not.** `ExhibitLive` builds with `start_async/3` and reports progress per step through `Steps.run/3`'s `:on_step`. A frame navigation reuses the frames already assigned through `Run.view/4`; only a change to `{slug, values}` starts a new run, and a superseded run is cancelled.
+- **Wheel zoom normalises `deltaMode`.** A wheel delta arrives in pixels (`0`), lines (`1`) or pages (`2`); lines are multiplied by 16 px and pages by the canvas height before `Math.exp(-delta * 0.002)`, so ctrl/⌘-wheel zooms in Firefox's line mode rather than being dead.
+- **The star skip follows the side count.** `Instancing.star_skip/1` returns `3` for three or four sides and `div(sides - 1, 2)` otherwise, so a hexagon is a hexagram rather than three diameters through its centre while the square keeps its cross-shaped star. The binder passes `star_skip(sides) * 1.0`, keeping `Star.build!/3`'s float contract.
+- **Derived tone constants.** A missing palette tone shifts HSL lightness by `0.18` with hue and saturation kept, clamped to `[0.08, 0.92]`; a shift the clamp leaves unchanged is reversed.
+- **Overlay tints.** Five fixed hues — `#2563eb`, `#d97706`, `#0d9488`, `#db2777`, `#7c3aed` — cycled by `feature_id`, with fill opacity `0.12`, stroke opacity `0.5` and stroke width `0.75`.
+- **The seam property is checked on rounded positions.** The test compares six-decimal rounded vertex positions, translating the exact position and rounding once; translating an already-rounded position double-rounds and can miss a counterpart that is present.

@@ -36,9 +36,10 @@ defmodule Girihelix.Engine.Render.Style do
   A painted picture: its background (when the style has one), its draw ops in
   order, and how many faces it filled.
 
-  The background is kept apart from the geometry so a caller can paint
-  something above it and below the geometry — the tile overlay does — before
-  composing the two.
+  The background is kept apart from the geometry so a caller can compose it
+  beneath the geometry and paint something above the geometry — the tile
+  overlay does — rather than flattening all three into one op list. The
+  composition is therefore background, then figure, then tiles.
 
   A style that fills no faces reports `nil` rather than `0`, so a caller can
   tell "this style does not fill" from "this style filled none".

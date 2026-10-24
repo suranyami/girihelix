@@ -55,15 +55,34 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
     assert html =~ ~s(checked)
   end
 
-  test "the palette control renders a swatch row per combination" do
+  test "the palette control renders one swatch row per combination and checks the selected one" do
     param = %Param{name: :palette, type: :palette, options: [:"1", :"253"], default: :"253"}
 
     html = render_component(&Controls.controls/1, params: [param], values: %{palette: :"253"})
+    fragment = LazyHTML.from_fragment(html)
 
-    assert html =~ ~s(type="radio")
+    assert Enum.count(LazyHTML.query(fragment, ~s(input[type="radio"]))) == 2
+
+    assert LazyHTML.attribute(LazyHTML.query(fragment, ~s(input[type="radio"][checked])), "value") ==
+             ["253"]
+
     assert html =~ "background-color: #de4500"
     assert html =~ "background-color: #340059"
-    assert html =~ ~s(checked)
+    # The legend names the fieldset itself, so it carries no dangling `for`.
+    refute html =~ ~s(for="palette")
+  end
+
+  test "an unknown palette option renders a row with no swatches" do
+    param = %Param{name: :palette, type: :palette, options: [:"9999"], default: :"9999"}
+
+    html = render_component(&Controls.controls/1, params: [param], values: %{palette: :"9999"})
+    fragment = LazyHTML.from_fragment(html)
+
+    assert LazyHTML.attribute(LazyHTML.query(fragment, ~s(input[type="radio"][checked])), "value") ==
+             ["9999"]
+
+    assert Enum.empty?(LazyHTML.query(fragment, "[style]"))
+    refute html =~ "background-color"
   end
 
   test "a boolean renders a checkbox that sends false when cleared" do
