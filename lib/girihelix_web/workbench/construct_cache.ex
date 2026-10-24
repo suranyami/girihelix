@@ -24,9 +24,12 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   ## Versioning
 
   The cache stores a `:"__version__"` entry holding
-  `{schema_version, Application.spec(:girihelix, :vsn)}` and namespaces every
-  stored key with the same pair. A mismatch at boot clears the disk tier before
-  it serves anything, so a deploy never reads an old frame shape.
+  `{schema_version, Application.spec(:girihelix, :vsn), fingerprint}`, where the
+  fingerprint hashes the beams that define a cached frame's shape. Every stored
+  key — in ETS as well as DETS — is namespaced with the same triple. A mismatch
+  at boot clears the disk tier before it serves anything, and a recompile (or a
+  deploy that forgot to bump `mix.exs`) changes the fingerprint, so a stale
+  frame is unreachable rather than merely unusual.
 
   ## Eviction
 
@@ -210,14 +213,14 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   @impl true
   def handle_call({:put, key, entry}, _from, state) do
-    :ets.insert(state.ets, {key, entry})
+    :ets.insert(state.ets, {cache_key(key), entry})
     evict_memory(state)
 
     {:reply, :ok, put_disk(state, key, entry)}
   end
 
   def handle_call({:get, key}, _from, state) do
-    case touch(state.ets, key) do
+    case touch(state.ets, cache_key(key)) do
       nil ->
         {entry, state} = promote(state, key)
         {:reply, entry, state}
@@ -258,7 +261,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   # both tiers and the recorded size grows with it. An entry in neither tier is
   # not resurrected.
   defp store_faces(state, key, faces) do
-    case touch(state.ets, key) do
+    case touch(state.ets, cache_key(key)) do
       nil ->
         {entry, state} = promote(state, key)
         store_faces(state, key, entry, faces)
@@ -275,7 +278,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     # second LiveView's identical update from double-counting the colouring.
     size = :erlang.external_size(entry.frames) + :erlang.external_size(faces)
     updated = %{entry | faces: faces, size: size}
-    :ets.insert(state.ets, {key, updated})
+    :ets.insert(state.ets, {cache_key(key), updated})
     put_disk(state, key, updated)
   end
 
@@ -299,7 +302,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   defp promote(%{dets: nil} = state, _key), do: {nil, state}
 
   defp promote(state, key) do
-    case :dets.lookup(state.dets, disk_key(key)) do
+    case :dets.lookup(state.dets, cache_key(key)) do
       [
         {_stored_key,
          %{
@@ -312,7 +315,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
          } = entry}
       ] ->
         promoted = %{entry | accessed_at: now()}
-        :ets.insert(state.ets, {key, promoted})
+        :ets.insert(state.ets, {cache_key(key), promoted})
         evict_memory(state)
         {promoted, state}
 
@@ -333,11 +336,11 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   defp put_disk(%{disk_bytes: cap} = state, key, %{size: size}) when size > cap do
     # The oversized replacement must not leave a stale, smaller copy on disk.
-    remove_disk(state, disk_key(key))
+    remove_disk(state, cache_key(key))
   end
 
   defp put_disk(state, key, %{size: size} = entry) do
-    stored_key = disk_key(key)
+    stored_key = cache_key(key)
 
     state =
       state
@@ -403,7 +406,23 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     end
   end
 
-  defp disk_key(key), do: {current_version(), key}
+  # -- versioning ------------------------------------------------------------
+
+  # Both tiers are keyed by the version, not only the disk tier: the dev code
+  # reloader recompiles modules without restarting the supervision tree, so an
+  # entry in memory can outlive the shapes it was built from. The fingerprint
+  # makes a recompile (or a deploy that changes these modules) a new key space,
+  # so a stale frame is unreachable rather than merely unusual.
+  @fingerprint_modules [
+    Girihelix.Engine.Steps,
+    Girihelix.Engine.PlanarMap,
+    Girihelix.Engine.Geometry.Point,
+    Girihelix.Engine.Geometry.Transform,
+    Girihelix.Engine.Tilings.Construct,
+    Girihelix.Engine.Tilings.Tiling
+  ]
+
+  defp cache_key(key), do: {current_version(), key}
 
   defp now, do: System.system_time(:microsecond)
 
@@ -449,26 +468,29 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     end
   end
 
+  # The boot scan must survive a damaged file: `:dets.foldl/3` reports a read
+  # error as `{:error, reason}`, and an object with a non-integer `size` cannot
+  # be indexed. Either degrades or repairs the tier rather than failing `init/1`,
+  # which would stop the application from booting.
   defp index_disk(state) do
-    {index, total, malformed} =
-      :dets.foldl(
-        fn
-          {@version_key, _}, acc ->
-            acc
+    case :dets.foldl(&index_object/2, {%{}, 0, []}, state.dets) do
+      {:error, reason} -> degrade_disk(state, state.dets_file, reason)
+      {index, total, malformed} -> finish_index(state, index, total, malformed)
+    end
+  end
 
-          {stored_key, %{size: size, inserted_at: inserted_at}}, {index, total, malformed} ->
-            {Map.put(index, stored_key, %{size: size, inserted_at: inserted_at}), total + size, malformed}
+  defp index_object({@version_key, _}, acc), do: acc
 
-          {stored_key, _other}, {index, total, malformed} ->
-            {index, total, [stored_key | malformed]}
+  defp index_object({stored_key, %{size: size, inserted_at: inserted_at}}, {index, total, malformed})
+       when is_integer(size) and size >= 0 and is_integer(inserted_at) do
+    {Map.put(index, stored_key, %{size: size, inserted_at: inserted_at}), total + size, malformed}
+  end
 
-          _other, acc ->
-            acc
-        end,
-        {%{}, 0, []},
-        state.dets
-      )
+  defp index_object({stored_key, _other}, {index, total, malformed}), do: {index, total, [stored_key | malformed]}
 
+  defp index_object(_other, acc), do: acc
+
+  defp finish_index(state, index, total, malformed) do
     state = %{state | disk_index: index, disk_total: total}
 
     # Objects that cannot be interpreted are removed, so the index and the
@@ -503,7 +525,24 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     Path.join(dir, "construct_cache.dets")
   end
 
-  defp current_version, do: {@schema_version, app_vsn()}
+  defp current_version, do: {@schema_version, app_vsn(), code_fingerprint()}
+
+  # A hash of the beams that define the cached frame shape. Unlike the app
+  # version it changes whenever those modules are recompiled, which is what
+  # makes a dev hot reload and a deploy that forgot to bump `mix.exs` both
+  # invalidate the cache.
+  defp code_fingerprint do
+    @fingerprint_modules
+    |> Enum.map(&module_md5/1)
+    |> :erlang.phash2()
+  end
+
+  defp module_md5(module) do
+    case :code.get_object_code(module) do
+      {^module, binary, _path} -> :erlang.md5(binary)
+      _unavailable -> nil
+    end
+  end
 
   defp app_vsn do
     case Application.spec(:girihelix, :vsn) do

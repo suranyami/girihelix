@@ -75,7 +75,7 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
 
     :ok = ConstructCache.put(cache, :k, ConstructCache.entry(:k, [:frame], nil, 2))
     :ok = ConstructCache.reset(cache)
-    assert :ets.lookup(ets, :k) == []
+    assert :ets.tab2list(ets) == []
 
     build = fn ->
       :counters.add(counter, 1, 1)
@@ -84,7 +84,7 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
 
     assert ConstructCache.fetch(cache, :k, build).frames == [:frame]
     assert :counters.get(counter, 1) == 0
-    assert [{:k, entry}] = :ets.lookup(ets, :k)
+    assert [{_stored_key, entry}] = :ets.tab2list(ets)
     assert entry.frames == [:frame]
   end
 
@@ -171,6 +171,32 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
     refute version == {:stale_schema, "0.0.0"}
   end
 
+  test "an openable DETS file with a malformed object is repaired at boot" do
+    path = tmp_dets_file()
+    {cache, _ets} = start_cache(disk?: true, dets_file: path)
+    :ok = ConstructCache.put(cache, :k, ConstructCache.entry(:k, [:frame], nil, 2))
+    :ok = stop_supervised(ConstructCache)
+
+    # An object the boot scan can decode but not index: `size` is not an integer.
+    # The scan must drop it rather than fail the application's boot.
+    writer = :"writer_#{System.unique_integer([:positive])}"
+
+    {:ok, writer} = :dets.open_file(writer, file: String.to_charlist(path), type: :set)
+    :ok = :dets.insert(writer, {:bad, %{size: "huge", inserted_at: 1}})
+    :ok = :dets.close(writer)
+
+    {cache, _ets} = start_cache(disk?: true, dets_file: path)
+    assert ConstructCache.get(cache, :k).frames == [:frame]
+    :ok = stop_supervised(ConstructCache)
+
+    reader = :"reader_#{System.unique_integer([:positive])}"
+    {:ok, reader} = :dets.open_file(reader, file: String.to_charlist(path), type: :set)
+    keys = :dets.foldl(fn {key, _}, acc -> [key | acc] end, [], reader)
+    :ok = :dets.close(reader)
+
+    refute :bad in keys
+  end
+
   test "an existing file with a matching version is indexed at boot" do
     path = tmp_dets_file()
     {cache, _ets} = start_cache(disk?: true, dets_file: path, disk_bytes: 1_000)
@@ -233,6 +259,29 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
 
     assert :counters.get(counter, 1) == 1
     assert Enum.map(results, & &1.frames) == [[:frame], [:frame]]
+  end
+
+  test "both tiers are keyed by the cache version" do
+    {cache, ets} = start_cache()
+    ConstructCache.put(cache, :k, ConstructCache.entry(:k, [:frame], nil, 2))
+
+    # The stored key is not the raw key: it carries the schema, app version and
+    # code fingerprint, so a recompile or deploy cannot be served a frame built
+    # by the previous shape — in memory as well as on disk.
+    assert [{stored_key, _entry}] = :ets.tab2list(ets)
+    refute stored_key == :k
+    assert {{schema, vsn, fingerprint}, :k} = stored_key
+    assert is_integer(schema)
+    assert vsn == to_string(Application.spec(:girihelix, :vsn))
+    assert is_integer(fingerprint)
+
+    # An entry from another build is unreachable even when it is in memory.
+    :ets.insert(
+      ets,
+      {{{schema, vsn, :other_build}, :stale}, ConstructCache.entry(:stale, [:stale], nil, 2)}
+    )
+
+    refute ConstructCache.get(cache, :stale)
   end
 
   test "update_faces stores the colouring in memory and on disk" do

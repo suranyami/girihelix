@@ -159,17 +159,17 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @impl true
   @spec handle_async(:faces, {:ok, term()} | {:exit, term()}, Socket.t()) ::
           {:noreply, Socket.t()}
-  def handle_async(:faces, {:ok, faces}, socket) do
-    :ok = ConstructCache.update_faces(ConstructCache, socket.assigns.run_key, faces)
+  def handle_async(:faces, {:ok, {run_key, faces}}, %{assigns: %{run_key: run_key}} = socket) do
+    :ok = ConstructCache.update_faces(ConstructCache, run_key, faces)
 
     {:noreply, socket |> assign(cached_faces: faces) |> redraw_cached()}
   end
 
-  def handle_async(:faces, {:exit, _reason}, socket) do
-    # The extraction died instead of returning its error tuple. The draw still
-    # has to land, and a supplied error makes it report rather than re-extract.
-    {:noreply, socket |> assign(cached_faces: {:error, :faces_unavailable}) |> redraw_cached()}
-  end
+  # A result from a superseded phase carries another run's key, and must neither
+  # be assigned to this page nor written to the cache under the current key. An
+  # exit cannot be attributed at all, so it is treated the same way; the task
+  # folds its own failures into the result tuple, so only a kill reaches here.
+  def handle_async(:faces, _superseded_or_unattributed, socket), do: {:noreply, socket}
 
   @impl true
   @spec handle_info({:run_progress, non_neg_integer(), non_neg_integer(), String.t()}, Socket.t()) ::
@@ -409,6 +409,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   defp start_faces(socket, frames, failure, cells, requested) do
     map = faces_map(frames)
+    # The result is tagged with its key, so a phase superseded by a construct
+    # key change can never be written under the new key.
+    run_key = socket.assigns.run_key
 
     socket
     |> assign(
@@ -421,7 +424,15 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       index: nil,
       count: nil
     )
-    |> start_async(:faces, fn -> Faces.extract_faces(map) end)
+    |> start_async(:faces, fn -> {run_key, extract_faces(map)} end)
+  end
+
+  # `Faces.extract_faces/1` reports its own failures as tuples; a raise is folded
+  # into one here, because an exit cannot carry the key the result belongs to.
+  defp extract_faces(map) do
+    Faces.extract_faces(map)
+  rescue
+    _exception -> {:error, :faces_unavailable}
   end
 
   defp draw_frames(socket, frames, failure, cells, requested) do
@@ -437,15 +448,18 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     |> assign(cells: cells, loading: false, progress: nil)
   end
 
-  defp redraw_cached(socket) do
+  defp redraw_cached(%{assigns: %{frames: frames}} = socket) when is_list(frames) do
     show_frames(
       socket,
-      socket.assigns.frames,
+      frames,
       socket.assigns.failure,
       socket.assigns.cells,
       socket.assigns.requested_frame
     )
   end
+
+  # A run in flight has no frames to redraw onto; the run's own result will.
+  defp redraw_cached(socket), do: socket
 
   defp faces_of(%{faces: faces}), do: faces
   defp faces_of(_uncached_construct), do: nil
@@ -472,6 +486,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       requested_frame: requested
     )
     |> cancel_async(:run)
+    |> cancel_async(:faces)
     |> start_async(:run, fn -> run_task(exhibit, values, run_key, parent) end)
   end
 

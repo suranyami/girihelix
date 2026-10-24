@@ -91,7 +91,7 @@ The disk tier stores a `:"__version__"` entry. On boot, a mismatch with the curr
 2. **The cache is generic, keyed by an exhibit-declared identity.** `Exhibit` gains an optional `construct_key(params) :: term()`; `Styles` returns `{:styles, tiling, figure}`, `Instancing` returns `{:instancing, tiling, figure}`, and an exhibit without the callback is not cached. `ExhibitLive`'s `run_key` is `{slug, construct_key || values}`, so an exhibit switch can never look like a reuse.
 3. **Frames are stored compact.** A cached state keeps only `tiling`, `translations`, `map` and `failure`, plus the step metadata the transport and source pane read; `bindings`, `feature_maps`, `binder` and `region` are dropped, because no draw, row or viewport reads them. An entry whose external size exceeds the disk cap is kept memory-only and reported as such.
 4. **Face colouring has an explicit seam.** It is cached in the entry and injected into the params handed to `draw/2` as `:cached_faces` (the exhibit contract stays "frame plus params"). The async build computes it when the requested style is `:filled`; a later switch to `:filled` with no cached colouring starts a second short async phase that computes, stores and redraws — never a synchronous block in the LiveView.
-5. **Dev and test isolation.** The disk tier is enabled in `prod` only; `dev` and `test` use the memory tier, so editing the engine cannot serve build from an older frame shape. The cache exposes `reset/0`, and its ETS name and DETS file are injectable so unit tests start an isolated instance; the LiveView tests reset the global cache in setup. Keys still carry the schema version and `Application.spec(:girihelix, :vsn)` for production.
+5. **Dev and test isolation.** The disk tier is enabled in `prod` only; `dev` and `test` use the memory tier. Both tiers are keyed by `{schema_version, app_vsn, code_fingerprint}`, where the fingerprint hashes the engine beams that define a cached frame's shape: the dev code reloader recompiles modules without restarting the supervision tree, so without it an in-memory entry could outlive the shapes it was built from. A mismatch at boot clears the disk tier. The cache exposes `reset/1`, and its ETS name and DETS file are injectable so unit tests start an isolated instance. The LiveView tests await both the run and the paint phase rather than resetting the shared cache.
 
 ## Decisions taken (our calls)
 
@@ -118,11 +118,16 @@ Built by `docs/superpowers/plans/2026-10-24-girihelix-construction-cache.md` on 
 
 - **DETS file and version key.** `construct_cache.dets` under `:cache_dir`, opened as a
   `:set` with `access: :read_write`. The `:"__version__"` entry holds
-  `{1, Application.spec(:girihelix, :vsn)}`, and every stored key is
-  `{{1, app_vsn}, key}`, so an entry from another version is unreachable even before
-  the boot check clears the file. A version mismatch deletes every object and rewrites
-  the version entry; a file that cannot be opened is closed, deleted and reopened; an
-  unopenable directory degrades the cache to its memory tier.
+  `{1, Application.spec(:girihelix, :vsn), code_fingerprint}`, where the fingerprint is
+  a hash of the engine beams whose structs a cached frame carries (`Steps`,
+  `PlanarMap`, `Point`, `Transform`, `Construct`, `Tiling`). Every stored key in both
+  tiers is `{version, key}`, so an entry from another build is unreachable — including
+  an in-memory one left behind by a dev hot reload or a deploy that did not bump
+  `mix.exs`. A version mismatch at boot deletes every object and rewrites the version
+  entry; a file that cannot be opened is closed, deleted and reopened; an unopenable
+  directory degrades the cache to its memory tier. A file that opens but yields a read
+  error or an object with a non-integer `size` degrades or repairs the tier rather
+  than failing the application's boot.
 - **External-size margin.** None. Sizes are `:erlang.external_size/1` of the frames,
   recomputed with the face colouring when it arrives, and the byte cap is enforced
   exactly. The memory cap counts entries (four), not bytes.

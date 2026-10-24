@@ -3,6 +3,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GirihelixWeb.Workbench.ExhibitLive
   alias GirihelixWeb.Workbench.Exhibits.Styles
   alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
@@ -14,7 +15,31 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   @light_timeout 30_000
   @run_timeout 300_000
 
-  defp await_run(view), do: render_async(view, @light_timeout)
+  # A run can be followed by the paint phase when the cached map has no face
+  # colouring yet. Waiting twice returns the finished page either way: with no
+  # phase the second call renders immediately.
+  defp await_run(view) do
+    render_async(view, @light_timeout)
+    render_async(view, @light_timeout)
+  end
+
+  test "a face result for a superseded run key is discarded" do
+    # The paint phase's task outlives a construct-key change: its result carries
+    # the key it was computed for, and a result for another key must never be
+    # assigned or written to the shared cache under the current key.
+    faces = {:ok, %{black: [], white: []}}
+
+    socket = %Phoenix.LiveView.Socket{
+      assigns: %{run_key: {:styles, :new}, cached_faces: nil, frames: nil}
+    }
+
+    assert {:noreply, %{assigns: %{cached_faces: nil, frames: nil}}} =
+             ExhibitLive.handle_async(:faces, {:ok, {{:styles, :old}, faces}}, socket)
+
+    # An exit cannot be attributed to a key, so it is treated as stale too.
+    assert {:noreply, %{assigns: %{cached_faces: nil}}} =
+             ExhibitLive.handle_async(:faces, {:exit, :killed}, socket)
+  end
 
   test "an exhibit mounts with all four panes", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/point")
