@@ -175,7 +175,8 @@ defmodule GirihelixWeb.Workbench.Run do
 
   defp heavy?(frames), do: frames |> List.last() |> Map.fetch!(:state) |> vertices() > @vertex_budget
 
-  defp vertices(%{map: %PlanarMap{} = map}), do: PlanarMap.num_vertices(map)
+  # `count_vertices/1` is total, so the opaque map stays inside its module.
+  defp vertices(%{map: map}), do: PlanarMap.count_vertices(map)
   defp vertices(_state), do: 0
 
   # -- the frame's page fields ------------------------------------------------
