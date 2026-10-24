@@ -17,7 +17,7 @@
 - **No new dependencies.** The serializer's draw-op vocabulary is unchanged.
 - **The face-colouring extension is deliberate.** Taprats seeds only the first face; girihelix seeds every island, each island's first face black. Record the decision and its reason in the module doc, not the source narration.
 - **Palette roles are content-declared.** `Filled` asks for `edge, darker, lighter`; `Plain` and `Outline` ask for `edge, background`. Missing tones are derived by shifting HSL lightness with hue and saturation kept (`0.18` step, clamped to `[0.08, 0.92]`, direction flipped at a clamp). No colour is recycled.
-- **Composition order.** Background → tile overlay → figure. The style returns `background` separately from `ops` so the overlay is not hidden by `Plain`/`Outline`'s opaque background.
+- **Composition order.** Background → figure → translucent tile overlay (on top). The style returns `background` separately from `ops` so the composition is explicit; the overlay is translucent so the design stays readable through the tiles.
 - **Patch and frame.** The patch spans `cells = 2` (a 5×5 grid of lattice translations). The viewport shows `2.0` unit cells vertically, centred on the final frame's content bounds, at the canvas aspect `0.75`, nominal width `1000.0`.
 - **Canvas.** One `CanvasZoom` hook on every canvas; the SVG root is `overflow-visible` and the wrapper clips. No inline scripts.
 - **Gates.** The commit hook runs `mix precommit.fast`. Before the branch is pushed, `mix precommit` passes with `mix dialyzer` reporting `Total errors: 0`, and no module exceeds 800 lines.
@@ -307,7 +307,7 @@ end
 Add to `styles_test.exs`:
 
 ```elixir
-test "the tile overlay is off by default and sits under the figure" do
+test "the tile overlay is off by default and sits over the figure" do
   params = defaults()
   assert params.tiles == false
 
@@ -322,6 +322,8 @@ test "the tile overlay is off by default and sits under the figure" do
   assert Enum.any?(on_ops, &match?({:polygon, _, :fill, [fill: "#1b3644"]}, &1))
 end
 ```
+
+Also assert the order: with `style: :plain, tiles: true`, the first op is the background, the `:line` figure ops follow, and the tile fill/stroke pairs come last.
 
 Add to `controls_test.exs`:
 
@@ -353,7 +355,7 @@ Expected: FAIL — `Tilings.tile_ops/2` is undefined, `tiles` is not a parameter
 `Styles`:
 
 - Add the `tiles` parameter after `palette`.
-- `draw/2` composes `List.wrap(background) ++ overlay ++ geometry`, where `overlay` is `Tilings.tile_ops(state.tiling, state.translations)` when `params.tiles` is true and `[]` otherwise. The overlay is emitted in every frame, including the fallback.
+- `draw/2` composes `List.wrap(background) ++ geometry ++ overlay`, where `overlay` is `Tilings.tile_ops(state.tiling, state.translations)` when `params.tiles` is true and `[]` otherwise. The overlay is emitted after the figure in every frame, including the structure fallback, as a translucent layer on top.
 
 `Controls`: replace the boolean select with a hidden `"false"` input followed by a checkbox with `value="true"` and `checked={@value}`; update the existing boolean test.
 
