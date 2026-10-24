@@ -115,8 +115,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMap do
   end
 
   @impl true
-  @spec viewport(map()) :: Viewport.t()
-  def viewport(_params), do: Viewport.fit(@viewport_bounds, padding: 0.0)
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(_params, _frames), do: Viewport.fit(@viewport_bounds, padding: 0.0)
 
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()

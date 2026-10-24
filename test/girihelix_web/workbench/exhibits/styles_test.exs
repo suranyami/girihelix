@@ -1,6 +1,9 @@
 defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
   use ExUnit.Case, async: true
 
+  alias Girihelix.Engine.Geometry.Point
+  alias Girihelix.Engine.PlanarMap
+  alias Girihelix.Engine.Render.Viewport
   alias Girihelix.Engine.Steps
   alias GirihelixWeb.Workbench.Exhibits.Styles
   alias GirihelixWeb.Workbench.Param
@@ -43,9 +46,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {"figure", "rosette"} in rows
     assert {"style", "filled"} in rows
     assert {"palette", "Wada 253"} in rows
-    assert {"faces", "153"} in rows
-    assert {"vertices", "432"} in rows
-    assert {"edges", "576"} in rows
+    assert {"faces", "1037"} in rows
+    assert {"vertices", "2928"} in rows
+    assert {"edges", "3904"} in rows
     assert {"failure", "none"} in rows
   end
 
@@ -107,7 +110,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
 
     assert {:both, [_ | _], rows} = Styles.draw(last_frame(params), params)
     assert {"palette", "Wada 5"} in rows
-    assert {"faces", "153"} in rows
+    assert {"faces", "1037"} in rows
     assert {"failure", "none"} in rows
   end
 
@@ -124,14 +127,75 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     end
   end
 
+  test "the viewport shows two cells and is centred on the content" do
+    params = defaults()
+    frames = Steps.run!(Styles.steps(params), Styles.initial(params))
+    viewport = Styles.viewport(params, frames)
+    state = List.last(frames).state
+    cell = max(Point.mag(state.tiling.t1), Point.mag(state.tiling.t2))
+
+    assert_in_delta viewport.width, 2.0 * cell / 0.75, 1.0e-9
+    assert_in_delta viewport.scale, 1000.0 / viewport.width, 1.0e-9
+  end
+
+  test "the windowed interior is periodic in both lattice directions" do
+    for tiling <- [:"8.5", :"6.5 flower"] do
+      params = %{defaults() | tiling: tiling}
+      frames = Steps.run!(Styles.steps(params), Styles.initial(params))
+      state = List.last(frames).state
+      viewport = Styles.viewport(params, frames)
+      map = state.map
+
+      vertices =
+        for vertex <- PlanarMap.vertices(map) do
+          point = PlanarMap.position!(map, vertex)
+          {rounded_point(point), point}
+        end
+
+      positions = MapSet.new(vertices, fn {rounded, _point} -> rounded end)
+
+      window =
+        {viewport.left, viewport.top - viewport.width * 0.75, viewport.left + viewport.width, viewport.top}
+
+      inside =
+        Enum.filter(vertices, fn {rounded, _point} ->
+          {x, y} = rounded
+          {min_x, min_y, max_x, max_y} = window
+          x > min_x and x < max_x and y > min_y and y < max_y
+        end)
+
+      assert inside != []
+
+      # The rounded position locates the vertex; the target is the exact
+      # position translated and rounded once. Translating the already-rounded
+      # position would double-round and can miss a counterpart that is there.
+      for {_rounded, point} <- inside, axis <- [state.tiling.t1, state.tiling.t2] do
+        target = rounded_point({point.x + axis.x, point.y + axis.y})
+        assert MapSet.member?(positions, target)
+      end
+    end
+  end
+
+  test "a failed run still pins a viewport" do
+    params = %{defaults() | tiling: :"3-8-12", figure: :star}
+
+    assert {:error, %Steps.Failure{frames: frames}} =
+             Steps.run(Styles.steps(params), Styles.initial(params))
+
+    assert %Viewport{} = Styles.viewport(params, frames)
+  end
+
   test "reproduces the painted map with a fully qualified snippet" do
     assert Styles.reproduce(defaults()) ==
              "Girihelix.Engine.Render.Style.paint(:filled, " <>
                "Girihelix.Engine.Tilings.Construct.construct!(" <>
                "Girihelix.Engine.Tilings.Catalogue.load!(\"8.5\"), " <>
                "&GirihelixWeb.Workbench.Exhibits.Instancing.rosette_binder/1, " <>
-               "Girihelix.Engine.Tilings.Construct.default_region(" <>
-               "Girihelix.Engine.Tilings.Catalogue.load!(\"8.5\"))), " <>
+               "Girihelix.Engine.Tilings.Construct.patch_region(" <>
+               "Girihelix.Engine.Tilings.Catalogue.load!(\"8.5\"), 2)), " <>
                "Girihelix.Engine.Render.Palette.roles!(:\"253\", [:edge, :darker, :lighter]))"
   end
+
+  defp rounded_point(%Point{x: x, y: y}), do: {Float.round(x, 6), Float.round(y, 6)}
+  defp rounded_point({x, y}), do: {Float.round(x, 6), Float.round(y, 6)}
 end

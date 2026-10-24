@@ -92,7 +92,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.RadialTest do
     params = Param.values(Radial.params(), :default)
     radius = 1.25
     width = 2.0 * radius / 0.75
-    viewport = Radial.viewport(params)
+    viewport = Radial.viewport(params, [])
 
     assert viewport.left == -radius / 0.75
     assert viewport.top == radius

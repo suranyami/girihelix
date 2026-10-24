@@ -12,6 +12,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   With `tiles` on, the faint lattice overlay is composited above the figure, so
   the tile boundaries stay legible over the paint rather than hidden beneath it.
 
+  **A finite patch behind a pinned window.** The construction fills a square
+  patch of `2 * @patch_cells + 1` cells in each lattice direction, so every
+  vertex the pinned window shows has its periodic counterparts a cell away. The
+  window itself shows `@visible_cells` cells, centred on the constructed map's
+  own content, and the canvas no longer clips, so panning reveals the fringe
+  rather than empty space.
+
   A map the style cannot paint still draws. An unbound run leaves the map empty,
   so `Filled` reports `:no_faces` and the panel falls back to the construct
   drawing; the same fallback covers an empty painting, such as `Plain` over an
@@ -30,10 +37,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   import Girihelix.Engine.Steps, only: [step: 4]
 
+  alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
+  alias Girihelix.Engine.Render.Bounds
   alias Girihelix.Engine.Render.Palette
   alias Girihelix.Engine.Render.Style
+  alias Girihelix.Engine.Render.Viewport
   alias Girihelix.Engine.Steps
   alias Girihelix.Engine.Tilings.Catalogue
   alias Girihelix.Engine.Tilings.Construct
@@ -43,6 +53,14 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   alias GirihelixWeb.Workbench.Exhibits.Instancing
   alias GirihelixWeb.Workbench.Exhibits.Tilings
   alias GirihelixWeb.Workbench.Param
+
+  # The patch is a finite square of cells around the origin; the pinned window
+  # shows `@visible_cells` of them. A 4:3 (aspect 0.75) canvas 1000 SVG units
+  # wide keeps presentation sizes at their authored meaning.
+  @patch_cells 2
+  @visible_cells 2.0
+  @canvas_aspect 0.75
+  @nominal_width 1000.0
 
   @typedoc """
   The construct state with the paint step's outcome beside it.
@@ -123,7 +141,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   @spec initial(map()) :: state()
   def initial(%{tiling: name, figure: figure}) do
     tiling = load(name)
-    state = Construct.start(tiling, binder(figure), Construct.default_region(tiling))
+    state = Construct.start(tiling, binder(figure), Construct.patch_region(tiling, @patch_cells))
     Map.put(state, :paint, nil)
   end
 
@@ -132,7 +150,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   def steps(%{tiling: name, figure: figure, style: style, palette: palette}) do
     tiling = load(name)
 
-    Construct.steps(tiling, binder(figure), Construct.default_region(tiling)) ++
+    Construct.steps(tiling, binder(figure), Construct.patch_region(tiling, @patch_cells)) ++
       [paint_step(style, palette)]
   end
 
@@ -155,14 +173,69 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
       tiling <>
       ", " <>
       binder_call(figure) <>
-      ", Girihelix.Engine.Tilings.Construct.default_region(" <>
+      ", Girihelix.Engine.Tilings.Construct.patch_region(" <>
       tiling <>
+      ", " <>
+      Integer.to_string(@patch_cells) <>
       ")), " <>
       "Girihelix.Engine.Render.Palette.roles!(" <>
       inspect(palette) <>
       ", " <>
       inspect(Style.roles(style)) <>
       "))"
+  end
+
+  @impl true
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(_params, frames) do
+    state = frames |> List.last() |> Map.fetch!(:state)
+    cell = max(Point.mag(state.tiling.t1), Point.mag(state.tiling.t2))
+    pinned(content_centre(state), @visible_cells * cell / @canvas_aspect)
+  end
+
+  # The window is `width` by `width * aspect` map units, centred on the content
+  # and projected at the canvas's nominal width. With no content to centre on,
+  # the empty view is what a canvas with no drawing already uses.
+  defp pinned(nil, _width), do: Viewport.fit(nil)
+
+  defp pinned({centre_x, centre_y}, width) do
+    %Viewport{
+      left: centre_x - width / 2.0,
+      top: centre_y + width * @canvas_aspect / 2.0,
+      width: width,
+      scale: @nominal_width / width
+    }
+  end
+
+  # The centre comes from the constructed map's vertices, never from the painted
+  # ops: those carry the tile overlay when it is on, which spans the whole patch
+  # and would widen the window to it. An unbound run leaves the map empty, and
+  # the structure the frames draw is the fallback.
+  defp content_centre(%{map: map} = state) do
+    map |> PlanarMap.vertices() |> vertices_centre(map, state)
+  end
+
+  defp vertices_centre([], _map, state) do
+    state |> Tilings.structure_ops() |> Bounds.of_ops() |> bounds_centre()
+  end
+
+  defp vertices_centre(vertices, map, _state) do
+    vertices |> Enum.map(&PlanarMap.position!(map, &1)) |> points_centre()
+  end
+
+  defp bounds_centre(nil), do: nil
+
+  defp bounds_centre({min_x, min_y, max_x, max_y}), do: {(min_x + max_x) / 2.0, (min_y + max_y) / 2.0}
+
+  defp points_centre([first | rest]) do
+    {min_x, min_y, max_x, max_y} =
+      Enum.reduce(rest, {first.x, first.y, first.x, first.y}, &extend/2)
+
+    bounds_centre({min_x, min_y, max_x, max_y})
+  end
+
+  defp extend(%Point{x: x, y: y}, {min_x, min_y, max_x, max_y}) do
+    {min(min_x, x), min(min_y, y), max(max_x, x), max(max_y, y)}
   end
 
   # A painted result with ops is the picture; frame zero, an empty painting and

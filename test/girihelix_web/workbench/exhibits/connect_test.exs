@@ -93,7 +93,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.ConnectTest do
     params = Param.values(Connect.params(), :default)
     radius = 1.25
     width = 2.0 * radius / 0.75
-    viewport = Connect.viewport(params)
+    viewport = Connect.viewport(params, [])
 
     assert viewport.left == -radius / 0.75
     assert viewport.top == radius

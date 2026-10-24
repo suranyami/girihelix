@@ -90,7 +90,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StarTest do
     params = Param.values(Star.params(), :default)
     radius = 1.25
     width = 2.0 * radius / 0.75
-    viewport = Star.viewport(params)
+    viewport = Star.viewport(params, [])
 
     assert viewport.left == -radius / 0.75
     assert viewport.top == radius

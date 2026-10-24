@@ -146,6 +146,15 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ "build"
   end
 
+  test "the styles exhibit pins a viewport narrower than its patch", %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/workbench/styles")
+
+    # The patch spans five cells but the pinned window shows two, so the figure
+    # projects outside the viewBox: a fitted viewport would keep every point
+    # inside it. Negative coordinates are the fringe the overflow class reveals.
+    assert html =~ ~r/points="[^"]*-\d/
+  end
+
   test "an unknown slug is a 404", %{conn: conn} do
     assert_raise GirihelixWeb.Workbench.NotFound, fn -> live(conn, "/workbench/nope") end
   end

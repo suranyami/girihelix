@@ -105,7 +105,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.ScaleTest do
     params = Param.values(Scale.params(), :default)
     radius = 1.5
     width = 2.0 * radius / 0.75
-    viewport = Scale.viewport(params)
+    viewport = Scale.viewport(params, [])
 
     assert viewport.left == -radius / 0.75
     assert viewport.top == radius

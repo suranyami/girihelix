@@ -86,6 +86,38 @@ defmodule Girihelix.Engine.Tilings.Construct do
     )
   end
 
+  @doc """
+  The four corners of a finite patch: the unit cell repeated over `m, n` in
+  `-cells..cells`, bounded, with the same `0.01` margin as `default_region/1`.
+
+  The extrema of an affine repetition sit at the ends of the index ranges, so
+  the bounding box is taken over the cell corners at the four extreme lattice
+  nodes. That makes the patch `2 * cells + 1` cells wide in each lattice
+  direction, which is wide enough for the fringe beyond a pinned window to be
+  drawn. The corners run counter-clockwise from the lower left, in perimeter
+  order, as `FillRegion.fill/3` expects.
+  """
+  @spec patch_region(Tiling.t(), pos_integer()) :: [Point.t()]
+  def patch_region(%Tiling{t1: t1, t2: t2} = tiling, cells) when is_integer(cells) and cells > 0 do
+    margin = @margin_factor * max(Point.mag(t1), Point.mag(t2))
+
+    points =
+      for m <- [-cells, cells],
+          n <- [-cells, cells],
+          corner <- Tiling.unit_cell(tiling),
+          do: Point.add(Point.add(Point.scale(t1, m), Point.scale(t2, n)), corner)
+
+    xs = Enum.map(points, & &1.x)
+    ys = Enum.map(points, & &1.y)
+
+    box(
+      Enum.min(xs) - margin,
+      Enum.min(ys) - margin,
+      Enum.max(xs) + margin,
+      Enum.max(ys) + margin
+    )
+  end
+
   @doc "The state `steps/3` starts from."
   @spec start(Tiling.t(), binder(), [Point.t()]) :: state()
   def start(%Tiling{} = tiling, binder, region) do

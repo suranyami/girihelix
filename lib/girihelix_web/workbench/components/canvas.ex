@@ -13,6 +13,11 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
   panel and for an empty canvas; the serializer still needs a viewport to build
   its root, so `nil` becomes `Viewport.fit(nil)` — the fixed square centred on
   the origin. Panels never reach the serializer, so their viewport is ignored.
+
+  **Overflow is split.** The SVG root does not clip (`overflow-visible`), so a
+  pinned viewport can be panned past and the drawing's fringe stays in the
+  document; the wrapper clips (`overflow-hidden`), so the picture keeps the
+  layout's own bounds.
   """
 
   use GirihelixWeb, :html
@@ -21,7 +26,10 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
   alias Girihelix.Engine.Render.Viewport
 
   @default_aspect 0.75
-  @svg_class "w-full h-auto"
+  # The SVG root must not clip: a pinned viewport shows less than the drawing
+  # holds, and the fringe beyond it is what panning reveals. The wrapper keeps
+  # the layout's own bounds and does clip.
+  @svg_class "w-full h-auto overflow-visible"
 
   attr :drawing, :any,
     required: true,
@@ -40,7 +48,7 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     assigns = assign(assigns, :ops, ops)
 
     ~H"""
-    <div id="canvas" class="w-full">
+    <div id="canvas" class="w-full overflow-hidden">
       <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
     </div>
     """
@@ -59,7 +67,7 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
 
     ~H"""
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div id="canvas" class="min-w-0 flex-1">
+      <div id="canvas" class="min-w-0 flex-1 overflow-hidden">
         <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
       </div>
       <div class="w-64 shrink-0">

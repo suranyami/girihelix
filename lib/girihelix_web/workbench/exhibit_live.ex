@@ -18,8 +18,10 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   zero's parameters, because that is the line a reader wants to see.
 
   The viewport comes from the exhibit when it pins one, and otherwise fits the
-  current drawing's bounds. A panel has no ops, so it fits the empty view; the
-  canvas ignores a panel's viewport.
+  current drawing's bounds. A pinned viewport is asked for the run's frames, so
+  it can be anchored on the finished map rather than on the frame being drawn. A
+  panel has no ops, so it fits the empty view; the canvas ignores a panel's
+  viewport.
   """
 
   use GirihelixWeb, :live_view
@@ -74,7 +76,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
         step: frame_step(frame),
         failure: failure,
         drawing: drawing,
-        viewport: viewport(exhibit, values, drawing),
+        viewport: viewport(exhibit, values, frames, drawing),
         source: source(frame, failure),
         snippet: exhibit.reproduce(values),
         page_title: exhibit.title(),
@@ -233,15 +235,15 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   defp draw(_exhibit, nil, _values), do: nil
   defp draw(exhibit, frame, values), do: exhibit.draw(frame, values)
 
-  defp viewport(exhibit, values, drawing) do
-    case pinned_viewport(exhibit, values) do
+  defp viewport(exhibit, values, frames, drawing) do
+    case pinned_viewport(exhibit, values, frames) do
       %Viewport{} = viewport -> viewport
       :fit -> fitted(drawing)
     end
   end
 
-  defp pinned_viewport(exhibit, values) do
-    pinned_viewport(exhibit, values, exports_viewport?(exhibit))
+  defp pinned_viewport(exhibit, values, frames) do
+    pinned_viewport(exhibit, values, frames, exports_viewport?(exhibit))
   end
 
   # `function_exported?/3` reports false for a module that has not been loaded,
@@ -249,11 +251,12 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   # first makes the answer depend on the module, not on what happened to be
   # loaded already.
   defp exports_viewport?(exhibit) do
-    Code.ensure_loaded?(exhibit) and function_exported?(exhibit, :viewport, 1)
+    Code.ensure_loaded?(exhibit) and function_exported?(exhibit, :viewport, 2)
   end
 
-  defp pinned_viewport(exhibit, values, true), do: declared_viewport(exhibit.viewport(values))
-  defp pinned_viewport(_exhibit, _values, false), do: :fit
+  defp pinned_viewport(exhibit, values, frames, true), do: declared_viewport(exhibit.viewport(values, frames))
+
+  defp pinned_viewport(_exhibit, _values, _frames, false), do: :fit
 
   defp declared_viewport(%Viewport{} = viewport), do: viewport
   defp declared_viewport(_other), do: :fit

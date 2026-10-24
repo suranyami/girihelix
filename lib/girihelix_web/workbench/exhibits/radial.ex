@@ -143,8 +143,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Radial do
   end
 
   @impl true
-  @spec viewport(map()) :: Viewport.t()
-  def viewport(params) do
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(params, _frames) do
     Figures.viewport_for(fn -> params |> build_figure() |> Figure.map() end)
   end
 

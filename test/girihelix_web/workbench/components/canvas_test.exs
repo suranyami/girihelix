@@ -47,7 +47,7 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
 
     assert html =~ ~s(id="canvas")
     assert html =~ ~s(id="panel")
-    assert html =~ ~s(class="w-full h-auto")
+    assert html =~ ~s(class="w-full h-auto overflow-visible")
 
     html =
       render_component(&Canvas.canvas/1,
@@ -58,6 +58,18 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
 
     # The empty view is the nominal 1000-wide canvas at aspect 0.5.
     assert html =~ ~s(viewBox="0.0 0.0 1.0e3 500.0")
+  end
+
+  test "the SVG root does not clip and the wrappers do" do
+    for drawing <- [
+          {:canvas, [{:line, {0.0, 0.0}, {1.0, 1.0}, []}]},
+          {:both, [{:line, {0.0, 0.0}, {1.0, 1.0}, []}], [{"b", "2"}]}
+        ] do
+      html = render_component(&Canvas.canvas/1, drawing: drawing, viewport: nil)
+
+      assert html =~ ~s(class="w-full h-auto overflow-visible")
+      assert html =~ ~r/<div[^>]*id="canvas"[^>]*class="[^"]*overflow-hidden/
+    end
   end
 
   test "canvas renders a panel as a two-column table" do

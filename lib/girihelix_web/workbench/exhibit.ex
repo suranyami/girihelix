@@ -13,9 +13,12 @@ defmodule GirihelixWeb.Workbench.Exhibit do
   anywhere else. `reproduce/1` returns the plain call a reader can paste into
   `iex`, which is what keeps the debugger honest about the engine beneath it.
 
-  `viewport/1` is optional. Omitting it means `:fit`: the canvas frames the
+  `viewport/2` is optional. Omitting it means `:fit`: the canvas frames the
   current frame's bounds. An exhibit pins a viewport only when auto-fitting would
-  make a figure visibly jitter as it is built.
+  make a figure visibly jitter as it is built, or when the picture must stay
+  fixed in the map while a construction grows. It receives the run's frames so a
+  pin can be anchored on the finished map rather than on the frame being drawn;
+  an exhibit whose window depends only on its parameters ignores them.
   """
 
   alias Girihelix.Engine.Render.Op
@@ -65,8 +68,13 @@ defmodule GirihelixWeb.Workbench.Exhibit do
   @doc "The plain engine call that reproduces this exhibit's result."
   @callback reproduce(params :: map()) :: String.t()
 
-  @doc "`:fit` (the default) or a pinned viewport."
-  @callback viewport(params :: map()) :: :fit | Viewport.t()
+  @doc """
+  `:fit` (the default) or a pinned viewport.
 
-  @optional_callbacks viewport: 1
+  `frames` is the run's complete frame list, including frame zero and, for a
+  failed run, every frame that built before the failure.
+  """
+  @callback viewport(params :: map(), frames :: [Steps.Frame.t()]) :: :fit | Viewport.t()
+
+  @optional_callbacks viewport: 2
 end
