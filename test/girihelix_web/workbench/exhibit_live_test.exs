@@ -221,7 +221,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
     html = render_click(view, "go", %{"to" => "prev"})
     refute has_element?(view, "#run-progress")
-    assert html =~ "weld the feature maps"
+    # The run's last frame is the weld; one step back is the unit step.
+    assert html =~ "build the feature maps"
   end
 
   @tag :heavy

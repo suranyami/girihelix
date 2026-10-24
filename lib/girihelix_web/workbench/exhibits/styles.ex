@@ -2,12 +2,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   @moduledoc """
   One catalogue tiling instanced with a figure, then painted by a render style.
 
-  The exhibit runs `Construct`'s step sequence exactly as `Instancing` does, then
-  adds one terminal `:paint` step: the chosen style reads the welded map and the
-  palette roles it declares, and returns the draw ops and the number of faces it
-  filled. Frame zero and the construct's intermediate frames draw the same
-  static structure `Instancing` shows, so a reader can step through the
-  construction before the finished picture.
+  The exhibit runs `Construct`'s step sequence exactly as `Instancing` does. The
+  chosen style paints the welded map in `draw/2`, never in a step: the frame
+  carries the construction and nothing style- or palette-dependent, so a style,
+  palette or `tiles` change redraws the same frame instead of reconstructing
+  it. Frame zero and the construct's intermediate frames draw the same static
+  structure `Instancing` shows, so a reader can step through the construction
+  before the finished picture.
 
   With `tiles` on, the faint lattice overlay is composited above the figure, so
   the tile boundaries stay legible over the paint rather than hidden beneath it.
@@ -36,8 +37,6 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   @behaviour GirihelixWeb.Workbench.Exhibit
 
-  import Girihelix.Engine.Steps, only: [step: 4]
-
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
@@ -64,17 +63,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   @nominal_width 1000.0
 
   @typedoc """
-  The construct state with the paint step's outcome beside it.
+  The construct state, unchanged from `Construct.state/0`.
 
-  `paint` is `nil` before the terminal step, then either the style's result or
-  its reason. The construct's own keys are unchanged.
+  Painting is not part of it: `draw/2` computes the style's result from
+  `:map` and the draw params every time, so nothing style- or
+  palette-dependent is ever stored in a frame.
   """
   @type state :: %{
           required(:tiling) => Tiling.t(),
           required(:translations) => [Transform.t()],
           required(:map) => PlanarMap.t(),
           required(:failure) => nil | Construct.reason(),
-          required(:paint) => nil | {:ok, Style.result()} | {:error, term()},
           optional(atom()) => any()
         }
 
@@ -143,26 +142,23 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   def initial(%{tiling: name, figure: figure} = params) do
     tiling = load(name)
 
-    state =
-      Construct.start(tiling, binder(figure), Construct.patch_region(tiling, cells(params)))
-
-    Map.put(state, :paint, nil)
+    Construct.start(tiling, binder(figure), Construct.patch_region(tiling, cells(params)))
   end
 
   @impl true
   @spec steps(map()) :: [Steps.Step.t()]
-  def steps(%{tiling: name, figure: figure, style: style, palette: palette} = params) do
+  def steps(%{tiling: name, figure: figure} = params) do
     tiling = load(name)
 
-    Construct.steps(tiling, binder(figure), Construct.patch_region(tiling, cells(params))) ++
-      [paint_step(style, palette)]
+    Construct.steps(tiling, binder(figure), Construct.patch_region(tiling, cells(params)))
   end
 
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
   def draw(%Steps.Frame{state: state}, params) do
-    {ops, faces} = picture(state, params)
-    {:both, ops, rows(state, params, faces)}
+    paint = paint_map(params.style, state.map, params.palette)
+    {ops, faces} = picture(paint, state, params)
+    {:both, ops, rows(state, params, faces, paint)}
   end
 
   @impl true
@@ -246,14 +242,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   # a retained failure frame all fall back to the shared construct structure.
   # The background is composed beneath the figure and the tile overlay above it,
   # so the lattice reads over the paint in every frame.
-  defp picture(state, params) do
-    case Map.get(state, :paint) do
-      {:ok, %{background: background, ops: [_ | _] = ops, faces: faces}} ->
-        {List.wrap(background) ++ ops ++ overlay(state, params), faces}
+  defp picture({:ok, %{background: background, ops: [_ | _] = ops, faces: faces}}, state, params) do
+    {List.wrap(background) ++ ops ++ overlay(state, params), faces}
+  end
 
-      _absent_or_failed ->
-        {Tilings.structure_ops(state) ++ overlay(state, params), nil}
-    end
+  defp picture(_absent_or_failed, state, params) do
+    {Tilings.structure_ops(state) ++ overlay(state, params), nil}
   end
 
   defp overlay(%{tiling: tiling, translations: translations}, %{tiles: true}) do
@@ -262,7 +256,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   defp overlay(_state, _params), do: []
 
-  defp rows(%{tiling: %Tiling{name: name}, map: map} = state, params, faces) do
+  defp rows(%{tiling: %Tiling{name: name}, map: map} = state, params, faces, paint) do
     [
       {"tiling", name},
       {"figure", Atom.to_string(params.figure)},
@@ -271,16 +265,17 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
       {"faces", Figures.integer(faces)},
       {"vertices", Integer.to_string(PlanarMap.num_vertices(map))},
       {"edges", Integer.to_string(PlanarMap.num_edges(map))},
-      {"failure", failure(state)}
+      {"failure", failure(state, paint)}
     ]
   end
 
-  # The construct records its own reason; the paint step records its reason
-  # beside it. Either is the panel's failure row, and both absent is `none`.
-  @spec failure(state()) :: String.t()
-  defp failure(%{failure: reason}) when not is_nil(reason), do: failure_name(reason)
-  defp failure(%{paint: {:error, reason}}), do: failure_name(reason)
-  defp failure(_state), do: "none"
+  # The construct records its own reason; the draw's painting records its
+  # reason beside it. Either is the panel's failure row, and both absent is
+  # `none`.
+  @spec failure(state(), {:ok, Style.result()} | {:error, term()}) :: String.t()
+  defp failure(%{failure: reason}, _paint) when not is_nil(reason), do: failure_name(reason)
+  defp failure(_state, {:error, reason}), do: failure_name(reason)
+  defp failure(_state, _paint), do: "none"
 
   defp failure_name(nil), do: "none"
   defp failure_name(reason) when is_atom(reason), do: Atom.to_string(reason)
@@ -291,16 +286,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   defp failure_name({:figure_failed, exception}), do: Exception.message(exception)
   defp failure_name(reason), do: inspect(reason)
 
-  # The paint step: the style's ops over the welded map, or its reason.
-  defp paint_step(style, palette) do
-    step(
-      :paint,
-      "paint the map",
-      "Runs the chosen style over the constructed map with the palette roles the style declares; a map the style cannot paint records the reason.",
-      fn state -> Map.put(state, :paint, paint_map(style, state.map, palette)) end
-    )
-  end
-
+  # The draw's painting: the style's ops over the welded map, or its reason.
+  # Recomputed on every draw, so it never enters a frame.
   defp paint_map(style, map, palette) do
     case Palette.roles(palette, Style.roles(style)) do
       {:ok, roles} -> Style.paint(style, map, roles)

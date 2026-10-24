@@ -35,10 +35,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {tiles.name, tiles.type, tiles.default} == {:tiles, :boolean, false}
   end
 
-  test "the default run ends with a paint step and a painted drawing" do
+  test "the default run ends with four construct steps and a painted drawing" do
     params = defaults()
 
-    assert Enum.map(Styles.steps(params), & &1.id) == [:place, :bind, :units, :weld, :paint]
+    assert Enum.map(Styles.steps(params), & &1.id) == [:place, :bind, :units, :weld]
 
     assert {:both, ops, rows} = Styles.draw(last_frame(params), params)
     assert Enum.any?(ops, &match?({:polygon, _, :fill, _}, &1))
@@ -50,6 +50,23 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {"vertices", "2928"} in rows
     assert {"edges", "3904"} in rows
     assert {"failure", "none"} in rows
+  end
+
+  test "style and palette repaint one frame without re-running the steps" do
+    params = defaults()
+    # One frame, three drawings: the paint is recomputed from the frame's map.
+    frame = last_frame(params)
+
+    {:both, filled_ops, filled_rows} = Styles.draw(frame, params)
+    assert {"style", "filled"} in filled_rows
+
+    {:both, outline_ops, outline_rows} = Styles.draw(frame, %{params | style: :outline})
+    assert {"style", "outline"} in outline_rows
+    assert outline_ops != filled_ops
+
+    {:both, recoloured_ops, recoloured_rows} = Styles.draw(frame, %{params | palette: :"5"})
+    assert {"palette", "Wada 5"} in recoloured_rows
+    assert recoloured_ops != filled_ops
   end
 
   test "an unbound run paints nothing and still draws the tiling" do
