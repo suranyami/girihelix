@@ -235,6 +235,29 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
     assert Enum.map(results, & &1.frames) == [[:frame], [:frame]]
   end
 
+  test "update_faces stores the colouring in memory and on disk" do
+    path = tmp_dets_file()
+    {cache, _ets} = start_cache(disk?: true, dets_file: path)
+    ConstructCache.put(cache, :k, ConstructCache.entry(:k, [:frame], nil, 2))
+
+    faces = {:ok, %{black: [[{0.0, 0.0}]], white: []}}
+
+    assert :ok = ConstructCache.update_faces(cache, :k, faces)
+    assert ConstructCache.get(cache, :k).faces == faces
+
+    # The colouring must survive the memory tier, so a later run reads it from
+    # disk rather than extracting faces again.
+    ConstructCache.reset(cache)
+    assert ConstructCache.get(cache, :k).faces == faces
+  end
+
+  test "update_faces on an absent key is a no-op" do
+    {cache, _ets} = start_cache()
+
+    assert :ok = ConstructCache.update_faces(cache, :absent, {:ok, %{black: [], white: []}})
+    assert ConstructCache.get(cache, :absent) == nil
+  end
+
   test "disk?: false keeps the tier working and creates no file" do
     path = tmp_dets_file()
     {cache, _ets} = start_cache(disk?: false, dets_file: path)

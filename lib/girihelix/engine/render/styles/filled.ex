@@ -11,6 +11,10 @@ defmodule Girihelix.Engine.Render.Styles.Filled do
   The face count is the number of faces the colouring returned, white plus
   black. A map the colouring cannot two-colour, or one with no faces at all,
   returns that reason as an error tuple instead of a partial painting.
+
+  A caller that already holds an `{:ok, colouring}` — the workbench's
+  construction cache does — passes it as `opts[:faces]` and is not charged for
+  the extraction again; a supplied `{:error, reason}` is reported as-is.
   """
 
   @behaviour Girihelix.Engine.Render.Style
@@ -22,12 +26,28 @@ defmodule Girihelix.Engine.Render.Styles.Filled do
 
   @edge_width 1.0
 
+  @doc """
+  Paints `map`, extracting the face colouring unless one is supplied.
+
+  `opts[:faces]` is a precomputed `Faces.extract_faces/1` result: an
+  `{:ok, colouring}` paints from that colouring, and its `{:error, reason}`
+  becomes the result without extracting again. Extracting a heavy map costs
+  seconds, so a cached construction stores its colouring and repaints from it.
+  """
+  @spec paint(PlanarMap.t(), Palette.roles(), keyword()) ::
+          {:ok, Style.result()} | {:error, Style.reason()}
   @impl true
-  @spec paint(PlanarMap.t(), Palette.roles()) :: {:ok, Style.result()} | {:error, Style.reason()}
-  def paint(map, roles) do
+  def paint(map, roles, opts \\ []) do
     map
-    |> Faces.extract_faces()
+    |> faces(opts)
     |> painted(map, roles)
+  end
+
+  defp faces(map, opts) do
+    case Keyword.fetch(opts, :faces) do
+      {:ok, faces} -> faces
+      :error -> Faces.extract_faces(map)
+    end
   end
 
   defp painted({:ok, %{black: black, white: white}}, map, roles) do

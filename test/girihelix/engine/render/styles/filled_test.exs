@@ -4,6 +4,7 @@ defmodule Girihelix.Engine.Render.Styles.FilledTest do
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Palette
+  alias Girihelix.Engine.Render.Style
   alias Girihelix.Engine.Render.Styles.Filled
 
   defp split_parallel do
@@ -66,5 +67,37 @@ defmodule Girihelix.Engine.Render.Styles.FilledTest do
   test "a map with no faces is an error tuple" do
     assert Filled.paint(PlanarMap.new(), Palette.roles!(:"253", [:edge, :darker, :lighter])) ==
              {:error, :no_faces}
+  end
+
+  test "a supplied colouring is painted instead of extracted" do
+    # This marker face cannot come from this map's own colouring, so painting it
+    # proves the given colouring was used rather than recomputed.
+    marker = [Point.new(0.0, 0.0), Point.new(2.0, 0.0), Point.new(1.0, 0.0)]
+    faces = {:ok, %{black: [marker], white: []}}
+    roles = Palette.roles!(:"253", [:edge, :darker, :lighter])
+
+    assert {:ok, %{ops: [fill | boundary], faces: 1}} =
+             Filled.paint(split_parallel(), roles, faces: faces)
+
+    assert fill == {:polygon, [{0.0, 0.0}, {2.0, 0.0}, {1.0, 0.0}], :fill, [fill: "#1b3644"]}
+    assert length(boundary) == 3
+  end
+
+  test "a supplied error is reported without extracting" do
+    assert {:error, :no_faces} =
+             Filled.paint(split_parallel(), Palette.roles!(:"253", [:edge, :darker, :lighter]),
+               faces: {:error, :no_faces}
+             )
+  end
+
+  test "the style dispatcher forwards precomputed faces" do
+    marker = [Point.new(0.0, 0.0), Point.new(2.0, 0.0), Point.new(1.0, 0.0)]
+    faces = {:ok, %{black: [], white: [marker]}}
+    roles = Palette.roles!(:"253", [:edge, :darker, :lighter])
+
+    assert {:ok, %{ops: [fill | _boundary], faces: 1}} =
+             Style.paint(:filled, split_parallel(), roles, faces: faces)
+
+    assert fill == {:polygon, [{0.0, 0.0}, {2.0, 0.0}, {1.0, 0.0}], :fill, [fill: "#f2ff26"]}
   end
 end

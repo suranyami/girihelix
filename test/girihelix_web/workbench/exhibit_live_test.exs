@@ -215,6 +215,10 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert has_element?(view, "#reproduce", "Preparing the run…")
     assert has_element?(view, "#run-progress")
     assert render_async(view, @run_timeout) =~ ~s(id="canvas")
+
+    # A `Filled` draw then paints the cached map in its own phase; the progress
+    # element belongs to whichever phase is in flight.
+    render_async(view, @run_timeout)
     refute has_element?(view, "#run-progress")
   end
 

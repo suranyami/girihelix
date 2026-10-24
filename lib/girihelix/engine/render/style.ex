@@ -10,12 +10,13 @@ defmodule Girihelix.Engine.Render.Style do
   `Girihelix.Engine.Render.Svg`.
 
   `options/0` holds the ids in the order a control offers them, `roles/1`
-  declares the palette roles each style asks for, and `paint/3` dispatches an id
+  declares the palette roles each style asks for, and `paint/4` dispatches an id
   to the module behind it, so a caller that holds only an id never names a
-  module. `background/2` builds the padded fill op that `Plain` and `Outline`
-  return beside their geometry, so their picture is never left floating on the
-  view's edge; a style that emits no background returns `nil`. `Filled` covers
-  its box with faces instead.
+  module. Its optional `:faces` lets a caller supply a colouring it already
+  holds, so a cached construction is not recoloured twice. `background/2` builds
+  the padded fill op that `Plain` and `Outline` return beside their geometry, so
+  their picture is never left floating on the view's edge; a style that emits no
+  background returns `nil`. `Filled` covers its box with faces instead.
   """
 
   alias Girihelix.Engine.Geometry.Point
@@ -73,11 +74,20 @@ defmodule Girihelix.Engine.Render.Style do
 
   The result is that style's own: its ops and face count, or its reason for
   failing.
+
+  `opts` carries `:faces`, a precomputed `Faces.extract_faces/1` result — an
+  `{:ok, colouring}` or the `{:error, reason}` it returned. `Filled` paints a
+  supplied colouring instead of extracting one, which is what lets a cached map
+  be repainted without paying for the extraction again. The other styles read
+  no options.
   """
-  @spec paint(id(), PlanarMap.t(), Palette.roles()) :: {:ok, result()} | {:error, reason()}
-  def paint(:plain, map, roles), do: Plain.paint(map, roles)
-  def paint(:filled, map, roles), do: Filled.paint(map, roles)
-  def paint(:outline, map, roles), do: Outline.paint(map, roles)
+  @spec paint(id(), PlanarMap.t(), Palette.roles(), keyword()) ::
+          {:ok, result()} | {:error, reason()}
+  def paint(style, map, roles, opts \\ [])
+
+  def paint(:plain, map, roles, _opts), do: Plain.paint(map, roles)
+  def paint(:filled, map, roles, opts), do: Filled.paint(map, roles, opts)
+  def paint(:outline, map, roles, _opts), do: Outline.paint(map, roles)
 
   @doc """
   A `Point` as the `{x, y}` pair an op spells a coordinate with.

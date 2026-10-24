@@ -7,6 +7,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveCacheTest do
   import Phoenix.LiveViewTest
 
   alias GirihelixWeb.Workbench.ConstructCache
+  alias GirihelixWeb.Workbench.Exhibits.Styles
+  alias GirihelixWeb.Workbench.Param
+  alias GirihelixWeb.Workbench.Run
 
   @timeout 60_000
 
@@ -38,5 +41,34 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveCacheTest do
     # A rebuild would have stored a new entry with a new `inserted_at`; reuse
     # leaves the cached construction exactly as the first run built it.
     assert ConstructCache.get(ConstructCache, styles_key()).inserted_at == entry.inserted_at
+  end
+
+  test "a cached map without faces paints in a second phase, then reuses it", %{conn: conn} do
+    params = Param.values(Styles.params(), :default)
+    key = styles_key()
+    construct = Run.construct(Styles, params, nil)
+
+    ConstructCache.put(
+      ConstructCache,
+      key,
+      ConstructCache.entry(key, construct.frames, construct.failure, construct.cells)
+    )
+
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+
+    # The construction is a cache hit; the face colouring is not cached, so the
+    # LiveView computes it in its own task and paints when it lands.
+    render_async(view, @timeout)
+    html = render_async(view, @timeout)
+
+    assert html =~ "1037"
+    assert {:ok, _colouring} = ConstructCache.get(ConstructCache, key).faces
+
+    # With the colouring cached, switching away from `filled` and back needs no
+    # phase at all: the redraw is in the event's own render.
+    render_change(view, "params", %{"style" => "plain"})
+    html = render_change(view, "params", %{"style" => "filled"})
+    refute html =~ ~s(id="run-progress")
+    assert html =~ "1037"
   end
 end
