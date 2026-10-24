@@ -18,6 +18,7 @@
 - **The face-colouring extension is deliberate.** Taprats seeds only the first face; girihelix seeds every island, each island's first face black. Record the decision and its reason in the module doc, not the source narration.
 - **Palette roles are content-declared.** `Filled` asks for `edge, darker, lighter`; `Plain` and `Outline` ask for `edge, background`. Missing tones are derived by shifting HSL lightness with hue and saturation kept (`0.18` step, clamped to `[0.08, 0.92]`, direction flipped at a clamp). No colour is recycled.
 - **Composition order.** Background → figure → translucent tile overlay (on top). The style returns `background` separately from `ops` so the composition is explicit; the overlay is translucent so the design stays readable through the tiles.
+- **Asynchronous runs.** The construct and the SVG serialization run in a LiveView task, not in `handle_params`. The process stays responsive; a superseded run is cancelled; progress messages carry the current step; navigating frames reuses the finished frames instead of re-running the construct.
 - **Patch and frame.** The patch spans `cells = 2` (a 5×5 grid of lattice translations). The viewport shows `2.0` unit cells vertically, centred on the final frame's content bounds, at the canvas aspect `0.75`, nominal width `1000.0`.
 - **Canvas.** One `CanvasZoom` hook on every canvas; the SVG root is `overflow-visible` and the wrapper clips. No inline scripts.
 - **Gates.** The commit hook runs `mix precommit.fast`. Before the branch is pushed, `mix precommit` passes with `mix dialyzer` reporting `Total errors: 0`, and no module exceeds 800 lines.
@@ -29,7 +30,7 @@
 2. **A one-colour combination on `Plain`/`Outline`.** The background is derived from the edge colour and must differ from it. Owner: Task 2.
 3. **Frame zero with the tile overlay on.** `state.translations` is empty, so the overlay must fall back to one identity lattice translation and still draw. Owner: Task 3.
 4. **A failed run when the viewport is pinned.** The last retained frame has no paint; the viewport must come from the map or structure bounds without re-running the construction or raising. Owner: Task 4.
-5. **The largest catalogue tiling at the enlarged patch.** `Girih Star` at 5×5 cells multiplies construction and face work; measure it before adopting three visible cells, and keep the registry suite acceptable. Owner: Tasks 4 and 7.
+5. **The largest catalogue tiling at the enlarged patch.** `Girih Star` at 5×5 cells multiplies construction and face work; measure it before adopting three visible cells, and keep the registry suite acceptable. Owner: Tasks 4 and 8.
 
 ## Setup
 
@@ -523,7 +524,107 @@ git commit -m "feat: pin a seamless patch viewport and allow panning past it"
 
 ---
 
-### Task 5: `CanvasZoom` hook on every canvas
+### Task 5: Asynchronous runs with progress
+
+**Files:**
+
+- Modify: `lib/girihelix/engine/steps.ex`
+- Create: `lib/girihelix_web/workbench/run.ex`
+- Modify: `lib/girihelix_web/workbench/exhibit_live.ex`
+- Modify: `lib/girihelix_web/workbench/components/transport.ex`
+- Tests: `test/girihelix/engine/steps_test.exs`, `test/girihelix_web/workbench/exhibit_live_test.exs`
+
+**Interfaces:**
+
+- Produces: `Steps.run(steps, initial, opts)` gains `:on_step`, a 1-arity function called with each built `%Frame{}` after its step completes. Frame zero is not reported. `run!/3` passes the option through.
+- Produces: `GirihelixWeb.Workbench.Run.build(exhibit, values, requested_frame, on_step \\ nil) :: map` with `frames`, `failure`, `index`, `count`, `drawing`, `viewport`, `source` and `snippet`; it runs the steps, picks the requested frame or the last, and derives everything the page needs. `Run.view(frames, failure, index, params)` derives the same fields for one already-built frame, for frame navigation without a re-run.
+- Produces: the LiveView assigns `:run_key` (`{slug, values}`), `:frames`, `:loading`, `:progress` (`nil | {index, total, label}`), `:requested_frame`.
+- Produces: `start_async(:run, ...)`, `handle_async(:run, ...)`, `cancel_async(:run)` and `handle_info({:run_progress, index, total, label})`; navigating frames with `go` reuses the assigned frames when `run_key` matches and starts no async.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `steps_test.exs`:
+
+```elixir
+test "on_step sees every built frame except frame zero" do
+  parent = self()
+
+  steps = [
+    Girihelix.Engine.Steps.step(:one, "one", "first", fn state -> state + 1 end),
+    Girihelix.Engine.Steps.step(:two, "two", "second", fn state -> state * 2 end)
+  ]
+
+  notify = fn frame -> send(parent, {:step, frame.index, frame.step.id, frame.state}) end
+  assert {:ok, frames} = Steps.run(steps, 1, on_step: notify)
+  assert length(frames) == 3
+  assert_received {:step, 1, :one, 2}
+  assert_received {:step, 2, :two, 4}
+  refute_received {:step, 0, _, _}
+end
+```
+
+Add to `exhibit_live_test.exs`:
+
+```elixir
+test "a large tiling renders asynchronously with progress", %{conn: conn} do
+  {:ok, view, _html} = live(conn, "/workbench/styles?tiling=3-8-4-6")
+
+  assert has_element?(view, "#run-progress")
+  assert render_async(view) =~ ~s(id="canvas")
+  refute has_element?(view, "#run-progress")
+end
+
+test "navigating frames reuses the finished frames", %{conn: conn} do
+  {:ok, view, _html} = live(conn, "/workbench/styles")
+  render_async(view)
+
+  html = render_click(view, "go", %{"to" => "prev"})
+  refute has_element?(view, "#run-progress")
+  assert html =~ "weld the feature maps"
+end
+```
+
+Use `import Girihelix.Engine.Steps, only: [step: 4]` (or `require Girihelix.Engine.Steps`) in `steps_test.exs` for the `step` macro.
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `mix test test/girihelix/engine/steps_test.exs test/girihelix_web/workbench/exhibit_live_test.exs`
+Expected: FAIL — `:on_step` is ignored, no `#run-progress` exists, and the run is synchronous.
+
+- [ ] **Step 3: Add the step callback**
+
+In `Steps.run/3`, read `:on_step` and call it with each frame after `run_one/6` builds it, before continuing. A raising step still produces the `Failure`; the callback is not called for the step that raised. `run!/3` passes the option through.
+
+- [ ] **Step 4: Run the LiveView run in a task**
+
+In `ExhibitLive`:
+
+- `handle_params/3` decodes the values and computes `run_key = {slug, values}`. When `run_key` equals the assigned one and `:frames` is assigned, select the requested frame and draw it synchronously; no async. Otherwise assign `loading: true`, `progress: nil`, `requested_frame`, keep the previous drawing, `cancel_async(socket, :run)` when a run is in flight, capture `parent = self()`, and `start_async(:run, fn -> run_task(exhibit, values, requested_frame, parent) end)`.
+- `run_task/4` calls `Run.build(exhibit, values, requested_frame, on_step)` with `on_step: fn frame -> send(parent, {:run_progress, frame.index, total, label(frame.step)}) end`. `Run.build/4` runs the steps, derives the frames/failure, picks the requested index or the last frame, draws it, and returns the page's fields. Expected step failures are returned in the map, never raised. The LiveView's existing `run/2`, `viewport/3`, `source/1` and snippet derivation move into `Run`, so frame navigation calls `Run.view/4` with the assigned frames and starts no async.
+- `handle_async(:run, {:ok, result}, socket)` assigns the result and sets `loading: false`, `progress: nil`. `handle_async(:run, {:exit, reason}, socket)` clears loading and assigns a generic failure.
+- `handle_info({:run_progress, index, total, label}, socket)` updates `:progress` while loading.
+- The `render(%{index: nil})` branch becomes the loading branch: it keeps the controls, shows `#run-progress` with the current step and `index/total`, and shows the previous drawing when one exists.
+
+- [ ] **Step 5: Run the tests to see them pass**
+
+Run: `mix test test/girihelix/engine/steps_test.exs test/girihelix_web/workbench/exhibit_live_test.exs`
+Expected: PASS. If a timing assertion is flaky, assert the observable state (progress element present, then absent; frame content changed) rather than a delay.
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `mix test`
+Expected: PASS. Confirm the transport, source and reproduce panes still work after an async run.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/girihelix/engine/steps.ex lib/girihelix_web/workbench/exhibit_live.ex lib/girihelix_web/workbench/components/transport.ex test/girihelix/engine/steps_test.exs test/girihelix_web/workbench/exhibit_live_test.exs
+git commit -m "feat: run exhibits asynchronously with progress"
+```
+
+---
+
+### Task 6: `CanvasZoom` hook on every canvas
 
 **Files:**
 
@@ -663,7 +764,7 @@ git commit -m "feat: add pan and zoom to every workbench canvas"
 
 ---
 
-### Task 6: Palette parameter type and swatch picker
+### Task 7: Palette parameter type and swatch picker
 
 **Files:**
 
@@ -730,7 +831,7 @@ git commit -m "feat: pick palettes from swatch rows"
 
 ---
 
-### Task 7: Homogenisation, documents, full gate
+### Task 8: Homogenisation, documents, full gate
 
 **Files:**
 
