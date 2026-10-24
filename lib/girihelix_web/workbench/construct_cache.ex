@@ -159,7 +159,6 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     state = %{
       ets: ets,
       memory_entries: Keyword.get(opts, :memory_entries, @default_memory_entries),
-      disk?: Keyword.get(opts, :disk?, @default_disk?),
       dets: nil,
       dets_file: Keyword.get(opts, :dets_file),
       disk_bytes: Keyword.get(opts, :disk_bytes, @default_disk_bytes),
@@ -167,7 +166,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
       disk_total: 0
     }
 
-    {:ok, open_disk(state)}
+    {:ok, open_disk(state, Keyword.get(opts, :disk?, @default_disk?))}
   end
 
   @impl true
@@ -184,8 +183,12 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   def handle_call({:get, key}, _from, state) do
     case touch(state.ets, key) do
-      nil -> {:reply, promote(state, key), state}
-      entry -> {:reply, entry, state}
+      nil ->
+        {entry, state} = promote(state, key)
+        {:reply, entry, state}
+
+      entry ->
+        {:reply, entry, state}
     end
   end
 
@@ -226,24 +229,38 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   # -- disk tier -------------------------------------------------------------
 
-  defp promote(%{dets: nil}, _key), do: nil
+  # A promotion returns the entry (or nil) and the possibly-degraded state: a
+  # runtime DETS failure disables the disk tier so later calls take the
+  # memory-only path instead of crashing.
+  defp promote(%{dets: nil} = state, _key), do: {nil, state}
 
   defp promote(state, key) do
     case :dets.lookup(state.dets, disk_key(key)) do
-      [{_stored_key, entry}] ->
+      [{_stored_key, %{size: _, inserted_at: _, accessed_at: _} = entry}] ->
         promoted = %{entry | accessed_at: now()}
         :ets.insert(state.ets, {key, promoted})
         evict_memory(state)
-        promoted
+        {promoted, state}
+
+      [{stored_key, _malformed}] ->
+        # A stored object without the entry shape cannot be served; drop it
+        # rather than failing the read.
+        {nil, remove_disk(state, stored_key)}
 
       [] ->
-        nil
+        {nil, state}
+
+      {:error, reason} ->
+        {nil, degrade_disk(state, state.dets_file, reason)}
     end
   end
 
   defp put_disk(%{dets: nil} = state, _key, _entry), do: state
 
-  defp put_disk(%{disk_bytes: cap} = state, _key, %{size: size}) when size > cap, do: state
+  defp put_disk(%{disk_bytes: cap} = state, key, %{size: size}) when size > cap do
+    # The oversized replacement must not leave a stale, smaller copy on disk.
+    remove_disk(state, disk_key(key))
+  end
 
   defp put_disk(state, key, %{size: size} = entry) do
     stored_key = disk_key(key)
@@ -272,12 +289,17 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   defp evict_disk(state, incoming) do
     case oldest_disk(state) do
-      nil ->
-        state
+      nil -> state
+      {stored_key, _meta} -> evict_disk(remove_disk(state, stored_key), incoming)
+    end
+  end
 
-      {stored_key, _meta} ->
-        _ = :dets.delete(state.dets, stored_key)
-        evict_disk(drop_index(state, stored_key), incoming)
+  defp remove_disk(%{dets: nil} = state, _stored_key), do: state
+
+  defp remove_disk(state, stored_key) do
+    case :dets.delete(state.dets, stored_key) do
+      :ok -> drop_index(state, stored_key)
+      {:error, reason} -> degrade_disk(state, state.dets_file, reason)
     end
   end
 
@@ -303,9 +325,9 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   # -- DETS lifecycle --------------------------------------------------------
 
-  defp open_disk(%{disk?: false} = state), do: state
+  defp open_disk(state, false), do: state
 
-  defp open_disk(state) do
+  defp open_disk(state, _enabled) do
     path = state.dets_file || default_dets_file()
     dets = :"#{state.ets}_dets"
 
@@ -344,23 +366,32 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   end
 
   defp index_disk(state) do
-    {index, total} =
+    {index, total, malformed} =
       :dets.foldl(
         fn
           {@version_key, _}, acc ->
             acc
 
-          {stored_key, %{size: size, inserted_at: inserted_at}}, {index, total} ->
-            {Map.put(index, stored_key, %{size: size, inserted_at: inserted_at}), total + size}
+          {stored_key, %{size: size, inserted_at: inserted_at}}, {index, total, malformed} ->
+            {Map.put(index, stored_key, %{size: size, inserted_at: inserted_at}), total + size, malformed}
+
+          {stored_key, _other}, {index, total, malformed} ->
+            {index, total, [stored_key | malformed]}
 
           _other, acc ->
             acc
         end,
-        {%{}, 0},
+        {%{}, 0, []},
         state.dets
       )
 
-    %{state | disk_index: index, disk_total: total}
+    state = %{state | disk_index: index, disk_total: total}
+
+    # Objects that cannot be interpreted are removed, so the index and the
+    # file agree, then the cap is enforced against the current `:disk_bytes`.
+    state
+    |> Enum.reduce(malformed, fn stored_key, state -> remove_disk(state, stored_key) end)
+    |> evict_disk(0)
   end
 
   defp reset_dets(%{dets: nil} = state), do: state
@@ -379,7 +410,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
     _ = state.dets && :dets.close(state.dets)
 
-    %{state | disk?: false, dets: nil, dets_file: path, disk_index: %{}, disk_total: 0}
+    %{state | dets: nil, dets_file: path, disk_index: %{}, disk_total: 0}
   end
 
   defp default_dets_file do

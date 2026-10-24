@@ -112,15 +112,42 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
 
   test "an entry larger than the disk cap is served from memory only" do
     path = tmp_dets_file()
-    {cache, _ets} = start_cache(disk?: true, dets_file: path, disk_bytes: 10)
+    {cache, _ets} = start_cache(disk?: true, dets_file: path, disk_bytes: 20)
     big = ConstructCache.entry(:big, [String.duplicate("x", 100)], nil, 2)
-    assert big.size > 10
+    assert big.size > 20
 
     :ok = ConstructCache.put(cache, :big, big)
     assert ConstructCache.get(cache, :big).frames == big.frames
 
     ConstructCache.reset(cache)
     refute ConstructCache.get(cache, :big)
+
+    # An oversized replacement also removes a smaller copy already on disk.
+    small = ConstructCache.entry(:big, [String.duplicate("s", 5)], nil, 2)
+    assert small.size <= 20
+    ConstructCache.put(cache, :big, small)
+    ConstructCache.put(cache, :big, big)
+    assert ConstructCache.get(cache, :big).frames == big.frames
+
+    ConstructCache.reset(cache)
+    refute ConstructCache.get(cache, :big)
+  end
+
+  test "clear_disk empties the disk tier and leaves it usable" do
+    path = tmp_dets_file()
+    {cache, _ets} = start_cache(disk?: true, dets_file: path, disk_bytes: 1_000)
+
+    :ok = ConstructCache.put(cache, :k, ConstructCache.entry(:k, [:frame], nil, 2))
+    ConstructCache.reset(cache)
+    assert ConstructCache.get(cache, :k).frames == [:frame]
+
+    :ok = ConstructCache.clear_disk(cache)
+    ConstructCache.reset(cache)
+    refute ConstructCache.get(cache, :k)
+
+    :ok = ConstructCache.put(cache, :next, ConstructCache.entry(:next, [:next], nil, 2))
+    ConstructCache.reset(cache)
+    assert ConstructCache.get(cache, :next).frames == [:next]
   end
 
   test "a mismatched version clears the disk tier on start" do
