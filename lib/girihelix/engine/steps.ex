@@ -76,12 +76,17 @@ defmodule Girihelix.Engine.Steps do
 
     * `:max_frames` — cap on the frames returned, frame zero included. Defaults
       to `:infinity`.
+
+    * `:on_step` — a 1-arity function called with each `%Frame{}` as soon as
+      its step has built it, before the next step runs. Frame zero is never
+      reported, and a step that raised is not reported. Defaults to `nil`.
   """
   @spec run([Step.t()], term(), keyword()) :: {:ok, [Frame.t()]} | {:error, Failure.t()}
   def run(steps, initial, opts \\ []) do
     max = Keyword.get(opts, :max_frames, :infinity)
+    on_step = Keyword.get(opts, :on_step)
     zero = %Frame{index: 0, step: nil, state: initial}
-    advance(steps, zero, [zero], max)
+    advance(steps, zero, [zero], max, on_step)
   end
 
   @doc "Runs `steps` and returns the frames, re-raising the original exception."
@@ -104,20 +109,21 @@ defmodule Girihelix.Engine.Steps do
   @spec at([Frame.t()], non_neg_integer()) :: Frame.t() | nil
   def at(frames, index), do: Enum.at(frames, index)
 
-  defp advance([], _previous, acc, _max), do: {:ok, Enum.reverse(acc)}
+  defp advance([], _previous, acc, _max, _on_step), do: {:ok, Enum.reverse(acc)}
 
   # At capacity: stop, keeping the frames built so far. `:infinity` is not an
   # integer, so it falls through to the clause that runs the next step.
-  defp advance([_step | _rest], %Frame{index: index}, acc, max) when is_integer(max) and index + 1 >= max,
+  defp advance([_step | _rest], %Frame{index: index}, acc, max, _on_step) when is_integer(max) and index + 1 >= max,
     do: {:ok, Enum.reverse(acc)}
 
-  defp advance([step | rest], %Frame{index: index} = previous, acc, max),
-    do: run_one(step, rest, previous, acc, max, index + 1)
+  defp advance([step | rest], %Frame{index: index} = previous, acc, max, on_step),
+    do: run_one(step, rest, previous, acc, max, index + 1, on_step)
 
-  defp run_one(step, rest, previous, acc, max, index) do
+  defp run_one(step, rest, previous, acc, max, index, on_step) do
     state = step.run.(previous.state)
     frame = %Frame{index: index, step: step, state: state}
-    advance(rest, frame, [frame | acc], max)
+    notify(on_step, frame)
+    advance(rest, frame, [frame | acc], max, on_step)
   rescue
     exception ->
       {:error,
@@ -129,4 +135,8 @@ defmodule Girihelix.Engine.Steps do
          stacktrace: __STACKTRACE__
        }}
   end
+
+  # No callback is an ordinary state, so it needs no branch at the call site.
+  defp notify(nil, _frame), do: :ok
+  defp notify(on_step, frame), do: on_step.(frame)
 end

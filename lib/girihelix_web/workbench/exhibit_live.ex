@@ -22,6 +22,17 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   it can be anchored on the finished map rather than on the frame being drawn. A
   panel has no ops, so it fits the empty view; the canvas ignores a panel's
   viewport.
+
+  **A run is a task; a frame is not.** Building a run can take minutes for a
+  heavy tiling, so `handle_params/3` starts it with `start_async/3` and renders
+  a loading state with the previous picture still on screen. The task reports
+  each step to this process as `{:run_progress, index, total, label}`. Moving
+  through the frames of the run it already holds never starts a task: the URL's
+  parameters name the run, the assigned `:run_key` says whether they still do,
+  and `Run.view/4` redraws a frame from the frames in hand.
+
+  A superseded run is cancelled rather than left to finish unseen, and an
+  unexpected task exit clears the loading state with a generic failure.
   """
 
   use GirihelixWeb, :live_view
@@ -32,25 +43,35 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
 
-  alias Girihelix.Engine.Render.Bounds
-  alias Girihelix.Engine.Render.Viewport
-  alias Girihelix.Engine.Steps
-  alias Girihelix.Engine.Steps.Failure
-  alias Girihelix.Engine.Steps.Frame
   alias GirihelixWeb.Workbench.NotFound
   alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
-  alias GirihelixWeb.Workbench.Source
+  alias GirihelixWeb.Workbench.Run
   alias Phoenix.LiveView.Socket
-
-  # The same cap the workbench's runs use everywhere; a run longer than this is
-  # a bug in the exhibit, not a page worth rendering.
-  @max_frames 200
 
   @impl true
   @spec mount(map(), map(), Socket.t()) :: {:ok, Socket.t()}
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    # The run's fields are assigned here so the loading render is total before
+    # the first task exists. `handle_params/3` then preserves the previous
+    # drawing while a new run builds.
+    {:ok,
+     assign(socket,
+       frames: nil,
+       failure: nil,
+       index: nil,
+       count: nil,
+       step: nil,
+       drawing: nil,
+       viewport: nil,
+       source: {:error, :no_step},
+       snippet: nil,
+       cells: nil,
+       loading: false,
+       progress: nil,
+       run_key: nil,
+       requested_frame: nil
+     )}
   end
 
   @impl true
@@ -60,35 +81,55 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     exhibit = fetch!(slug)
     param_defs = exhibit.params()
     values = Param.decode(param_defs, params)
-    {frames, failure} = run(exhibit, values)
-    count = length(frames)
-    index = index(params["frame"], count)
-    frame = frame_at(frames, index)
-    drawing = draw(exhibit, frame, values)
+    run_key = {slug, values}
+    previous_key = socket.assigns.run_key
+    requested = params["frame"]
 
     socket =
       assign(socket,
         exhibit: exhibit,
         values: values,
         param_defs: param_defs,
-        index: index,
-        count: count,
-        step: frame_step(frame),
-        failure: failure,
-        drawing: drawing,
-        viewport: viewport(exhibit, values, frames, drawing),
-        source: source(frame, failure),
-        snippet: exhibit.reproduce(values),
+        run_key: run_key,
+        requested_frame: requested,
         page_title: exhibit.title(),
         groups: Registry.grouped()
       )
 
-    {:noreply, socket}
+    {:noreply, continue(socket, previous_key, run_key, requested)}
   end
+
+  @impl true
+  @spec handle_async(:run, {:ok, map()} | {:exit, term()}, Socket.t()) ::
+          {:noreply, Socket.t()}
+  def handle_async(:run, {:ok, result}, socket) do
+    {:noreply, socket |> assign(result) |> assign(loading: false, progress: nil)}
+  end
+
+  def handle_async(:run, {:exit, reason}, socket) do
+    {:noreply, assign(socket, loading: false, progress: nil, failure: Run.generic_failure(reason))}
+  end
+
+  @impl true
+  @spec handle_info({:run_progress, non_neg_integer(), non_neg_integer(), String.t()}, Socket.t()) ::
+          {:noreply, Socket.t()}
+  def handle_info({:run_progress, index, total, label}, %{assigns: %{loading: true}} = socket) do
+    {:noreply, assign(socket, progress: {index, total, label})}
+  end
+
+  # A message from a superseded run can still be in the mailbox after its task
+  # is cancelled; it must not overwrite the run that replaced it.
+  def handle_info({:run_progress, _index, _total, _label}, socket), do: {:noreply, socket}
 
   @impl true
   @spec handle_event(String.t(), map(), Socket.t()) ::
           {:noreply, Socket.t()}
+  # A transport event can race a parameter patch that has just cleared the run;
+  # there is no run to move through until the new one completes.
+  def handle_event("go", %{"to" => _to}, %{assigns: %{count: count}} = socket) when not is_integer(count) do
+    {:noreply, socket}
+  end
+
   def handle_event("go", %{"to" => to}, socket) do
     {:noreply, patch_frame(socket, target(to, socket.assigns.index, socket.assigns.count))}
   end
@@ -122,9 +163,20 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       <div class="flex flex-col gap-3">
         <.exhibit_header exhibit={@exhibit} />
 
-        <p :if={@failure} role="alert" class="alert alert-error">
-          Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
-        </p>
+        <section id="transport" class="min-w-0">
+          <.transport
+            index={@index}
+            count={@count}
+            step={@step}
+            failure={@failure}
+            loading={@loading}
+            progress={@progress}
+          />
+        </section>
+
+        <div :if={@drawing} class="min-w-0">
+          <.canvas drawing={@drawing} viewport={@viewport} />
+        </div>
 
         <div class="flex flex-col gap-3 lg:flex-row xl:items-start">
           <div class="min-w-0 flex-1"><.source_pane source={@source} /></div>
@@ -195,26 +247,6 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     end
   end
 
-  defp run(exhibit, values) do
-    case Steps.run(exhibit.steps(values), exhibit.initial(values), max_frames: @max_frames) do
-      {:ok, frames} -> {frames, nil}
-      {:error, %Failure{frames: frames} = failure} -> {frames, failure}
-    end
-  end
-
-  defp index(_requested, 0), do: nil
-
-  defp index(requested, count) do
-    requested |> requested_index(count) |> clamp(count)
-  end
-
-  defp requested_index(requested, count) do
-    case parse_frame(requested) do
-      {:ok, index} -> index
-      :error -> count - 1
-    end
-  end
-
   defp parse_frame(raw) when is_binary(raw) do
     case Integer.parse(raw) do
       {index, ""} -> {:ok, index}
@@ -226,54 +258,48 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   defp clamp(index, count), do: index |> max(0) |> min(count - 1)
 
-  defp frame_at(_frames, nil), do: nil
-  defp frame_at(frames, index), do: Enum.at(frames, index)
-
-  defp frame_step(nil), do: nil
-  defp frame_step(%Frame{step: step}), do: step
-
-  defp draw(_exhibit, nil, _values), do: nil
-  defp draw(exhibit, frame, values), do: exhibit.draw(frame, values)
-
-  defp viewport(exhibit, values, frames, drawing) do
-    case pinned_viewport(exhibit, values, frames) do
-      %Viewport{} = viewport -> viewport
-      :fit -> fitted(drawing)
-    end
+  # The same parameters name the run already in hand: redraw one of its frames
+  # and start nothing.
+  defp continue(%{assigns: %{frames: frames}} = socket, key, key, requested) when is_list(frames) do
+    reuse(socket, requested)
   end
 
-  defp pinned_viewport(exhibit, values, frames) do
-    pinned_viewport(exhibit, values, frames, exports_viewport?(exhibit))
+  # New parameters: supersede any run in flight and build this one in a task.
+  defp continue(socket, _previous_key, _run_key, requested), do: start_run(socket, requested)
+
+  defp reuse(socket, requested) do
+    values = Map.put(socket.assigns.values, :cells, socket.assigns.cells)
+    index = Run.index(requested, length(socket.assigns.frames))
+
+    socket
+    |> assign(
+      Run.view(socket.assigns.frames, socket.assigns.failure, index, %{
+        exhibit: socket.assigns.exhibit,
+        values: values
+      })
+    )
+    |> assign(loading: false, progress: nil, requested_frame: requested)
   end
 
-  # `function_exported?/3` reports false for a module that has not been loaded,
-  # which would silently downgrade a pinned viewport to a fitted one. Loading
-  # first makes the answer depend on the module, not on what happened to be
-  # loaded already.
-  defp exports_viewport?(exhibit) do
-    Code.ensure_loaded?(exhibit) and function_exported?(exhibit, :viewport, 2)
+  defp start_run(socket, requested) do
+    exhibit = socket.assigns.exhibit
+    values = socket.assigns.values
+    parent = self()
+
+    socket
+    |> assign(loading: true, progress: nil, index: nil, requested_frame: requested)
+    |> cancel_async(:run)
+    |> start_async(:run, fn -> run_task(exhibit, values, requested, parent) end)
   end
 
-  defp pinned_viewport(exhibit, values, frames, true), do: declared_viewport(exhibit.viewport(values, frames))
+  # The task body. The step count is the same for the probe and the run that
+  # follows it, so one total serves every `:run_progress` message.
+  defp run_task(exhibit, values, requested, parent) do
+    total = length(exhibit.steps(values))
+    on_step = fn frame -> send(parent, {:run_progress, frame.index, total, frame.step.label}) end
 
-  defp pinned_viewport(_exhibit, _values, _frames, false), do: :fit
-
-  defp declared_viewport(%Viewport{} = viewport), do: viewport
-  defp declared_viewport(_other), do: :fit
-
-  # A panel drawing carries no ops, so it fits the empty view. The canvas
-  # ignores that viewport; it is here because every drawing needs one.
-  defp fitted({:canvas, ops}), do: Viewport.fit(Bounds.of_ops(ops))
-  defp fitted({:both, ops, _rows}), do: Viewport.fit(Bounds.of_ops(ops))
-  defp fitted(_drawing), do: Viewport.fit(nil)
-
-  # Frame zero has no step of its own, so a failed run points the source pane
-  # at the step that raised instead of at the parameters.
-  defp source(%Frame{step: %Steps.Step{} = step}, _failure), do: Source.resolve(step)
-  defp source(_frame, failure), do: Source.resolve(failure_step(failure))
-
-  defp failure_step(%Failure{step: step}), do: step
-  defp failure_step(nil), do: nil
+    Run.build(exhibit, values, requested, on_step)
+  end
 
   defp target(_to, nil, _count), do: 0
   defp target("first", _index, _count), do: 0
@@ -281,6 +307,10 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   defp target("next", index, _count), do: index + 1
   defp target("last", _index, count), do: count - 1
   defp target(_unknown, index, _count), do: index
+
+  # A frame control before the first run has finished has no run to move
+  # through; it is a no-op rather than a crash.
+  defp patch_frame(%{assigns: %{count: count}} = socket, _index) when not is_integer(count), do: socket
 
   defp patch_frame(%{assigns: %{count: count}} = socket, _index) when count == 0, do: socket
 

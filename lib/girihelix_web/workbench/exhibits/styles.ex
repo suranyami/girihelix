@@ -13,11 +13,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   the tile boundaries stay legible over the paint rather than hidden beneath it.
 
   **A finite patch behind a pinned window.** The construction fills a square
-  patch of `2 * @patch_cells + 1` cells in each lattice direction, so every
-  vertex the pinned window shows has its periodic counterparts a cell away. The
-  window itself shows `@visible_cells` cells, centred on the constructed map's
-  own content, and the canvas no longer clips, so panning reveals the fringe
-  rather than empty space.
+  patch of `2 * cells + 1` cells in each lattice direction, where `cells` comes
+  from the run (two by default, one for a tiling the run measured as heavy), so
+  every vertex the pinned window shows has its periodic counterparts a cell
+  away. The window itself shows the same `cells` count, centred on the
+  constructed map's own content, and the canvas no longer clips, so panning
+  reveals the fringe rather than empty space.
 
   A map the style cannot paint still draws. An unbound run leaves the map empty,
   so `Filled` reports `:no_faces` and the panel falls back to the construct
@@ -55,10 +56,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   alias GirihelixWeb.Workbench.Param
 
   # The patch is a finite square of cells around the origin; the pinned window
-  # shows `@visible_cells` of them. A 4:3 (aspect 0.75) canvas 1000 SVG units
-  # wide keeps presentation sizes at their authored meaning.
+  # shows the same number. A 4:3 (aspect 0.75) canvas 1000 SVG units wide keeps
+  # presentation sizes at their authored meaning. `:cells` is supplied by the
+  # run's adaptive probe; two is the shipped default.
   @patch_cells 2
-  @visible_cells 2.0
   @canvas_aspect 0.75
   @nominal_width 1000.0
 
@@ -139,18 +140,21 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   @impl true
   @spec initial(map()) :: state()
-  def initial(%{tiling: name, figure: figure}) do
+  def initial(%{tiling: name, figure: figure} = params) do
     tiling = load(name)
-    state = Construct.start(tiling, binder(figure), Construct.patch_region(tiling, @patch_cells))
+
+    state =
+      Construct.start(tiling, binder(figure), Construct.patch_region(tiling, cells(params)))
+
     Map.put(state, :paint, nil)
   end
 
   @impl true
   @spec steps(map()) :: [Steps.Step.t()]
-  def steps(%{tiling: name, figure: figure, style: style, palette: palette}) do
+  def steps(%{tiling: name, figure: figure, style: style, palette: palette} = params) do
     tiling = load(name)
 
-    Construct.steps(tiling, binder(figure), Construct.patch_region(tiling, @patch_cells)) ++
+    Construct.steps(tiling, binder(figure), Construct.patch_region(tiling, cells(params))) ++
       [paint_step(style, palette)]
   end
 
@@ -163,7 +167,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   @impl true
   @spec reproduce(map()) :: String.t()
-  def reproduce(%{tiling: name, figure: figure, style: style, palette: palette}) do
+  def reproduce(%{tiling: name, figure: figure, style: style, palette: palette} = params) do
     tiling = "Girihelix.Engine.Tilings.Catalogue.load!(" <> inspect(Atom.to_string(name)) <> ")"
 
     "Girihelix.Engine.Render.Style.paint(" <>
@@ -176,7 +180,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
       ", Girihelix.Engine.Tilings.Construct.patch_region(" <>
       tiling <>
       ", " <>
-      Integer.to_string(@patch_cells) <>
+      Integer.to_string(cells(params)) <>
       ")), " <>
       "Girihelix.Engine.Render.Palette.roles!(" <>
       inspect(palette) <>
@@ -187,10 +191,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   @impl true
   @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
-  def viewport(_params, frames) do
+  def viewport(params, frames) do
     state = frames |> List.last() |> Map.fetch!(:state)
     cell = max(Point.mag(state.tiling.t1), Point.mag(state.tiling.t2))
-    pinned(content_centre(state), @visible_cells * cell / @canvas_aspect)
+    pinned(content_centre(state), cells(params) * cell / @canvas_aspect)
   end
 
   # The window is `width` by `width * aspect` map units, centred on the content
@@ -307,6 +311,11 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   # The catalogue is trusted local data: `load!/1` is the honest raise.
   @spec load(atom()) :: Tiling.t()
   defp load(name), do: Catalogue.load!(Atom.to_string(name))
+
+  # The run's adaptive probe supplies the span. A plain caller — the exhibit's
+  # own tests — passes no `:cells` key and gets the shipped two.
+  @spec cells(map()) :: pos_integer()
+  defp cells(params), do: Map.get(params, :cells, @patch_cells)
 
   # One binder per declared figure, delegated so the styled pattern binds its
   # figures exactly as the instancing exhibit does. Private: the exhibit's

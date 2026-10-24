@@ -69,6 +69,32 @@ defmodule Girihelix.Engine.StepsTest do
     assert is_integer(line) and line > 0
   end
 
+  test "on_step sees every built frame except frame zero" do
+    parent = self()
+
+    steps = [
+      Steps.step(:one, "one", "first", fn state -> state + 1 end),
+      Steps.step(:two, "two", "second", fn state -> state * 2 end)
+    ]
+
+    notify = fn frame -> send(parent, {:step, frame.index, frame.step.id, frame.state}) end
+    assert {:ok, frames} = Steps.run(steps, 1, on_step: notify)
+    assert length(frames) == 3
+    assert_received {:step, 1, :one, 2}
+    assert_received {:step, 2, :two, 4}
+    refute_received {:step, 0, _, _}
+  end
+
+  test "on_step is not called for a step that raised" do
+    parent = self()
+    notify = fn frame -> send(parent, {:step, frame.index}) end
+
+    assert {:error, %Failure{}} = Steps.run(steps() ++ [boom()], %{n: 1}, on_step: notify)
+    assert_received {:step, 1}
+    assert_received {:step, 2}
+    refute_received {:step, 3}
+  end
+
   test "max_frames caps the frames returned, including frame zero" do
     ticks = List.duplicate(step(:tick, "tick", "no-op", &Function.identity/1), 10)
     assert {:ok, frames} = Steps.run(ticks, %{n: 1}, max_frames: 4)

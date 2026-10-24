@@ -11,14 +11,22 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
   component says "Parameters" instead of prose. When a step raised, `failure`
   carries the failing step and its exception, and the banner names both — the
   frame still on screen is the last one that built.
+
+  While a run is still building there is no frame to move through, so the
+  component takes its loading form: the failure banner, if any, and a
+  `#run-progress` status naming the step in flight and its `index/total`. The
+  frame controls return as soon as the run completes.
   """
 
   use GirihelixWeb, :html
 
   alias Girihelix.Engine.Steps
 
-  attr :index, :integer, required: true, doc: "The current frame index."
-  attr :count, :integer, required: true, doc: "The number of frames, frame zero included."
+  attr :index, :any, required: true, doc: "The current frame index, or `nil` while loading."
+
+  attr :count, :any,
+    required: true,
+    doc: "The number of frames, frame zero included, or `nil` while loading."
 
   attr :step, :any,
     default: nil,
@@ -28,7 +36,30 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
     default: nil,
     doc: "The `%Steps.Failure{}` when a step raised, or `nil`."
 
+  attr :loading, :boolean,
+    default: false,
+    doc: "Whether the run is still building, which replaces the controls with progress."
+
+  attr :progress, :any,
+    default: nil,
+    doc: "The step in flight as `{index, total, label}`, or `nil` before the first step."
+
   @spec transport(map()) :: Phoenix.LiveView.Rendered.t()
+  def transport(%{index: nil} = assigns) do
+    ~H"""
+    <div class="flex flex-col gap-4">
+      <p :if={@failure} role="alert" class="alert alert-error">
+        Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
+      </p>
+
+      <div :if={@loading} id="run-progress" role="status" class="flex items-center gap-3 text-sm">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span>{progress_text(@progress)}</span>
+      </div>
+    </div>
+    """
+  end
+
   def transport(assigns) do
     ~H"""
     <div class="flex flex-col gap-4">
@@ -77,4 +108,9 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
     </p>
     """
   end
+
+  # Before the first step there is no label yet, so the status still says what
+  # the page is doing rather than rendering an empty line.
+  defp progress_text(nil), do: "Preparing the run…"
+  defp progress_text({index, total, label}), do: "#{label} — #{index}/#{total}"
 end
