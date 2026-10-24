@@ -42,7 +42,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.InstancingTest do
   test "a hexagon star is a hexagram, not three diameters" do
     figure = Instancing.star_binder(%Feature{id: 0, regular: 6, points: []})
     assert {:ok, %{black: black, white: white}} = Faces.extract_faces(Figure.map(figure))
-    assert length(black) + length(white) > 3
+    assert length(black) + length(white) == 7
   end
 
   test "a triangle tiling in star mode is a failure frame, not a crash" do

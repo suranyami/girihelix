@@ -152,14 +152,15 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
   """
   @spec star_binder(Feature.t()) :: StarFigure.t() | nil
   def star_binder(%Feature{regular: nil}), do: nil
-  def star_binder(%Feature{regular: sides}), do: StarFigure.build!(sides, star_skip(sides), 2)
+
+  def star_binder(%Feature{regular: sides}), do: StarFigure.build!(sides, star_skip(sides) * 1.0, 2)
 
   @doc """
   The star skip for a tile with `sides` sides.
 
-  `3` up to four sides, so the square keeps its cross-shaped four-point star;
-  for five or more, `div(sides - 1, 2)`, which makes a hexagon a hexagram rather
-  than three diameters through its centre.
+  `3` for three or four sides, so the square keeps its cross-shaped four-point
+  star; for five or more, `div(sides - 1, 2)`, which makes a hexagon a hexagram
+  rather than three diameters through its centre.
   """
   @spec star_skip(pos_integer()) :: pos_integer()
   def star_skip(sides) when sides <= 4, do: 3
