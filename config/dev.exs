@@ -31,6 +31,11 @@ config :girihelix, GirihelixWeb.Endpoint,
     tailwind: {Tailwind, :install_and_run, [:girihelix, ~w(--watch)]}
   ]
 
+# The construction cache's disk tier is a production concern; dev and test use
+# the memory tier so an engine edit can never be served from an older frame
+# shape. Read from config (never `Mix.env/0`) because releases have no Mix.
+config :girihelix, :construct_cache_disk, false
+
 # ## SSL Support
 #
 # In order to use HTTPS in development, a self-signed

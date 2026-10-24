@@ -22,6 +22,17 @@ end
 
 config :girihelix, GirihelixWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# The shared construction cache. The disk tier is production-only: `dev` and
+# `test` keep the memory tier. Both tiers are keyed by the schema version, the
+# app version and a fingerprint of the engine beams that define a frame's shape,
+# so a hot recompile or a deploy cannot serve frames built from older code.
+# `GIRIHELIX_CACHE_DIR` points the DETS file at a writable volume; the default
+# is `var/cache` under the release's working directory. Both keys are always
+# concrete — a release has no `Mix.env/0`.
+config :girihelix,
+  cache_dir: System.get_env("GIRIHELIX_CACHE_DIR") || Path.join(File.cwd!(), "var/cache"),
+  construct_cache_disk: config_env() == :prod
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :girihelix, GirihelixWeb.Endpoint,

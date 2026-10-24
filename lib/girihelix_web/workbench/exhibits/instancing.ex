@@ -22,7 +22,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
 
   This is workbench code, not engine code: the construction is the `Construct`
   engine's step sequence, never a rebuild, and the picture draws op by op over
-  the state `Construct.start/3` builds.
+  the state `Construct.start/3` builds. The tiling and figure are the
+  construction's identity (`construct_key/1`), so the shared cache can serve
+  this exhibit's runs.
 
   The two figure binders, the parameter-named dispatch and its paste-able
   expression are public so the styled exhibit reuses them rather than keeping
@@ -96,6 +98,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
     tiling = load(name)
     Construct.steps(tiling, binder(figure), Construct.default_region(tiling))
   end
+
+  @impl true
+  @spec construct_key(map()) :: term()
+  def construct_key(%{tiling: tiling, figure: figure}), do: {:instancing, tiling, figure}
 
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()

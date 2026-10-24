@@ -12,8 +12,10 @@ defmodule Girihelix.Application do
       Girihelix.Repo,
       {DNSCluster, query: Application.get_env(:girihelix, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Girihelix.PubSub},
-      # Start a worker by calling: Girihelix.Worker.start_link(arg)
-      # {Girihelix.Worker, arg},
+      # The shared construction cache. `:disk?` comes from config rather than
+      # `Mix.env/0`, which releases do not have. See
+      # `docs/superpowers/specs/2026-10-24-girihelix-construction-cache-design.md`.
+      {GirihelixWeb.Workbench.ConstructCache, disk?: Application.get_env(:girihelix, :construct_cache_disk, false)},
       # Start to serve requests, typically the last entry
       GirihelixWeb.Endpoint
     ]

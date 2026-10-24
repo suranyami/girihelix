@@ -25,6 +25,9 @@ config :girihelix, GirihelixWeb.Endpoint,
   secret_key_base: "+J7hIXYlAKjhjN94jcjhp1ElAQifVMYWI81W8Nv0HrdL7Vmsq9wj0Phd9LuhCthu",
   server: false
 
+# See config/dev.exs: the disk tier is disabled outside production.
+config :girihelix, :construct_cache_disk, false
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

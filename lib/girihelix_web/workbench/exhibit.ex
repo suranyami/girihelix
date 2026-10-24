@@ -19,6 +19,13 @@ defmodule GirihelixWeb.Workbench.Exhibit do
   fixed in the map while a construction grows. It receives the run's frames so a
   pin can be anchored on the finished map rather than on the frame being drawn;
   an exhibit whose window depends only on its parameters ignores them.
+
+  `construct_key/1` is optional and opts the exhibit into the shared
+  construction cache. It returns the identity of the computation — the things
+  the steps read — so a parameter that only changes the drawing (a style, a
+  palette, an overlay toggle) keeps the key and redraws the cached frames
+  instead of reconstructing. An exhibit without the callback is never cached:
+  its parameters are its identity.
   """
 
   alias Girihelix.Engine.Render.Op
@@ -76,5 +83,29 @@ defmodule GirihelixWeb.Workbench.Exhibit do
   """
   @callback viewport(params :: map(), frames :: [Steps.Frame.t()]) :: :fit | Viewport.t()
 
-  @optional_callbacks viewport: 2
+  @doc """
+  The construction's identity, or no callback when the exhibit is not cached.
+
+  Every parameter the step sequence reads must appear in the key; every
+  parameter that only affects `draw/2` must not. The key must not be `nil`,
+  which marks an uncached exhibit.
+  """
+  @callback construct_key(params :: map()) :: term()
+
+  @optional_callbacks viewport: 2, construct_key: 1
+
+  @doc """
+  The exhibit's construct key, or `nil` when it declares none.
+
+  Loading first makes the answer depend on the module, never on whether it
+  happened to be loaded already.
+  """
+  @spec construct_key(module(), map()) :: term() | nil
+  def construct_key(exhibit, params) do
+    _ = Code.ensure_loaded?(exhibit)
+    declared_construct_key(exhibit, params, function_exported?(exhibit, :construct_key, 1))
+  end
+
+  defp declared_construct_key(exhibit, params, true), do: exhibit.construct_key(params)
+  defp declared_construct_key(_exhibit, _params, false), do: nil
 end

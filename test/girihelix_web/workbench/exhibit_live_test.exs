@@ -3,6 +3,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GirihelixWeb.Workbench.ExhibitLive
   alias GirihelixWeb.Workbench.Exhibits.Styles
   alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
@@ -14,7 +15,31 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   @light_timeout 30_000
   @run_timeout 300_000
 
-  defp await_run(view), do: render_async(view, @light_timeout)
+  # A run can be followed by the paint phase when the cached map has no face
+  # colouring yet. Waiting twice returns the finished page either way: with no
+  # phase the second call renders immediately.
+  defp await_run(view) do
+    render_async(view, @light_timeout)
+    render_async(view, @light_timeout)
+  end
+
+  test "a face result for a superseded run key is discarded" do
+    # The paint phase's task outlives a construct-key change: its result carries
+    # the key it was computed for, and a result for another key must never be
+    # assigned or written to the shared cache under the current key.
+    faces = {:ok, %{black: [], white: []}}
+
+    socket = %Phoenix.LiveView.Socket{
+      assigns: %{run_key: {:styles, :new}, cached_faces: nil, frames: nil}
+    }
+
+    assert {:noreply, %{assigns: %{cached_faces: nil, frames: nil}}} =
+             ExhibitLive.handle_async(:faces, {:ok, {{:styles, :old}, faces}}, socket)
+
+    # An exit cannot be attributed to a key, so it is treated as stale too.
+    assert {:noreply, %{assigns: %{cached_faces: nil}}} =
+             ExhibitLive.handle_async(:faces, {:exit, :killed}, socket)
+  end
 
   test "an exhibit mounts with all four panes", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/point")
@@ -155,20 +180,23 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     {:ok, view, _html} = live(conn, "/workbench/styles")
     await_run(view)
 
-    render_change(view, "params", %{"palette" => "348"})
-    assert await_run(view) =~ "Wada 348"
+    # The construction is cached, so a palette change repaints the frames in hand
+    # within the patch's own render rather than starting another run.
+    html = render_change(view, "params", %{"palette" => "348"})
+    assert html =~ "Wada 348"
+    refute html =~ ~s(id="run-progress")
   end
 
   test "the tiles toggle draws the overlay tint in the rendered SVG", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/styles")
     refute await_run(view) =~ ~s(fill="#2563eb")
 
-    render_change(view, "params", %{"tiles" => "true"})
+    html = render_change(view, "params", %{"tiles" => "true"})
 
     # The overlay's fill polygon: the first fixed tint at the declared opacity,
     # with the serializer's default stroke width, drawn after the figure.
-    assert await_run(view) =~
-             ~s(fill="#2563eb" stroke="none" stroke-width="1.0" opacity="0.12")
+    assert html =~ ~s(fill="#2563eb" stroke="none" stroke-width="1.0" opacity="0.12")
+    refute html =~ ~s(id="run-progress")
   end
 
   test "navigating to another exhibit clears the previous picture", %{conn: conn} do
@@ -212,6 +240,10 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert has_element?(view, "#reproduce", "Preparing the run…")
     assert has_element?(view, "#run-progress")
     assert render_async(view, @run_timeout) =~ ~s(id="canvas")
+
+    # A `Filled` draw then paints the cached map in its own phase; the progress
+    # element belongs to whichever phase is in flight.
+    render_async(view, @run_timeout)
     refute has_element?(view, "#run-progress")
   end
 
@@ -221,7 +253,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
     html = render_click(view, "go", %{"to" => "prev"})
     refute has_element?(view, "#run-progress")
-    assert html =~ "weld the feature maps"
+    # The run's last frame is the weld; one step back is the unit step.
+    assert html =~ "build the feature maps"
   end
 
   @tag :heavy

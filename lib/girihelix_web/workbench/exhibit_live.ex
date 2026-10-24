@@ -36,6 +36,17 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   A superseded run is cancelled rather than left to finish unseen, and an
   unexpected task exit clears the loading state with a generic failure.
+
+  **One construction, shared.** A run keyed by an exhibit's `construct_key/1`
+  goes through `ConstructCache`, so the construction is built once — across
+  style, palette and `tiles` changes and across users — and later requests read
+  it from memory or disk. An exhibit without a construct key is never cached.
+
+  **The paint phase.** A `Filled` draw needs the map's face colouring, and
+  extracting it is expensive even when the construction is free. The colouring
+  is therefore cached in the entry and injected into the draw's params as
+  `:cached_faces`; when the entry holds none, the LiveView computes it in a
+  second task and paints when it lands, so `handle_params/3` never blocks on it.
   """
 
   use GirihelixWeb, :live_view
@@ -46,6 +57,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
 
+  alias Girihelix.Engine.Faces
+  alias GirihelixWeb.Workbench.ConstructCache
+  alias GirihelixWeb.Workbench.Exhibit
   alias GirihelixWeb.Workbench.NotFound
   alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
@@ -70,6 +84,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
        source: {:error, :no_step},
        snippet: nil,
        cells: nil,
+       cached_faces: nil,
        loading: false,
        progress: nil,
        run_key: nil,
@@ -84,7 +99,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     exhibit = fetch!(slug)
     param_defs = exhibit.params()
     values = Param.decode(param_defs, params)
-    run_key = {slug, values}
+    # A cacheable exhibit's identity is its construct key, so a parameter that
+    # only changes the drawing keeps this key and redraws the frames in hand.
+    run_key = {slug, Exhibit.construct_key(exhibit, values) || values}
     previous_key = socket.assigns.run_key
     requested = params["frame"]
 
@@ -105,8 +122,18 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @impl true
   @spec handle_async(:run, {:ok, map()} | {:exit, term()}, Socket.t()) ::
           {:noreply, Socket.t()}
-  def handle_async(:run, {:ok, result}, socket) do
-    {:noreply, socket |> assign(result) |> assign(loading: false, progress: nil)}
+  def handle_async(:run, {:ok, %{frames: frames, failure: failure, cells: cells} = construct}, socket) do
+    requested = socket.assigns.requested_frame
+
+    socket =
+      assign(socket,
+        cached_faces: faces_of(construct),
+        frames: frames,
+        failure: failure,
+        cells: cells
+      )
+
+    {:noreply, show_frames(socket, frames, failure, cells, requested)}
   end
 
   def handle_async(:run, {:exit, reason}, socket) do
@@ -119,6 +146,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
        progress: nil,
        failure: Run.generic_failure(reason),
        frames: nil,
+       cached_faces: nil,
        index: nil,
        count: nil,
        step: nil,
@@ -127,6 +155,21 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
        source: {:error, :no_step}
      )}
   end
+
+  @impl true
+  @spec handle_async(:faces, {:ok, term()} | {:exit, term()}, Socket.t()) ::
+          {:noreply, Socket.t()}
+  def handle_async(:faces, {:ok, {run_key, faces}}, %{assigns: %{run_key: run_key}} = socket) do
+    :ok = ConstructCache.update_faces(ConstructCache, run_key, faces)
+
+    {:noreply, socket |> assign(cached_faces: faces) |> redraw_cached()}
+  end
+
+  # A result from a superseded phase carries another run's key, and must neither
+  # be assigned to this page nor written to the cache under the current key. An
+  # exit cannot be attributed at all, so it is treated the same way; the task
+  # folds its own failures into the result tuple, so only a kill reaches here.
+  def handle_async(:faces, _superseded_or_unattributed, socket), do: {:noreply, socket}
 
   @impl true
   @spec handle_info({:run_progress, non_neg_integer(), non_neg_integer(), String.t()}, Socket.t()) ::
@@ -313,25 +356,120 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   # the skeleton, as before.
   defp continue(socket, _previous_key, _run_key, requested), do: start_run(socket, requested, :same_exhibit)
 
+  # A `Filled` draw still needs the cached face colouring, which `show_frames/5`
+  # computes off the render path when it is missing.
   defp reuse(socket, requested) do
-    values = Map.put(socket.assigns.values, :cells, socket.assigns.cells)
-    index = Run.index(requested, length(socket.assigns.frames))
+    show_frames(
+      socket,
+      socket.assigns.frames,
+      socket.assigns.failure,
+      socket.assigns.cells,
+      requested
+    )
+  end
+
+  # The face colouring is part of a `Filled` draw, and extracting it can take
+  # seconds on a heavy map. When the cache holds none, a second task computes it
+  # and paints only when it lands, so no render blocks on the extraction.
+  defp show_frames(socket, frames, failure, cells, requested) do
+    show_frames(needs_faces?(socket, frames), socket, frames, failure, cells, requested)
+  end
+
+  defp show_frames(true, socket, frames, failure, cells, requested) do
+    start_faces(socket, frames, failure, cells, requested)
+  end
+
+  defp show_frames(false, socket, frames, failure, cells, requested) do
+    draw_frames(socket, frames, failure, cells, requested)
+  end
+
+  defp needs_faces?(socket, frames) do
+    faces_phase?(
+      Exhibit.construct_key(socket.assigns.exhibit, socket.assigns.values),
+      socket.assigns.cached_faces,
+      Map.get(socket.assigns.values, :style),
+      frames
+    )
+  end
+
+  # An exhibit without a construct key is never cached, so it has no entry to
+  # store a colouring in; its `Filled` draw extracts as it always did.
+  defp faces_phase?(nil, _faces, _style, _frames), do: false
+  defp faces_phase?(_key, nil, :filled, frames), do: is_map(faces_map(frames))
+  defp faces_phase?(_key, _faces, _style, _frames), do: false
+
+  defp faces_map([]), do: nil
+
+  defp faces_map(frames) do
+    case List.last(frames) do
+      %{state: %{map: map}} -> map
+      _frame -> nil
+    end
+  end
+
+  defp start_faces(socket, frames, failure, cells, requested) do
+    map = faces_map(frames)
+    # The result is tagged with its key, so a phase superseded by a construct
+    # key change can never be written under the new key.
+    run_key = socket.assigns.run_key
 
     socket
     |> assign(
-      Run.view(socket.assigns.frames, socket.assigns.failure, index, %{
-        exhibit: socket.assigns.exhibit,
-        values: values
-      })
+      frames: frames,
+      failure: failure,
+      cells: cells,
+      requested_frame: requested,
+      loading: true,
+      progress: {1, 1, "painting from the cached map"},
+      index: nil,
+      count: nil
     )
-    |> assign(loading: false, progress: nil, requested_frame: requested)
+    |> start_async(:faces, fn -> {run_key, extract_faces(map)} end)
   end
+
+  # `Faces.extract_faces/1` reports its own failures as tuples; a raise is folded
+  # into one here, because an exit cannot carry the key the result belongs to.
+  defp extract_faces(map) do
+    Faces.extract_faces(map)
+  rescue
+    _exception -> {:error, :faces_unavailable}
+  end
+
+  defp draw_frames(socket, frames, failure, cells, requested) do
+    values =
+      socket.assigns.values
+      |> Map.put(:cells, cells)
+      |> Map.put(:cached_faces, socket.assigns.cached_faces)
+
+    index = Run.index(requested, length(frames))
+
+    socket
+    |> assign(Run.view(frames, failure, index, %{exhibit: socket.assigns.exhibit, values: values}))
+    |> assign(cells: cells, loading: false, progress: nil)
+  end
+
+  defp redraw_cached(%{assigns: %{frames: frames}} = socket) when is_list(frames) do
+    show_frames(
+      socket,
+      frames,
+      socket.assigns.failure,
+      socket.assigns.cells,
+      socket.assigns.requested_frame
+    )
+  end
+
+  # A run in flight has no frames to redraw onto; the run's own result will.
+  defp redraw_cached(socket), do: socket
+
+  defp faces_of(%{faces: faces}), do: faces
+  defp faces_of(_uncached_construct), do: nil
 
   # A run started for another exhibit clears the previous picture; a parameter
   # change on the same exhibit keeps it as the loading skeleton.
   defp start_run(socket, requested, mode) do
     exhibit = socket.assigns.exhibit
     values = socket.assigns.values
+    run_key = socket.assigns.run_key
     parent = self()
 
     socket
@@ -348,19 +486,31 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       requested_frame: requested
     )
     |> cancel_async(:run)
-    |> start_async(:run, fn -> run_task(exhibit, values, requested, parent) end)
+    |> cancel_async(:faces)
+    |> start_async(:run, fn -> run_task(exhibit, values, run_key, parent) end)
   end
 
   defp clear_picture(socket, :new_exhibit), do: assign(socket, drawing: nil, viewport: nil)
   defp clear_picture(socket, :same_exhibit), do: socket
 
   # The task body. The step count is the same for the probe and the run that
-  # follows it, so one total serves every `:run_progress` message.
-  defp run_task(exhibit, values, requested, parent) do
+  # follows it, so one total serves every `:run_progress` message. A cacheable
+  # exhibit builds through the shared cache, so a second caller — including
+  # another user's LiveView — waits for the one build and receives its entry.
+  defp run_task(exhibit, values, run_key, parent) do
     total = length(exhibit.steps(values))
     on_step = fn frame -> send(parent, {:run_progress, frame.index, total, frame.step.label}) end
 
-    Run.build(exhibit, values, requested, on_step)
+    case Exhibit.construct_key(exhibit, values) do
+      nil ->
+        Run.construct(exhibit, values, on_step)
+
+      _key ->
+        ConstructCache.fetch(ConstructCache, run_key, fn ->
+          construct = Run.construct(exhibit, values, on_step)
+          ConstructCache.entry(run_key, construct.frames, construct.failure, construct.cells)
+        end)
+    end
   end
 
   defp target(_to, nil, _count), do: 0
