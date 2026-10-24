@@ -16,7 +16,6 @@ defmodule Girihelix.Engine.Render.Styles.Filled do
   @behaviour Girihelix.Engine.Render.Style
 
   alias Girihelix.Engine.Faces
-  alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Palette
   alias Girihelix.Engine.Render.Style
@@ -45,7 +44,7 @@ defmodule Girihelix.Engine.Render.Styles.Filled do
   defp polygons(faces, hex), do: Enum.map(faces, &polygon(&1, hex))
 
   defp polygon(face, hex) do
-    {:polygon, Enum.map(face, &pair/1), :fill, [fill: hex]}
+    {:polygon, Enum.map(face, &Style.pair/1), :fill, [fill: hex]}
   end
 
   defp boundary(map, stroke) do
@@ -60,7 +59,5 @@ defmodule Girihelix.Engine.Render.Styles.Filled do
     {:line, position(map, v1), position(map, v2), [stroke: stroke, width: @edge_width]}
   end
 
-  defp position(map, vertex), do: map |> PlanarMap.position!(vertex) |> pair()
-
-  defp pair(%Point{x: x, y: y}), do: {x, y}
+  defp position(map, vertex), do: map |> PlanarMap.position!(vertex) |> Style.pair()
 end

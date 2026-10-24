@@ -10,7 +10,6 @@ defmodule Girihelix.Engine.Render.Styles.Plain do
 
   @behaviour Girihelix.Engine.Render.Style
 
-  alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Palette
   alias Girihelix.Engine.Render.Style
@@ -31,12 +30,8 @@ defmodule Girihelix.Engine.Render.Styles.Plain do
   defp line(map, edge, stroke) do
     {v1, v2} = PlanarMap.endpoints!(map, edge)
 
-    {:line, pair(map, v1), pair(map, v2), [stroke: stroke, width: @edge_width]}
+    {:line, position(map, v1), position(map, v2), [stroke: stroke, width: @edge_width]}
   end
 
-  defp pair(map, vertex) do
-    %Point{x: x, y: y} = PlanarMap.position!(map, vertex)
-
-    {x, y}
-  end
+  defp position(map, vertex), do: map |> PlanarMap.position!(vertex) |> Style.pair()
 end

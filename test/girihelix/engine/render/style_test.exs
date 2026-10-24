@@ -37,6 +37,10 @@ defmodule Girihelix.Engine.Render.StyleTest do
     assert Style.paint(:filled, PlanarMap.new(), roles()) == {:error, :no_faces}
   end
 
+  test "paint dispatches the outline style" do
+    assert Style.paint(:outline, PlanarMap.new(), roles()) == {:ok, %{ops: [], faces: nil}}
+  end
+
   defp assert_close({x, y}, {want_x, want_y}) do
     assert_in_delta x, want_x, 1.0e-12
     assert_in_delta y, want_y, 1.0e-12

@@ -10,15 +10,18 @@ defmodule Girihelix.Engine.Render.Style do
 
   `options/0` holds the ids in the order a control offers them, and `paint/3`
   dispatches an id to the module behind it, so a caller that holds only an id
-  never names a module. `background/2` builds the one op every style emits, so
-  a picture is never left floating on the view's edge.
+  never names a module. `background/2` builds the padded fill op that `Plain`
+  and `Outline` emit behind their geometry, so their picture is never left
+  floating on the view's edge. `Filled` covers its box with faces instead.
   """
 
+  alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Bounds
   alias Girihelix.Engine.Render.Op
   alias Girihelix.Engine.Render.Palette
   alias Girihelix.Engine.Render.Styles.Filled
+  alias Girihelix.Engine.Render.Styles.Outline
   alias Girihelix.Engine.Render.Styles.Plain
 
   @padding 0.02
@@ -54,6 +57,13 @@ defmodule Girihelix.Engine.Render.Style do
   @spec paint(id(), PlanarMap.t(), Palette.roles()) :: {:ok, result()} | {:error, reason()}
   def paint(:plain, map, roles), do: Plain.paint(map, roles)
   def paint(:filled, map, roles), do: Filled.paint(map, roles)
+  def paint(:outline, map, roles), do: Outline.paint(map, roles)
+
+  @doc """
+  A `Point` as the `{x, y}` pair an op spells a coordinate with.
+  """
+  @spec pair(Point.t()) :: Op.point()
+  def pair(%Point{x: x, y: y}), do: {x, y}
 
   @doc """
   `ops` with a filled background op prepended.
