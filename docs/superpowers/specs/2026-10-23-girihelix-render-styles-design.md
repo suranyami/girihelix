@@ -28,7 +28,7 @@ Taprats' own renders, not a canonical golden.
   `Faces.java` colours every face, with Taprats' consistency errors surfaced as
   error tuples, not silent paint.
 - A palette model built on Sanzo Wada's *Dictionary of Color Combinations*
-  (171 colours, 348 combinations), vendored with provenance.
+  (157 colours, 348 combinations), vendored with provenance.
 - One `:styles` exhibit: tiling + figure binding + style + palette, rendering
   the finished map. The step-through exhibits stay uncoloured.
 
@@ -93,7 +93,7 @@ point.
 ## Palettes (our call)
 
 - **Dataset.** `colors.json` from `dblodorn/sanzo-wada` (MIT — the data behind
-  <https://sanzo-wada.dmbk.io>): 171 colours with names, slugs, hex and
+  <https://sanzo-wada.dmbk.io>): 157 colours with names, slugs, hex and
   combination membership; 348 numbered combinations. Vendored to
   `priv/palettes/` with a provenance README naming the source repo, its MIT
   licence, and Wada's 1918/1933 dictionaries as the ultimate origin.
@@ -101,7 +101,7 @@ point.
   (`combination/1` returning the palette's colours, `options/0` for the workbench
   enum). 348 combinations is the full set — a dropdown enum is fine at this
   size; browsing by base colour (the swatch pages' mode) is a follow-up.
-- **Role mapping.** A combination carries 3–4 colours and a paint needs roles:
+- **Role mapping.** A combination carries 1–5 colours and a paint needs roles:
   edge/boundary, darker face, lighter face (+ background for `Outline`/`Plain`
   pages). The mapping rule (e.g. by luminance ordering) is the builder's, and
   must be documented as a decision with its failure mode (a two-colour
@@ -139,7 +139,7 @@ point.
    pin counts and structure instead.
 5. Palettes resolve to final hexes when the style runs; the serializer stays
    palette-agnostic.
-6. The dataset is the 171-colour/348-combination JSON from `dblodorn/sanzo-wada`
+6. The dataset is the 157-colour/348-combination JSON from `dblodorn/sanzo-wada`
    (MIT), vendored with provenance.
 7. The palette-to-role mapping rule (boundary, darker, lighter, background) is
    documented at the point of decision; near-identical-luminance combinations
