@@ -65,6 +65,20 @@ defmodule GirihelixWeb.Workbench.ParamTest do
     assert Param.decode(@params, %{"d" => "4.5x"})[:d] == 3.0
   end
 
+  test "a palette parameter round-trips like an enum" do
+    param = %Param{
+      name: :palette,
+      type: :palette,
+      options: [:"1", :"253", :"348"],
+      default: :"253"
+    }
+
+    values = Param.decode([param], %{"palette" => "348"})
+    assert values.palette == :"348"
+    assert Param.encode([param], values) == %{"palette" => "348"}
+    assert Param.values([param], :first) == %{palette: :"1"}
+  end
+
   test "decode/2 leaves an unclamped numeric parameter alone" do
     params = [%Param{name: :size, type: :integer, default: 5}]
 

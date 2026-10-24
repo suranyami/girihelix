@@ -124,7 +124,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
       },
       %Param{
         name: :palette,
-        type: :enum,
+        type: :palette,
         options: Palette.options(),
         default: :"253",
         doc: "The Wada colour combination the style's palette roles come from."

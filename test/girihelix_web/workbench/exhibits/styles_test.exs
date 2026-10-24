@@ -29,7 +29,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {style.name, style.options, style.default} ==
              {:style, [:plain, :filled, :outline], :filled}
 
-    assert {palette.name, palette.default} == {:palette, :"253"}
+    assert {palette.name, palette.type, palette.default} == {:palette, :palette, :"253"}
     assert length(palette.options) == 348
 
     assert {tiles.name, tiles.type, tiles.default} == {:tiles, :boolean, false}

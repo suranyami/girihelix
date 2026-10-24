@@ -55,6 +55,17 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
     assert html =~ ~s(checked)
   end
 
+  test "the palette control renders a swatch row per combination" do
+    param = %Param{name: :palette, type: :palette, options: [:"1", :"253"], default: :"253"}
+
+    html = render_component(&Controls.controls/1, params: [param], values: %{palette: :"253"})
+
+    assert html =~ ~s(type="radio")
+    assert html =~ "background-color: #de4500"
+    assert html =~ "background-color: #340059"
+    assert html =~ ~s(checked)
+  end
+
   test "a boolean renders a checkbox that sends false when cleared" do
     param = %Param{name: :tiles, type: :boolean, default: false, doc: "overlay"}
     html = render_component(&Controls.controls/1, params: [param], values: %{tiles: false})
