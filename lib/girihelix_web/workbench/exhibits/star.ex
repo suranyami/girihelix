@@ -111,8 +111,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Star do
   end
 
   @impl true
-  @spec viewport(map()) :: Viewport.t()
-  def viewport(%{n: n, d: d, s: s}) do
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(%{n: n, d: d, s: s}, _frames) do
     Figures.viewport_for(fn -> n |> StarFigure.new!(d, s) |> Figure.map() end)
   end
 

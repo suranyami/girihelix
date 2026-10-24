@@ -102,8 +102,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Rosette do
   end
 
   @impl true
-  @spec viewport(map()) :: Viewport.t()
-  def viewport(%{n: n, q: q, s: s}) do
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(%{n: n, q: q, s: s}, _frames) do
     Figures.viewport_for(fn -> n |> RosetteFigure.new!(q, s) |> Figure.map() end)
   end
 

@@ -31,7 +31,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.FiguresTest do
         |> List.last()
 
       assert {:both, ops, _rows} = exhibit.draw(last, params)
-      viewport = exhibit.viewport(params)
+      viewport = exhibit.viewport(params, [])
 
       for {x, y} <- drawn_points(ops) do
         assert x >= viewport.left,

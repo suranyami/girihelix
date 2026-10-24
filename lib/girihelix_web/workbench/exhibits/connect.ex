@@ -94,8 +94,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Connect do
   # The normalised unit is within the unit circle, so the figure's own extent is
   # the whole window the exhibit needs.
   @impl true
-  @spec viewport(map()) :: Viewport.t()
-  def viewport(params) do
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(params, _frames) do
     Figures.viewport_for(fn ->
       params |> Figures.build_child() |> ConnectFigure.new!() |> Figure.map()
     end)

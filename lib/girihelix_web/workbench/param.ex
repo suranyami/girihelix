@@ -25,6 +25,10 @@ defmodule GirihelixWeb.Workbench.Param do
   with `Atom.to_string/1`, never with `String.to_atom/1`, because the URL is user
   input and the atom table is finite.
 
+  **`:palette` is an enum on the wire.** It decodes, encodes and takes its
+  extremes exactly as an `:enum` does; only the control differs, rendering the
+  combinations as colour swatches rather than a select.
+
   **Extremes are declarative too.** `values/2` yields every parameter at its
   default or at one end of its declared domain, which is what a property test and
   the index page's sample URLs need.
@@ -33,7 +37,7 @@ defmodule GirihelixWeb.Workbench.Param do
   @enforce_keys [:name, :type]
   defstruct [:name, :type, :default, :doc, :range, :step, :options]
 
-  @type type :: :integer | :float | :boolean | :enum
+  @type type :: :integer | :float | :boolean | :enum | :palette
   @type value :: integer() | float() | boolean() | atom()
   @type t :: %__MODULE__{
           name: atom(),
@@ -96,7 +100,8 @@ defmodule GirihelixWeb.Workbench.Param do
   defp parse(%__MODULE__{type: :integer}, raw), do: parse_integer(raw)
   defp parse(%__MODULE__{type: :float}, raw), do: parse_float(raw)
   defp parse(%__MODULE__{type: :boolean}, raw), do: parse_boolean(raw)
-  defp parse(%__MODULE__{type: :enum, options: options}, raw), do: parse_enum(raw, options)
+
+  defp parse(%__MODULE__{type: type, options: options}, raw) when type in [:enum, :palette], do: parse_enum(raw, options)
 
   # Requiring an empty remainder is what makes "12px" invalid rather than 12.
   defp parse_integer(raw) when is_binary(raw) do
@@ -158,15 +163,17 @@ defmodule GirihelixWeb.Workbench.Param do
     Atom.to_string(value)
   end
 
-  defp encode_value(%__MODULE__{type: :enum}, value) when is_atom(value) do
+  defp encode_value(%__MODULE__{type: type}, value) when type in [:enum, :palette] and is_atom(value) do
     Atom.to_string(value)
   end
 
   defp extreme(%__MODULE__{type: :boolean}, :first), do: false
   defp extreme(%__MODULE__{type: :boolean}, :last), do: true
-  defp extreme(%__MODULE__{type: :enum, options: [first | _]}, :first), do: first
 
-  defp extreme(%__MODULE__{type: :enum, options: [_ | _] = options}, :last), do: List.last(options)
+  defp extreme(%__MODULE__{type: type, options: [first | _]}, :first) when type in [:enum, :palette], do: first
+
+  defp extreme(%__MODULE__{type: type, options: [_ | _] = options}, :last) when type in [:enum, :palette],
+    do: List.last(options)
 
   defp extreme(%__MODULE__{type: :float, range: %Range{first: first}}, :first), do: first * 1.0
   defp extreme(%__MODULE__{type: :float, range: %Range{last: last}}, :last), do: last * 1.0

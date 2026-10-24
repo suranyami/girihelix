@@ -1,27 +1,43 @@
 defmodule GirihelixWeb.Workbench.Components.Canvas do
   @moduledoc """
-  Draws one frame: the picture, the panel of numbers, or both side by side.
+  Draws one frame: the picture, the panel of numbers, or the picture half of a
+  frame that has both.
 
   The picture is the engine's serialized SVG, placed verbatim inside a wrapper
   with `id="canvas"`; the panel is a two-column table with `id="panel"`. A
-  `:both` drawing renders both, with the same ids, in a responsive two-column
-  grid. The wrapper is a fixed id rather than a unique one because a page shows
-  one exhibit at a time, and the transport and the source pane address the
-  canvas by that name.
+  `:both` drawing's panel is drawn by the public `panel/1`, not beside the
+  picture: the exhibit page places it under the controls in its right column, so
+  `canvas/1` renders only the picture for that drawing. A `:panel` drawing has
+  no picture, so `canvas/1` draws the panel itself. The wrapper is a fixed id
+  rather than a unique one because a page shows one exhibit at a time, and the
+  transport and the source pane address the canvas by that name.
+
+  **The picture is height-capped.** The SVG is `h-auto` with
+  `max-h-[70vh]`, so a tall aspect cannot push the page past one screen; the
+  viewBox preserves its proportions inside the shorter box.
 
   **A missing viewport is the empty view.** The brief's callers pass `nil` for a
   panel and for an empty canvas; the serializer still needs a viewport to build
   its root, so `nil` becomes `Viewport.fit(nil)` — the fixed square centred on
   the origin. Panels never reach the serializer, so their viewport is ignored.
+
+  **Overflow is split.** The SVG root does not clip (`overflow-visible`), so a
+  pinned viewport can be panned past and the drawing's fringe stays in the
+  document; the wrapper clips (`overflow-hidden`), so the picture keeps the
+  layout's own bounds.
   """
 
   use GirihelixWeb, :html
 
   alias Girihelix.Engine.Render.Svg
   alias Girihelix.Engine.Render.Viewport
+  alias Phoenix.LiveView.Rendered
 
   @default_aspect 0.75
-  @svg_class "w-full h-auto"
+  # The SVG root must not clip: a pinned viewport shows less than the drawing
+  # holds, and the fringe beyond it is what panning reveals. The wrapper keeps
+  # the layout's own bounds and does clip.
+  @svg_class "w-full h-auto max-h-[70vh] overflow-visible"
 
   attr :drawing, :any,
     required: true,
@@ -35,14 +51,22 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     default: @default_aspect,
     doc: "Height divided by width; pass the aspect the viewport was fitted with."
 
-  @spec canvas(map()) :: Phoenix.LiveView.Rendered.t()
+  attr :canvas_key, :string,
+    default: nil,
+    doc: "A stable key for the exhibit; the hook resets pan and zoom when it changes."
+
+  @spec canvas(map()) :: Rendered.t()
   def canvas(%{drawing: {:canvas, ops}} = assigns) do
     assigns = assign(assigns, :ops, ops)
 
     ~H"""
-    <div id="canvas" class="w-full">
-      <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
-    </div>
+    <.zoomable_canvas
+      class="relative w-full overflow-hidden"
+      ops={@ops}
+      viewport={@viewport}
+      aspect={@aspect}
+      canvas_key={@canvas_key}
+    />
     """
   end
 
@@ -50,20 +74,45 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     assigns = assign(assigns, :rows, rows)
 
     ~H"""
-    <.panel_view rows={@rows} />
+    <.panel rows={@rows} />
     """
   end
 
-  def canvas(%{drawing: {:both, ops, rows}} = assigns) do
-    assigns = assign(assigns, ops: ops, rows: rows)
+  # A `:both` drawing's rows belong to `panel/1`; the page decides where that
+  # sits, so the picture half is exactly a canvas-only drawing's.
+  def canvas(%{drawing: {:both, ops, _rows}} = assigns) do
+    canvas(%{assigns | drawing: {:canvas, ops}})
+  end
 
+  attr :class, :string, required: true
+  attr :ops, :list, required: true
+  attr :viewport, :any, required: true
+  attr :aspect, :float, required: true
+  attr :canvas_key, :string, default: nil
+
+  # The `CanvasZoom` hook transforms the inner wrapper and clips at the outer
+  # one, so a pan past the pinned viewport reveals the SVG's fringe without
+  # moving the page. The controls sit inside the hook element (their clicks are
+  # wired by it) but outside the transformed content (so they never scale or
+  # move). The key names the exhibit so the hook can tell a navigation — where
+  # the previous exhibit's pan and zoom must not carry over — from a patch of
+  # the same one.
+  defp zoomable_canvas(assigns) do
     ~H"""
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div id="canvas" class="min-w-0 flex-1">
+    <div id="canvas" phx-hook="CanvasZoom" data-canvas-key={@canvas_key} class={@class}>
+      <div data-zoom-content>
         <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
       </div>
-      <div class="w-64 shrink-0">
-        <.panel_view rows={@rows} />
+      <div class="absolute top-2 right-2 flex gap-1">
+        <button type="button" data-zoom="in" class="btn btn-xs btn-square" aria-label="Zoom in">
+          +
+        </button>
+        <button type="button" data-zoom="out" class="btn btn-xs btn-square" aria-label="Zoom out">
+          −
+        </button>
+        <button type="button" data-zoom="reset" class="btn btn-xs btn-square" aria-label="Reset zoom">
+          ⟳
+        </button>
       </div>
     </div>
     """
@@ -82,9 +131,16 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     """
   end
 
-  attr :rows, :list, required: true
+  attr :rows, :list, required: true, doc: "The label/value rows of a `:both` or `:panel` drawing."
 
-  defp panel_view(assigns) do
+  @doc """
+  The panel of numbers, as a two-column table.
+
+  Public because a `:both` drawing's rows are placed by the page — under the
+  controls rather than beside the picture.
+  """
+  @spec panel(map()) :: Rendered.t()
+  def panel(assigns) do
     ~H"""
     <table id="panel" class="table table-sm w-auto">
       <tbody>

@@ -37,6 +37,30 @@ defmodule Girihelix.Engine.Tilings.ConstructTest do
     assert Loose.equals(Enum.at(region, 2), Point.new(2.0 + margin, 2.0 + margin))
   end
 
+  test "the patch region covers a square grid of cells" do
+    tiling = Catalogue.load!("8.5")
+    region = Construct.patch_region(tiling, 2)
+    assert length(region) == 4
+
+    margin = 0.01 * max(Point.mag(tiling.t1), Point.mag(tiling.t2))
+
+    expected =
+      for m <- -2..2,
+          n <- -2..2,
+          p <- [Point.origin(), tiling.t1, Point.add(tiling.t1, tiling.t2), tiling.t2],
+          do: Point.add(Point.add(Point.scale(tiling.t1, m), Point.scale(tiling.t2, n)), p)
+
+    xs = Enum.map(expected, & &1.x)
+    ys = Enum.map(expected, & &1.y)
+    region_xs = Enum.map(region, & &1.x)
+    region_ys = Enum.map(region, & &1.y)
+
+    assert_in_delta Enum.min(region_xs), Enum.min(xs) - margin, 1.0e-9
+    assert_in_delta Enum.max(region_xs), Enum.max(xs) + margin, 1.0e-9
+    assert_in_delta Enum.min(region_ys), Enum.min(ys) - margin, 1.0e-9
+    assert_in_delta Enum.max(region_ys), Enum.max(ys) + margin, 1.0e-9
+  end
+
   test "the :place step enumerates the cell translations" do
     tiling = Catalogue.load!("4.5")
     steps = Construct.steps(tiling, fn _ -> nil end, Construct.default_region(tiling))

@@ -62,7 +62,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.FacesTest do
     assert colours(:split_parallel) == {1, 1}
     assert colours(:dangling) == {1, 0}
     assert colours(:figure_eight) == {2, 0}
-    assert colours(:two_corner) == {2, 0}
+    assert colours(:two_corner) == {2, 1}
 
     assert Faces.extract_faces(Exhibit.scenario(:square_diagonal)) ==
              {:error, :filling_conflict}

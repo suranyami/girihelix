@@ -92,7 +92,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.RosetteTest do
     params = Param.values(Rosette.params(), :default)
     radius = 1.25
     width = 2.0 * radius / 0.75
-    viewport = Rosette.viewport(params)
+    viewport = Rosette.viewport(params, [])
 
     assert viewport.left == -radius / 0.75
     assert viewport.top == radius

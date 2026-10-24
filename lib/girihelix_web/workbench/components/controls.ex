@@ -14,13 +14,22 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
   The current value is repeated beside the slider, so a clamped value is legible
   without reading the URL.
 
-  A `:boolean` and an `:enum` use `<.input type="select">`. Select values are
+  A `:boolean` is a checkbox, preceded by a hidden input carrying `"false"`:
+  an unchecked checkbox sends nothing, so the hidden value is what makes
+  "cleared" reach the server as `false` rather than as an absent parameter. An
+  `:enum` uses `<.input type="select">`. Select values are
   strings on the wire, so each value is stringified before it is handed to the
   input; a missing value falls back to the parameter's declared default.
+
+  A `:palette` is an enum on the wire, but its options are colour combinations,
+  so it is a `<fieldset>` of radio rows rather than a select: each row shows the
+  combination's number and its colours as swatches, inside a scroll container so
+  all 348 combinations fit the panel.
   """
 
   use GirihelixWeb, :html
 
+  alias Girihelix.Engine.Render.Palette
   alias GirihelixWeb.Workbench.Param
 
   attr :params, :list, required: true, doc: "The exhibit's declared parameters."
@@ -67,12 +76,14 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
     ~H"""
     <div>
       <.control_label param={@param} />
-      <.input
-        type="select"
+      <input type="hidden" name={@param.name} value="false" />
+      <input
+        type="checkbox"
         id={@param.name}
         name={@param.name}
-        value={to_string(@value)}
-        options={[{"true", "true"}, {"false", "false"}]}
+        value="true"
+        checked={@value}
+        class="checkbox checkbox-sm"
       />
     </div>
     """
@@ -93,6 +104,49 @@ defmodule GirihelixWeb.Workbench.Components.Controls do
       />
     </div>
     """
+  end
+
+  defp control(%{param: %Param{type: :palette} = param} = assigns) do
+    assigns = assign(assigns, :combinations, Enum.map(param.options, &{&1, colours(&1)}))
+
+    ~H"""
+    <fieldset>
+      <legend class="label mb-1">
+        <span class="font-semibold">{@param.name}</span>
+        <span :if={@param.doc} class="opacity-70">{@param.doc}</span>
+      </legend>
+      <div class="max-h-72 overflow-y-auto">
+        <label
+          :for={{option, colours} <- @combinations}
+          class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-base-200"
+        >
+          <input
+            type="radio"
+            name={@param.name}
+            value={to_string(option)}
+            checked={option == @value}
+            class="radio radio-xs"
+          />
+          <span class="w-8 text-sm tabular-nums">{to_string(option)}</span>
+          <span
+            :for={colour <- colours}
+            class="h-3 w-3 rounded-sm"
+            style={"background-color: #{colour.hex}"}
+          ></span>
+        </label>
+      </div>
+    </fieldset>
+    """
+  end
+
+  # The palette's options are ids of the trusted local dataset, so a colour list
+  # is always present; an option outside it renders as a row with no swatches
+  # rather than raising.
+  defp colours(option) do
+    case Palette.combination(option) do
+      {:ok, colours} -> colours
+      {:error, :unknown_combination} -> []
+    end
   end
 
   attr :param, Param, required: true

@@ -35,7 +35,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.PlanarMapTest do
     assert {scenario.name, scenario.type, scenario.default} == {:scenario, :enum, :weld_squares}
     assert scenario.options == [:weld_squares, :replicate_ladder]
 
-    assert Exhibit.viewport(Param.values(Exhibit.params(), :default)) ==
+    assert Exhibit.viewport(Param.values(Exhibit.params(), :default), []) ==
              Viewport.fit({-2.0, -2.0, 2.0, 2.0}, padding: 0.0)
   end
 

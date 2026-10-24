@@ -17,6 +17,22 @@ two triages unchanged is a signal it should be closed rather than carried.
 
 ## Open
 
+### The loading placeholder shifts the layout by about 1rem (captured 2026-10-24, Styles presentation review)
+
+The run's skeleton reserves `min-h-64` (16rem) for the panel, but the finished
+styles panel is about 17.4rem tall, so the page grows by roughly 1rem when a
+run lands and the content below it shifts. Fixing it means measuring the panel
+or reserving its real height in the loading branch, and pinning the shift with
+a LiveView assertion on the loading and finished renders.
+
+### The reproduce snippet omits the tile overlay (captured 2026-10-24, Styles presentation review)
+
+`Styles.reproduce/1` names the painted construct but never the overlay's
+`Tilings.tile_ops/2` call, so a reader who copies the snippet while `tiles` is
+on gets the figure without the lattice. Fixing it means appending the overlay
+call and its tiling/translation arguments when the toggle is on, and extending
+the reproduce test.
+
 ### `Faces.Walk` has no iteration cap (captured 2026-10-20, Plan 1c homogenisation)
 
 The walk stops only on returning to its start, as Taprats' does, so a map whose
@@ -94,17 +110,97 @@ above does; a release started elsewhere would read nothing, or fail
 `File.read!/1`. Resolve the read paths with `:code.priv_dir(:girihelix)` when the
 workbench is first run from a release started outside a project-root cwd.
 
-### Jason is compile-time-only in the engine (2026-10-23, Plan 4 review)
+### Six catalogue tilings have no regular features (captured 2026-10-24, Plan 5 review)
 
-`Girihelix.Engine.Tilings.Catalogue` decodes `priv/tilings/index.json` with
-`Jason.decode!/1` at compile time, so the engine holds no runtime Jason
-dependency — the plan mandated Jason over the stdlib `JSON` module then. Record
-the ruling and act on it when the catalogue is next touched: move the decode to
-stdlib `JSON` (no dependency), or keep Jason under an explicit documented
-allowance.
+`Penrose`, `Penrose Monster`, `Squoctogon`, `Squoctogon 2`, `6 Losange` and
+`Great Mosque of Malatya` carry no regular tiles, so a figure-bound construction
+binds nothing and welds an empty map; the `:styles` exhibit then reports
+`failure: no_faces` (or falls back on an empty painting) instead of a picture.
+A reader choosing one of them gets no explanation. Fixing it means either
+restricting the tiling enum to tilings with regular features, adding a doc
+sentence beside the control, or guiding the reader to a tiling that binds.
+
+### Browsing palettes by base colour (captured 2026-10-24, Plan 5 homogenisation)
+
+The palette control is one 348-entry enum of combination numbers. The dataset
+is organised the other way round too — each of the 157 colours lists the
+combinations it appears in — so a reader could pick a colour and see the
+combinations built on it. That needs a second control and a filter over
+`Palette`'s combination index.
+
+### A styled figure exhibit without a tiling (captured 2026-10-24, Plan 5 homogenisation)
+
+The `:styles` exhibit always paints a constructed catalogue tiling, so a figure
+or a welded figure map cannot be painted directly. The design names this as a
+follow-up: it needs a figure-focused exhibit over the existing binders plus the
+same terminal paint step.
+
+### Construct/weld construction scales superlinearly with the patch (captured 2026-10-24, styles presentation)
+
+`Construct.construct/3` plus `PlanarMap.weld/2` take roughly 83–90 s for a
+one-cell `3-8-4-6` run (`patch_region/2` with `1`, a three-by-three patch) and
+roughly 47–50 s for `Girih Star` at the five-cell patch. The styles exhibit's
+adaptive span keeps the heaviest catalogue tilings at one cell, but `3-8-4-6`
+is still tens of seconds even there, so selecting it in the workbench blocks a
+reader for that long even with the asynchronous run. Fixing it means profiling
+the replication and weld hot paths and reducing their growth with map size; the
+goldens must stay byte-identical. A wider visible window — the three-cell
+option the design considered — is deferred until this is addressed, because a
+wider window only multiplies the same cost.
+
+### No construction cache (captured 2026-10-24, styles presentation)
+
+Every change to `{slug, values}` rebuilds the run, so changing only the style or
+palette re-constructs and re-welds a map that cannot depend on them. A cache
+keyed by `{tiling, figure, region}` — with the adaptive span in the key — would
+make those changes instant. Cost: an owner for the cache (process, ETS or
+persistent term), an eviction policy, and a test that a palette change does not
+run the construction steps again.
+
+### The seam property does not hold for `7.6` or `3-8-4-6` (captured 2026-10-24, styles presentation)
+
+The seam test covers `8.5` and `6.5 flower`. Extended by hand, `7.6` is
+non-periodic at both the one- and two-cell spans, and `3-8-4-6` misses for 1 of
+2,202 windowed vertices. Both are construction facts, not window arithmetic, so
+the shipped test keeps its two cases rather than weakening the assertion.
+Validating them needs either a construction fix or an explicit exclusion with
+the measured miss recorded in the test.
+
+### Canvas pan is unclamped and zoom buttons are bound per element (captured 2026-10-24, styles presentation)
+
+`CanvasZoom` clamps scale to `[0.6, 8.0]` but lets a pan translate the content
+arbitrarily far into blank space, and it attaches a click listener to each
+`[data-zoom]` button found at mount, so a button added by a later LiveView patch
+would be inert. Fixing it means a translation clamp derived from the content
+bounds and the canvas rect (or a stated blank margin), and one delegated click
+listener on the hook element. Cost: a JS-only change with a manual gesture check.
+
+### Palette rows render eagerly and the list has no search (captured 2026-10-24, styles presentation)
+
+The picker resolves all 348 combinations' colours and renders 348 radio rows on
+every controls render, and a reader can only scroll. Precompute the row data
+(compile time or a cached list) or window the scroll container, and add a search
+over the combination number. Filtering by base colour is already covered by
+"Browsing palettes by base colour" above; this item is the rendering and
+number-search side, not a second colour filter. Cost: a data-shape change in
+`Controls`, or a small JS hook for windowing, plus a search input.
 
 ## Closed
 
+- **The star binder's fixed skip degenerated polygonal stars** (styles
+  presentation). Closed 2026-10-24: `Instancing.star_skip/1` chooses the skip
+  from the tile's side count — `3` for three or four sides, `div(sides - 1, 2)`
+  otherwise — so a hexagon is a hexagram rather than three diameters through its
+  centre, while the square keeps its cross-shaped star. The binder passes
+  `star_skip(sides) * 1.0` to keep `Star.build!/3`'s float contract. Pinned in
+  `instancing_test.exs`.
+- **Palette labels in the controls** (Plan 5 homogenisation). Closed 2026-10-24:
+  the `:palette` control resolves each combination's colours and renders them as
+  swatches beside the number, so a reader can see a combination before choosing
+  it (`controls_test.exs`, Task 8).
+- **Jason is compile-time-only in the engine** (Plan 4 review). Closed
+  2026-10-24: new engine data modules use the standard library's `JSON` module;
+  `Tilings.Catalogue` keeps Jason until it is next touched.
 - **`Point.compare_to/2` had no documented sorting idiom** (Plan 1a review).
   Closed 2026-10-22: `Point.sorter/0` converts the comparator into the boolean
   predicate `Enum.sort/2` expects, keeping the `tolerance2` band, and is pinned

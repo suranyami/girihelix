@@ -603,6 +603,16 @@ defmodule Girihelix.Engine.PlanarMap do
   @spec num_vertices(t()) :: non_neg_integer()
   def num_vertices(%__MODULE__{vertices: vertices}), do: map_size(vertices)
 
+  @doc """
+  The number of vertices in `term` when it is a map, otherwise zero.
+
+  A total query for callers that hold a map among other state shapes and need
+  to measure it without matching on the opaque struct themselves.
+  """
+  @spec count_vertices(term()) :: non_neg_integer()
+  def count_vertices(%__MODULE__{vertices: vertices}), do: map_size(vertices)
+  def count_vertices(_term), do: 0
+
   @doc "The number of edges."
   @spec num_edges(t()) :: non_neg_integer()
   def num_edges(%__MODULE__{edges: edges}), do: map_size(edges)

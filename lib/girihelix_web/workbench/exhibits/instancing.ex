@@ -24,8 +24,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
   engine's step sequence, never a rebuild, and the picture draws op by op over
   the state `Construct.start/3` builds.
 
-  The two figure binders are public because the exhibit's `reproduce/1` names
-  one of them in the paste-able call it returns.
+  The two figure binders, the parameter-named dispatch and its paste-able
+  expression are public so the styled exhibit reuses them rather than keeping
+  a second copy of the same dispatch.
   """
 
   @behaviour GirihelixWeb.Workbench.Exhibit
@@ -99,13 +100,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
   def draw(%Steps.Frame{state: state}, _params) do
-    ops =
-      Tilings.translation_ops(state.tiling) ++
-        Tilings.cell_ops(state.translations) ++
-        Tilings.outline_ops(state.tiling) ++
-        Figures.map_ops(state.map)
-
-    {:both, ops, Tilings.rows(state.tiling) ++ Figures.rows_for(pattern(state.map))}
+    {:both, Tilings.structure_ops(state), Tilings.rows(state.tiling) ++ Figures.rows_for(pattern(state.map))}
   end
 
   @impl true
@@ -126,10 +121,15 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
 
   defp name_string(name), do: Atom.to_string(name)
 
-  # One binder per declared figure; workbench code, not engine code.
-  defp binder(:none), do: &nil_binder/1
-  defp binder(:rosette), do: &rosette_binder/1
-  defp binder(:star), do: &star_binder/1
+  @doc """
+  The binder the `figure` parameter names: a rosette, a star, or none.
+
+  `:none` binds no figure, so every feature is placed but none carries one.
+  """
+  @spec binder(:none | :rosette | :star) :: Construct.binder()
+  def binder(:none), do: &nil_binder/1
+  def binder(:rosette), do: &rosette_binder/1
+  def binder(:star), do: &star_binder/1
 
   # "No figure": every feature is placed, none is bound to one.
   defp nil_binder(_feature), do: nil
@@ -142,17 +142,39 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
   @doc """
   The `:star` binder: every regular tile gets a star, the rest none.
 
+  The skip is chosen per side count by `star_skip/1`, so a hexagon becomes a
+  hexagram rather than three diameters through its centre, while square tiles
+  keep the cross-shaped four-point star.
+
   `Star.build!/3` is deliberately the unchecked constructor, so a tiling with a
   triangle tile — `3-8-12` — fails in `:units`, when `Figure.map/1` raises at
   the star's closure, and the run is a failure frame.
   """
   @spec star_binder(Feature.t()) :: StarFigure.t() | nil
   def star_binder(%Feature{regular: nil}), do: nil
-  def star_binder(%Feature{regular: sides}), do: StarFigure.build!(sides, 3.0, 2)
 
-  defp binder_call(:none), do: "fn _feature -> nil end"
-  defp binder_call(:rosette), do: "&GirihelixWeb.Workbench.Exhibits.Instancing.rosette_binder/1"
-  defp binder_call(:star), do: "&GirihelixWeb.Workbench.Exhibits.Instancing.star_binder/1"
+  def star_binder(%Feature{regular: sides}), do: StarFigure.build!(sides, star_skip(sides) * 1.0, 2)
+
+  @doc """
+  The star skip for a tile with `sides` sides.
+
+  `3` for three or four sides, so the square keeps its cross-shaped four-point
+  star; for five or more, `div(sides - 1, 2)`, which makes a hexagon a hexagram
+  rather than three diameters through its centre.
+  """
+  @spec star_skip(pos_integer()) :: pos_integer()
+  def star_skip(sides) when sides <= 4, do: 3
+  def star_skip(sides), do: div(sides - 1, 2)
+
+  @doc """
+  The paste-able expression for the binder the `figure` parameter names.
+
+  `reproduce/1` returns it as part of the call it offers.
+  """
+  @spec binder_call(:none | :rosette | :star) :: String.t()
+  def binder_call(:none), do: "fn _feature -> nil end"
+  def binder_call(:rosette), do: "&GirihelixWeb.Workbench.Exhibits.Instancing.rosette_binder/1"
+  def binder_call(:star), do: "&GirihelixWeb.Workbench.Exhibits.Instancing.star_binder/1"
 
   # The welded pattern draws over the outlines; an empty map draws nothing.
   defp pattern(map), do: pattern(EngineMap.num_edges(map), map)

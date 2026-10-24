@@ -48,6 +48,19 @@ defmodule GirihelixWeb.Workbench.Components.TransportTest do
     assert html =~ ~s(value="0")
   end
 
+  test "the loading form reserves the finished form's height" do
+    html =
+      render_component(&Transport.transport/1,
+        index: nil,
+        count: nil,
+        loading: true,
+        progress: nil
+      )
+
+    assert html =~ ~s(id="run-progress")
+    assert html =~ "min-h-28"
+  end
+
   test "a failure banner names the failing step and its exception message" do
     step = %Steps.Step{
       id: :build,

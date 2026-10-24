@@ -8,7 +8,7 @@ defmodule GirihelixWeb.Workbench.RegistryTest do
   test "the registry has unique slugs and one non-empty group" do
     slugs = Enum.map(Registry.exhibits(), & &1.slug())
     assert slugs == Enum.uniq(slugs)
-    assert Enum.map(Registry.grouped(), &elem(&1, 0)) == [:geometry, :figures, :tilings]
+    assert Enum.map(Registry.grouped(), &elem(&1, 0)) == [:geometry, :figures, :tilings, :styles]
     assert {:ok, GirihelixWeb.Workbench.Exhibits.Loose} = Registry.get("loose")
     assert Registry.get("nope") == {:error, :unknown_exhibit}
   end

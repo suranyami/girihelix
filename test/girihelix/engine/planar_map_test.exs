@@ -14,6 +14,14 @@ defmodule Girihelix.Engine.PlanarMapTest do
     assert PlanarMap.num_vertices(map) == 1
   end
 
+  test "count_vertices/1 totals a map and answers zero for anything else" do
+    {map, _} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(1.0, 1.0))
+
+    assert PlanarMap.count_vertices(map) == 1
+    assert PlanarMap.count_vertices(nil) == 0
+    assert PlanarMap.count_vertices(:not_a_map) == 0
+  end
+
   test "vertices are kept in Taprats order, lexicographic by position" do
     {map, _} = PlanarMap.insert_vertex(PlanarMap.new(), Point.new(2.0, 0.0))
     {map, _} = PlanarMap.insert_vertex(map, Point.new(0.0, 5.0))

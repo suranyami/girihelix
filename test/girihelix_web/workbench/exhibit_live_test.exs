@@ -3,10 +3,22 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias GirihelixWeb.Workbench.Exhibits.Styles
+  alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
+  alias GirihelixWeb.Workbench.Run
+
+  # A run is asynchronous now, so every assertion about its result waits for
+  # the task rather than reading the loading render. A light exhibit settles in
+  # well under a second; only the heavy tiling test takes the large budget.
+  @light_timeout 30_000
+  @run_timeout 300_000
+
+  defp await_run(view), do: render_async(view, @light_timeout)
 
   test "an exhibit mounts with all four panes", %{conn: conn} do
-    {:ok, _view, html} = live(conn, "/workbench/point")
+    {:ok, view, _html} = live(conn, "/workbench/point")
+    html = await_run(view)
 
     assert html =~ "<svg"
     assert html =~ "Point"
@@ -16,8 +28,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   end
 
   test "the default frame is the last one, and the transport moves through it", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/workbench/faces")
-    assert html =~ "collect colours"
+    {:ok, view, _html} = live(conn, "/workbench/faces")
+    assert await_run(view) =~ "collect colours"
 
     html = render_click(view, "go", %{"to" => "first"})
     assert html =~ "Parameters"
@@ -30,8 +42,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   end
 
   test "the scrub slider sends a frame", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/workbench/faces")
-    assert html =~ "collect colours"
+    {:ok, view, _html} = live(conn, "/workbench/faces")
+    assert await_run(view) =~ "collect colours"
 
     html = render_change(view, "go", %{"frame" => "1"})
     assert html =~ "discover faces"
@@ -128,22 +140,121 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ ~s(value="5.0")
 
     {:ok, view, _html} = live(conn, "/workbench/faces?frame=1")
-    assert render(view) =~ "discover faces"
+    assert await_run(view) =~ "discover faces"
   end
 
   test "a parameter change resets to the last frame", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/point")
+    await_run(view)
 
-    html = render_change(view, "params", %{"x" => "2.0", "y" => "4.0"})
-    assert html =~ "Girihelix.Engine.Geometry.Point.new(2.0, 4.0)"
+    render_change(view, "params", %{"x" => "2.0", "y" => "4.0"})
+    assert await_run(view) =~ "Girihelix.Engine.Geometry.Point.new(2.0, 4.0)"
+  end
+
+  test "the palette picker's choice reaches the finished run's panel", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    await_run(view)
+
+    render_change(view, "params", %{"palette" => "348"})
+    assert await_run(view) =~ "Wada 348"
+  end
+
+  test "the tiles toggle draws the overlay tint in the rendered SVG", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    refute await_run(view) =~ ~s(fill="#2563eb")
+
+    render_change(view, "params", %{"tiles" => "true"})
+
+    # The overlay's fill polygon: the first fixed tint at the declared opacity,
+    # with the serializer's default stroke width, drawn after the figure.
+    assert await_run(view) =~
+             ~s(fill="#2563eb" stroke="none" stroke-width="1.0" opacity="0.12")
+  end
+
+  test "navigating to another exhibit clears the previous picture", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/point")
+    assert await_run(view) =~ "<circle"
+
+    # The loading render under the new title shows an empty canvas, not the
+    # previous exhibit's drawing.
+    html = render_patch(view, "/workbench/loose")
+    refute html =~ "<circle"
+    assert html =~ "Loose"
   end
 
   test "a raising step renders the failure", %{conn: conn} do
-    {:ok, _view, html} =
+    {:ok, view, _html} =
       live(conn, "/workbench/intersect?x1=0.0&y1=0.0&x2=0.0&y2=0.0")
 
+    html = await_run(view)
     assert html =~ "failed"
     assert html =~ "build"
+  end
+
+  test "the styles exhibit pins a viewport narrower than its patch", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+
+    # The patch spans five cells but the pinned window shows two, so the figure
+    # projects outside the viewBox: a fitted viewport would keep every point
+    # inside it. Negative coordinates are the fringe the overflow class reveals.
+    assert await_run(view) =~ ~r/points="[^"]*-\d/
+  end
+
+  @tag :heavy
+  @tag timeout: 900_000
+  test "a large tiling renders asynchronously with progress", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
+
+    # The loading branch is the finished page's skeleton: the canvas slot and
+    # the panel's box are already in place, so nothing moves when the run lands.
+    assert has_element?(view, "#canvas")
+    assert has_element?(view, "#panel-placeholder")
+    assert has_element?(view, "#reproduce", "Preparing the run…")
+    assert has_element?(view, "#run-progress")
+    assert render_async(view, @run_timeout) =~ ~s(id="canvas")
+    refute has_element?(view, "#run-progress")
+  end
+
+  test "navigating frames reuses the finished frames", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    await_run(view)
+
+    html = render_click(view, "go", %{"to" => "prev"})
+    refute has_element?(view, "#run-progress")
+    assert html =~ "weld the feature maps"
+  end
+
+  @tag :heavy
+  @tag timeout: 600_000
+  test "heavy tilings use one cell and light ones two" do
+    params = defaults()
+    assert %{cells: 2} = Run.build(Styles, params, nil)
+    assert %{cells: 1} = Run.build(Styles, %{params | tiling: :"Girih Star"}, nil)
+  end
+
+  test "the header carries the transport and the panel follows the controls", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    html = await_run(view)
+
+    assert has_element?(view, "header #transport")
+    assert html =~ ~s(id="transport")
+    assert html =~ ~s(id="controls")
+    assert html =~ ~s(id="panel")
+
+    transport = elem(:binary.match(html, ~s(id="transport")), 0)
+    controls = elem(:binary.match(html, ~s(id="controls")), 0)
+    panel = elem(:binary.match(html, ~s(id="panel")), 0)
+    assert controls < panel
+    assert transport < controls
+  end
+
+  test "the source and reproduce panes are collapsed by default", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    html = await_run(view)
+
+    assert html =~ "<details"
+    refute html =~ ~s(<details open)
+    assert html =~ "Show source and reproduce"
   end
 
   test "an unknown slug is a 404", %{conn: conn} do
@@ -151,4 +262,5 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   end
 
   defp occurrences(html, needle), do: length(String.split(html, needle)) - 1
+  defp defaults, do: Param.values(Styles.params(), :default)
 end

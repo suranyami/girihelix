@@ -93,8 +93,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Scale do
   # The map is clipped to the unit n-gon, but the scaled child reaches `s` before
   # that clip, so the scale is a floor on the radius as well.
   @impl true
-  @spec viewport(map()) :: Viewport.t()
-  def viewport(%{s: s} = params) do
+  @spec viewport(map(), [Steps.Frame.t()]) :: Viewport.t()
+  def viewport(%{s: s} = params, _frames) do
     Figures.viewport_for(fn -> params |> Figures.build_child() |> Figure.map() end, abs(s))
   end
 
