@@ -16,10 +16,9 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   ## Eviction
 
-  A put evicts entries in `:inserted_at` order (ties broken by key) until at
-  most `:memory_entries` remain. `get/2` and a `fetch/3` hit still touch
-  `:accessed_at`, so the entry carries its last-use time for the disk tier and
-  for callers that report on it.
+  A put evicts the least recently used entries (smallest `:accessed_at`, ties
+  broken by key) until at most `:memory_entries` remain. `get/2` and a
+  `fetch/3` hit touch `:accessed_at`, so a read keeps its entry resident.
   """
 
   use GenServer
@@ -173,13 +172,9 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   defp evict_oldest(_ets, excess) when excess <= 0, do: :ok
 
   defp evict_oldest(ets, excess) do
-    # Insertion order, not `:accessed_at`: the suite touches `:b` after filling
-    # the tier and still expects `:b` evicted next, so recency cannot drive the
-    # memory tier without contradicting it. `:accessed_at` is maintained for
-    # the disk tier and for reporting.
     ets
     |> :ets.tab2list()
-    |> Enum.sort_by(fn {key, entry} -> {entry.inserted_at, key} end)
+    |> Enum.sort_by(fn {key, entry} -> {entry.accessed_at, key} end)
     |> Enum.take(excess)
     |> Enum.each(fn {key, _entry} -> :ets.delete(ets, key) end)
   end

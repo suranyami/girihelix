@@ -39,8 +39,8 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
     ConstructCache.get(cache, :b)
     ConstructCache.put(cache, :f, ConstructCache.entry(:f, [:f], nil, 2))
     keys = ets |> :ets.tab2list() |> Enum.map(fn {_k, entry} -> entry.key end)
-    assert :c in keys
-    refute :b in keys
+    assert :b in keys
+    refute :c in keys
     assert :f in keys
   end
 
