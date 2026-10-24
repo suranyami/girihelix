@@ -142,13 +142,28 @@ defmodule GirihelixWeb.Workbench.Exhibits.Instancing do
   @doc """
   The `:star` binder: every regular tile gets a star, the rest none.
 
+  The skip is chosen per side count by `star_skip/1`, so a hexagon becomes a
+  hexagram rather than three diameters through its centre, while square tiles
+  keep the cross-shaped four-point star.
+
   `Star.build!/3` is deliberately the unchecked constructor, so a tiling with a
   triangle tile — `3-8-12` — fails in `:units`, when `Figure.map/1` raises at
   the star's closure, and the run is a failure frame.
   """
   @spec star_binder(Feature.t()) :: StarFigure.t() | nil
   def star_binder(%Feature{regular: nil}), do: nil
-  def star_binder(%Feature{regular: sides}), do: StarFigure.build!(sides, 3.0, 2)
+  def star_binder(%Feature{regular: sides}), do: StarFigure.build!(sides, star_skip(sides), 2)
+
+  @doc """
+  The star skip for a tile with `sides` sides.
+
+  `3` up to four sides, so the square keeps its cross-shaped four-point star;
+  for five or more, `div(sides - 1, 2)`, which makes a hexagon a hexagram rather
+  than three diameters through its centre.
+  """
+  @spec star_skip(pos_integer()) :: pos_integer()
+  def star_skip(sides) when sides <= 4, do: 3
+  def star_skip(sides), do: div(sides - 1, 2)
 
   @doc """
   The paste-able expression for the binder the `figure` parameter names.
