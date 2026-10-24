@@ -943,3 +943,109 @@ Ask the user to open `/workbench/styles` and check the seamless fill, the tile o
 git add lib test assets/js docs/superpowers/specs/2026-10-24-girihelix-styles-presentation-design.md docs/backlog.md
 git commit -m "chore: homogenise the styles presentation and record the decisions"
 ```
+
+---
+
+### Task 10: Compact the workbench layout
+
+**Files:**
+
+- Modify: `lib/girihelix_web/workbench/exhibit_live.ex`
+- Modify: `lib/girihelix_web/workbench/components/canvas.ex`
+- Tests: `test/girihelix_web/workbench/exhibit_live_test.exs`, `test/girihelix_web/workbench/components/canvas_test.exs`
+
+**Interfaces:**
+
+- Produces: the page splits `{:both, ops, rows}` itself — the canvas in the main column, the controls and then the panel in the right column. `Canvas.canvas/1` no longer lays a panel beside the picture; `Canvas.panel/1` is public for the page. The exhibit contract is unchanged.
+- Produces: one header row with the title, byline and summary on the left and the transport aligned right; a height-capped canvas; the source and reproduce panes inside a collapsed `<details>` labelled "Show source and reproduce".
+- Produces: the loading branch renders the same header, main grid and controls as a finished run, with a progress placeholder in the canvas area and the previous drawing when one exists, so the layout does not jump.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `exhibit_live_test.exs`:
+
+```elixir
+test "the header carries the transport and the panel follows the controls", %{conn: conn} do
+  {:ok, view, html} = live(conn, "/workbench/styles")
+  html = render_async(view)
+
+  assert html =~ ~s(id="transport")
+  assert html =~ ~s(id="controls")
+  assert html =~ ~s(id="panel")
+
+  transport = elem(:binary.match(html, ~s(id="transport")), 0)
+  controls = elem(:binary.match(html, ~s(id="controls")), 0)
+  panel = elem(:binary.match(html, ~s(id="panel")), 0)
+  assert controls < panel
+  assert transport < controls
+end
+
+test "the source and reproduce panes are collapsed by default", %{conn: conn} do
+  {:ok, view, html} = live(conn, "/workbench/styles")
+  html = render_async(view)
+
+  assert html =~ "<details"
+  refute html =~ ~s(<details open)
+  assert html =~ "Show source and reproduce"
+end
+
+test "the loading branch keeps the canvas slot", %{conn: conn} do
+  {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
+  assert has_element?(view, "#canvas")
+  assert has_element?(view, "#run-progress")
+  render_async(view)
+end
+```
+
+The assertions pin order by byte offset in one render; if a wrapper id changes, update the test with it.
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `mix test test/girihelix_web/workbench/exhibit_live_test.exs`
+Expected: FAIL — the panel sits beside the canvas, there is no details element, and the loading branch has no canvas.
+
+- [ ] **Step 3: Implement the compact layout**
+
+- `Canvas`: split the `{:both}` shape so `canvas/1` renders only the picture (and `{:panel}` only the panel); expose the panel as a public component. Keep `#canvas`, `#panel`, the zoom hook and the overflow classes.
+- `ExhibitLive`: render one header row — title, byline and summary on the left, `<.transport>` right-aligned (wrapping on small screens). In the main grid, the canvas takes the flexible column; the right column holds the controls and then the panel for `{:both}`. Tighten the vertical gaps to `gap-2` and cap the canvas height (for example `max-h-[70vh]` on the SVG with `h-auto`) so a tall aspect does not force scrolling.
+- Put the source and reproduce panes in one `<details>` labelled "Show source and reproduce", closed by default, side by side when opened.
+- The loading branch uses the same header and main grid: the canvas slot shows the previous drawing when one exists, otherwise an empty framed box, with `#run-progress` visible; the transport renders disabled until frames exist. No branch changes the page's block structure.
+- Add the panel's rows to the loading branch as placeholders (`n/a`) so the right column height stays stable.
+
+- [ ] **Step 4: Run the tests to see them pass**
+
+Run: `mix test test/girihelix_web/workbench/exhibit_live_test.exs test/girihelix_web/workbench/components`
+Expected: PASS. Update any existing test that assumed the old `{:both}` canvas structure, preserving its assertions.
+
+- [ ] **Step 5: Run the full gate**
+
+Run: `mix precommit`
+Expected: pass with `mix dialyzer` Total errors 0.
+
+- [ ] **Step 6: Ask the user to check the layout**
+
+Ask the user to open `/workbench/styles` at their usual window size and confirm the transport sits by the title, the panel below the controls, the code is collapsed, and the page fits without scrolling. Adjust the height cap and gaps if they ask; rerun the affected tests.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/girihelix_web/workbench test/girihelix_web/workbench
+git commit -m "feat: compact the workbench layout"
+```
+
+---
+
+### Task 11: Final gate after layout
+
+**Files:**
+
+- Modify only what the gate reports.
+
+- [ ] **Step 1: Run the full gate**
+
+Run: `mix precommit`
+Expected: format, Credo, Sobelow, the suite under coverage and dialyzer all pass with `Total errors: 0`.
+
+- [ ] **Step 2: Fix findings, rerun, commit**
+
+Fix only the reported items; commit with a message naming the gate.
