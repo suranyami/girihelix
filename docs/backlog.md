@@ -94,6 +94,16 @@ above does; a release started elsewhere would read nothing, or fail
 `File.read!/1`. Resolve the read paths with `:code.priv_dir(:girihelix)` when the
 workbench is first run from a release started outside a project-root cwd.
 
+### Six catalogue tilings have no regular features (captured 2026-10-24, Plan 5 review)
+
+`Penrose`, `Penrose Monster`, `Squoctogon`, `Squoctogon 2`, `6 Losange` and
+`Great Mosque of Malatya` carry no regular tiles, so a figure-bound construction
+binds nothing and welds an empty map; the `:styles` exhibit then reports
+`failure: no_faces` (or falls back on an empty painting) instead of a picture.
+A reader choosing one of them gets no explanation. Fixing it means either
+restricting the tiling enum to tilings with regular features, adding a doc
+sentence beside the control, or guiding the reader to a tiling that binds.
+
 ### Browsing palettes by base colour (captured 2026-10-24, Plan 5 homogenisation)
 
 The palette control is one 348-entry enum of combination numbers. The dataset

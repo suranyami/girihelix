@@ -28,6 +28,11 @@ defmodule Girihelix.Engine.Render.StyleTest do
     assert Style.background([], roles()) == []
   end
 
+  test "a point-only drawing gains no background" do
+    ops = [{:point, {1.0, 2.0}, 3.0, []}]
+    assert Style.background(ops, roles()) == ops
+  end
+
   test "paint dispatches by style id" do
     map = PlanarMap.new()
     assert {:ok, %{ops: [], faces: nil}} = Style.paint(:plain, map, roles())

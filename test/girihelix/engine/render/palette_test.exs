@@ -21,6 +21,7 @@ defmodule Girihelix.Engine.Render.PaletteTest do
     assert Palette.combination(349) == {:error, :unknown_combination}
     assert Palette.combination(:"0") == {:error, :unknown_combination}
     assert Palette.combination(:nope) == {:error, :unknown_combination}
+    assert Palette.roles(349) == {:error, :unknown_combination}
     assert_raise ArgumentError, fn -> Palette.combination!(349) end
     assert_raise ArgumentError, fn -> Palette.roles!(349) end
   end
@@ -49,6 +50,24 @@ defmodule Girihelix.Engine.Render.PaletteTest do
              darker: "#ffcfc4",
              lighter: "#80ffcc",
              background: "#80ffcc"
+           }
+  end
+
+  test "a four-colour combination maps all four in order" do
+    assert Palette.roles!(:"348") == %{
+             edge: "#340059",
+             darker: "#172713",
+             lighter: "#328e13",
+             background: "#bcd382"
+           }
+  end
+
+  test "a five-colour combination takes the first, second, second-to-last and last" do
+    assert Palette.roles!(:"274") == %{
+             edge: "#bf36e0",
+             darker: "#9161f2",
+             lighter: "#ff3319",
+             background: "#4f8fe6"
            }
   end
 

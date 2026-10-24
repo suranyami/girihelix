@@ -70,7 +70,7 @@ defmodule Girihelix.Engine.Render.Palette do
         }
 
   @doc """
-  The number of combinations in the dataset, 348.
+  The number of combinations in the dataset.
   """
   @spec count() :: pos_integer()
   def count, do: @count
@@ -121,7 +121,7 @@ defmodule Girihelix.Engine.Render.Palette do
   def roles(id) do
     case combination(id) do
       {:ok, colours} -> {:ok, role_map(colours)}
-      {:error, :unknown_combination} -> {:error, :unknown_combination}
+      {:error, _} = error -> error
     end
   end
 
@@ -143,6 +143,9 @@ defmodule Girihelix.Engine.Render.Palette do
   defp fetch(id) when is_atom(id) do
     id |> Atom.to_string() |> parse()
   end
+
+  # Anything that is neither an integer nor an atom names no combination.
+  defp fetch(_id), do: nil
 
   # The atom must be a whole number; a trailing remainder means it is not an id.
   defp parse(text) do

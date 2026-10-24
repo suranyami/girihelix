@@ -74,9 +74,9 @@ Taprats' style hierarchy paints the same map differently. The three v1 styles
 
 | Style | What it draws | Porting anchor |
 | --- | --- | --- |
-| `Plain` | One stroke per planar edge; the workhouse view | `rendering.md` §1, the `Style` base |
-| `Outline` | The closed outline of each figure/ring as a stroke | `rendering.md` §1, `Outline` |
-| `Filled` | Every two-coloured face as a fill (darker/lighter), plus the boundary treatment | `rendering.md` §2, `Filled` |
+| `Plain` | One stroke per planar edge; the workhouse view | `rendering.md` §4, `Plain` |
+| `Outline` | One mitred six-point ribbon polygon per planar edge, filled rather than stroked; no closed figure outline | `rendering.md` §6, `Outline` |
+| `Filled` | Every two-coloured face as a fill (darker/lighter), plus the boundary treatment | `rendering.md` §5, `Filled` |
 
 A style is a function of a `PlanarMap` (plus palette) — no mutable builder
 state crosses the port; the exact `setMap`/`computeMapShape` call sequence from
@@ -105,9 +105,10 @@ point.
   size; browsing by base colour (the swatch pages' mode) is a follow-up.
 - **Role mapping.** A combination carries 1–5 colours and a paint needs roles:
   edge/boundary, darker face, lighter face (+ background for `Outline`/`Plain`
-  pages). The mapping rule (e.g. by luminance ordering) is the builder's, and
-  must be documented as a decision with its failure mode (a two-colour
-  combination with near-identical luminances reads muddy — acceptable; note it).
+  pages). The mapping rule is the one recorded under "Decisions taken at
+  implementation" (ascending WCAG relative luminance, hex breaking ties, then
+  mapped by count), and its failure mode is documented there: a two-colour
+  combination with near-identical luminances reads muddy — acceptable for v1.
 - **Serialisation.** Ops carry their final hexes; the palette choice happens
   when the style produces ops, and the SVG serializer emits them unchanged.
 
@@ -127,7 +128,7 @@ point.
   step that runs the chosen style over the constructed map. The construct's
   frames remain for review; the last frame is the deliverable.
 - `draw/2` renders the painted ops; the panel rows carry tiling, figure, style,
-  palette, faces (filled), vertices, edges.
+  palette, faces (filled), vertices, edges, and the failure reason or `none`.
 - Failure frames carry over: a raising `Star`, a degenerate tiling or an
   inconsistent colouring render as failure frames, per the workbench contract.
 
@@ -160,16 +161,18 @@ point.
 - **Role mapping.** Colours sort ascending by WCAG relative luminance (hex
   breaks ties) and map to `edge`, `darker`, `lighter` and `background` by their
   count: one colour fills every role; two make the dark one the edge and the
-  light one everything else; three map `[dark, mid, light]` to the edge, darker,
-  lighter and background; four map in order; five or more take the first,
-  second, second-to-last and last. Near-identical luminances sort arbitrarily
-  and read muddy, and a one-colour combination paints flat. Both are visual,
-  not errors, and are accepted for v1.
+  light one everything else; three map `[dark, mid, light]` to the edge and
+  darker, with the light colour filling both `lighter` and `background`; four
+  map in order; five or more take the first, second, second-to-last and last.
+  Near-identical luminances sort arbitrarily and read muddy, and a one-colour
+  combination paints flat. Both are visual, not errors, and are accepted for
+  v1.
 - **`Outline`'s geometry.** Each edge is one six-point ribbon polygon: the
   mitred offset points at each end with the vertex between them. A degree-one
   end is capped perpendicular; a degree-two end is mitred against its only
   neighbour; a higher-degree end is mitred against the neighbours either side
-  of the edge. `sin θ` below `1e-7` means the miter is unbounded, so the corner
+  of the edge. `abs(sin θ) < 1.0e-7` means the miter is unbounded — covering
+  both the straight-through and coincident-direction cusps — so the corner
   falls back to the perpendicular offset.
 - **`Filled`'s order.** White faces paint first in the lighter colour, then
   black faces in the darker one, then every map edge is stroked once in the

@@ -185,6 +185,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   defp failure_name(nil), do: "none"
   defp failure_name(reason) when is_atom(reason), do: Atom.to_string(reason)
+
+  # Defensive totality over `Construct.state`'s declared reason, which includes
+  # the wrapped-exception tuple even though no current construction step stores
+  # it: a future step that does still gets a readable row.
   defp failure_name({:figure_failed, exception}), do: Exception.message(exception)
   defp failure_name(reason), do: inspect(reason)
 
@@ -210,10 +214,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   defp load(name), do: Catalogue.load!(Atom.to_string(name))
 
   # One binder per declared figure, delegated so the styled pattern binds its
-  # figures exactly as the instancing exhibit does.
-  @spec binder(atom()) :: Construct.binder()
-  defdelegate binder(figure), to: Instancing
+  # figures exactly as the instancing exhibit does. Private: the exhibit's
+  # public surface is exactly the behaviour's callbacks.
+  defp binder(figure), do: Instancing.binder(figure)
 
-  @spec binder_call(atom()) :: String.t()
-  defdelegate binder_call(figure), to: Instancing
+  defp binder_call(figure), do: Instancing.binder_call(figure)
 end

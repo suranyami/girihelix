@@ -20,12 +20,17 @@ defmodule Girihelix.Engine.Render.Styles.PlainTest do
 
     assert {:ok, %{ops: [background | lines], faces: nil}} = Plain.paint(map, roles())
     assert {:polygon, _, :fill, [fill: "#eeeeee"]} = background
-    assert length(lines) == PlanarMap.num_edges(map)
 
-    for {:line, _from, _to, opts} <- lines do
-      assert opts[:stroke] == "#111111"
-      assert opts[:width] == 1.5
-    end
+    # Every emitted op after the background is a line with the edge's ends,
+    # stroke and fixed width.
+    Enum.each(lines, fn line ->
+      assert {:line, from, to, opts} = line
+      assert from == {0.0, 0.0}
+      assert to == {2.0, 0.0}
+      assert opts == [stroke: "#111111", width: 1.5]
+    end)
+
+    assert length(lines) == PlanarMap.num_edges(map)
   end
 
   test "an empty map paints nothing" do

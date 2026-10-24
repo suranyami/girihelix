@@ -1,6 +1,7 @@
 defmodule Girihelix.Engine.Render.Style do
   @moduledoc """
-  The contract a paint style implements, and the background every style shares.
+  The contract a paint style implements, and the background `Plain` and
+  `Outline` share.
 
   A style reads a `PlanarMap` and the four colours of a `Palette` combination,
   and returns the draw ops that paint the map together with the number of faces
@@ -70,7 +71,8 @@ defmodule Girihelix.Engine.Render.Style do
 
   The fill spans the box around the drawing, grown on every side by two per
   cent of the box's longer side, so the strokes stand clear of the view's edge.
-  A drawing with no positions spans nothing and is returned unchanged.
+  A drawing with no positions, or one whose positions all coincide, spans
+  nothing and is returned unchanged.
 
   The corners run lower-left, lower-right, upper-right, upper-left.
   """
@@ -80,6 +82,9 @@ defmodule Girihelix.Engine.Render.Style do
   end
 
   defp fill_behind(nil, ops, _hex), do: ops
+
+  defp fill_behind({min_x, min_y, max_x, max_y}, ops, _hex) when min_x == max_x and min_y == max_y, do: ops
+
   defp fill_behind(box, ops, hex), do: [fill_op(box, hex) | ops]
 
   defp fill_op(box, hex) do

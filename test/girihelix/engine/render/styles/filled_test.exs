@@ -35,13 +35,19 @@ defmodule Girihelix.Engine.Render.Styles.FilledTest do
     assert {:ok, %{ops: [light, dark | boundary], faces: 2}} =
              Filled.paint(map, Palette.roles!(:"253"))
 
-    assert {:polygon, _, :fill, [fill: "#ff7340"]} = light
-    assert {:polygon, _, :fill, [fill: "#1b3644"]} = dark
-    assert length(boundary) == PlanarMap.num_edges(map)
+    assert {:polygon, light_points, :fill, [fill: "#ff7340"]} = light
+    assert {:polygon, dark_points, :fill, [fill: "#1b3644"]} = dark
 
-    for {:line, _from, _to, opts} <- boundary do
-      assert opts[:stroke] == "#340059"
-    end
+    # Two faces along the doubled y = 0 edge, each bounded by the same three
+    # edges; the colouring walks them in opposite directions.
+    assert light_points == [{2.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}]
+    assert dark_points == [{0.0, 0.0}, {2.0, 0.0}, {1.0, 0.0}]
+
+    assert boundary == [
+             {:line, {0.0, 0.0}, {2.0, 0.0}, [stroke: "#340059", width: 1.0]},
+             {:line, {0.0, 0.0}, {1.0, 0.0}, [stroke: "#340059", width: 1.0]},
+             {:line, {1.0, 0.0}, {2.0, 0.0}, [stroke: "#340059", width: 1.0]}
+           ]
   end
 
   test "a one-colour palette still fills and strokes" do

@@ -37,9 +37,13 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
 
     assert {:both, ops, rows} = Styles.draw(last_frame(params), params)
     assert Enum.any?(ops, &match?({:polygon, _, :fill, _}, &1))
+    assert {"tiling", "8.5"} in rows
+    assert {"figure", "rosette"} in rows
     assert {"style", "filled"} in rows
     assert {"palette", "Wada 253"} in rows
     assert {"faces", "17"} in rows
+    assert {"vertices", "432"} in rows
+    assert {"edges", "576"} in rows
     assert {"failure", "none"} in rows
   end
 
@@ -52,11 +56,24 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {"failure", "no_faces"} in rows
   end
 
+  test "an empty painting falls back to the construct drawing" do
+    params = %{defaults() | style: :plain, figure: :none}
+
+    assert {:both, [_ | _], rows} = Styles.draw(last_frame(params), params)
+    assert {"style", "plain"} in rows
+    assert {"faces", "n/a"} in rows
+    # `Plain` over an empty map succeeds with no ops, so the panel falls back to
+    # the construct drawing and reports no failure.
+    assert {"failure", "none"} in rows
+  end
+
   test "a one-colour palette still paints" do
     params = %{defaults() | palette: :"5"}
 
     assert {:both, [_ | _], rows} = Styles.draw(last_frame(params), params)
     assert {"palette", "Wada 5"} in rows
+    assert {"faces", "17"} in rows
+    assert {"failure", "none"} in rows
   end
 
   test "a triangle tiling in star mode keeps every frame drawable" do
