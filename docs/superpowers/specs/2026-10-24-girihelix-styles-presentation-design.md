@@ -40,12 +40,12 @@ The engine already builds a periodic design: `Construct` translates the same fig
 The fix is a **fixed viewport** framing the periodic interior of the patch:
 
 - The catalogue's placements put the constructed content off the lattice origin, so the window is centred on the **drawing's content bounds**, not on the origin.
-- The window is a fraction of those bounds, sized so it lies inside the region where every vertex has a `+t1` and a `+t2` counterpart. The frame targets two to three unit cells at rest; the fraction follows from that target and the patch span.
+- The window is a fraction of those bounds, sized so it lies inside the region where every vertex has a `+t1` and a `+t2` counterpart. The shipped frame shows two unit cells at rest (one for a tiling above the vertex budget); the fraction follows from that count and the patch span.
 - The styles exhibit pins one viewport for the whole run, not one per frame. The optional `viewport` callback gains an arity that receives the run's frames, so the exhibit takes the bounds from the final retained frame without constructing again and without raising on a failure frame. `:fit` stays the default for every other exhibit.
 - The serializer's root `viewBox` is the fixed window. The SVG root is made overflow-visible and the canvas wrapper clips, so the ops outside the window are still in the markup and panning or zooming can reveal the fringe.
 - The patch is enlarged beyond `Construct.default_region/1`: a span helper constructs a grid of unit cells large enough that the visible-cell window sits inside the periodic interior. The default build targets two cells (roughly a five-by-five-cell patch). **The span adapts to the tiling:** the exhibit measures the constructed one-cell map and, when it exceeds a vertex budget, builds one cell and shows one cell instead, because the heaviest catalogue tilings take tens of seconds at five cells. The exact budget is calibrated so `8.5` keeps two cells and `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` use one.
 
-Seamlessness is pinned by a property test, not by eye: every vertex of the windowed region has a counterpart translated by `t1` and by `t2` within the constructed patch (rounded positions compared as sets).
+Seamlessness is pinned by a property test, not by eye, for the two-cell windows of `8.5` and `6.5 flower`: every vertex of those windowed regions has a counterpart translated by `t1` and by `t2` within the constructed patch (rounded positions compared as sets). `7.6` and `3-8-4-6` do not hold this property at either span and are recorded in `docs/backlog.md` rather than asserted.
 
 ## Face colouring: every island
 
@@ -62,12 +62,12 @@ Goldens or tests that assume single-seed counts are updated; structural goldens 
 
 The exhibit gains a `tiles` boolean parameter, default `false`.
 
-- When on, every placed tile is drawn before the figure: a `{:polygon, points, :fill, [fill: hex, opacity: 0.12]}` per placement, plus the tile outline.
+- When on, every placed tile is appended after the figure ops: a `{:polygon, points, :fill, [fill: hex, opacity: 0.12]}` and a `{:polygon, points, :stroke, [stroke: hex, width: 0.75, opacity: 0.5]}` per placement.
 - Tint per tile type: a fixed ordered list of five faint hues assigned by `feature_id` (modulo the list), so octagons and squares read differently and the assignment is stable across runs. The exact hues are the builder's call; they must stay legible in both themes.
 - The overlay is generated from the construct state's `translations` and the tiling's placements: each placed feature's points are transformed by the placement, then by the lattice translation. It therefore covers the same patch as the figure.
 - The overlay is drawn **after** the figure in every frame of the run, as a translucent layer on top. With the patch filling the frame, anything drawn beneath the figure would be hidden; the transparency keeps the design readable through the tiles. The style's background is still returned separately so the composition is explicit: **background → figure → tiles**.
 - Frame zero has no lattice translations yet; the overlay then draws the tiling's in-cell placements at the identity translation.
-- Existing tile outlines remain part of the structure drawing; the overlay adds fills and does not replace them.
+- Existing tile outlines remain part of the structure drawing; the overlay's fill and stroke are added alongside them, not in place of them.
 
 ## Pan and zoom
 
@@ -76,7 +76,7 @@ One hook, `CanvasZoom`, in `assets/js/`, registered in `app.js`, attached by the
 - **Pan:** pointer drag moves the content; the wrapper clips overflow.
 - **Zoom:** pinch on touch, or ctrl/⌘-wheel on a trackpad/mouse, zooms about the pointer. Plain wheel scrolls the page and never traps it.
 - **Controls:** small `+`, `−` and reset buttons in the canvas corner, so zoom is reachable without a gesture.
-- **Clamps:** scale between roughly 0.6 and 8; panning is allowed into the patch's fringe but not indefinitely into blank space.
+- **Clamps:** scale between roughly 0.6 and 8. Translation is not clamped for v1, so panning can move into blank space; the clamp is recorded in the backlog.
 - **Lifecycle:** the transform survives frame and parameter updates (LiveView patches the SVG inside the hook's wrapper); reset returns to the fitted view. Navigating to another exhibit remounts the hook and resets.
 - The SVG remains server-rendered and unchanged; the hook only transforms the wrapper's content with CSS.
 
@@ -129,11 +129,12 @@ The controls component renders a `:palette` parameter as:
 The calls the draft left open, as shipped.
 
 - **The adaptive span is measured, not guessed.** `Run.build/4` probes every run at one cell and measures the probe's final map with `PlanarMap.count_vertices/1`. Above `@vertex_budget 2_000` the probe *is* the run and its frames are kept; otherwise the probe is discarded and the exhibit runs again at two cells. The budget was calibrated with the rosette binder on one-cell `patch_region/2` maps, which are three-by-three patches: `8.5` 1,392 vertices, `7.6` 4,321 and `6.5 flower` 6,164. `8.5` therefore keeps two cells, while `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` drop to one. A probe that raises proves nothing about the span, so it is repeated at two cells and that run's failure is reported.
-- **Visible cells stay at two, and no three-cell window shipped.** Task 4's timing showed a wider window would not change construction cost, and the largest tiling was already impractical at five cells; the fix for that is the adaptive span plus the construction scaling noted in `docs/backlog.md`, not a wider window.
-- **The viewport formula.** `Styles.viewport/2` takes the last frame's state, `cell = max(|t1|, |t2|)`, and pins a window of `cells * cell / @canvas_aspect` map units (`@canvas_aspect 0.75`) at scale `@nominal_width / width` (`@nominal_width 1000.0`), centred on the constructed map's vertex bounds. An empty map falls back to the structure ops' bounds, and neither gives `Viewport.fit(nil)`. The pinned viewport is computed once per run from the frames in hand.
+- **Visible cells stay at two, and no three-cell window shipped.** The visible window is sized by the same `cells` value that sizes the patch region, so a wider window multiplies the same construction cost. Task 4 measured that the patch cost already made the largest tiling impractical at five cells; the fix is the adaptive span plus the construction scaling noted in `docs/backlog.md`, which also defers a three-cell window until that cost is addressed.
+- **The viewport formula.** `Styles.viewport/2` takes the last frame's state, `cell = max(|t1|, |t2|)`, and pins a window of `cells * cell / @canvas_aspect` map units (`@canvas_aspect 0.75`) at scale `@nominal_width / width` (`@nominal_width 1000.0`), centred on the constructed map's vertex bounds. An empty map falls back to the structure ops' bounds; if neither yields a centre, the result is `Viewport.fit(nil)`. The pinned viewport is computed once per run from the frames in hand.
 - **A run is a task; a frame is not.** `ExhibitLive` builds with `start_async/3` and reports progress per step through `Steps.run/3`'s `:on_step`. A frame navigation reuses the frames already assigned through `Run.view/4`; only a change to `{slug, values}` starts a new run, and a superseded run is cancelled.
 - **Wheel zoom normalises `deltaMode`.** A wheel delta arrives in pixels (`0`), lines (`1`) or pages (`2`); lines are multiplied by 16 px and pages by the canvas height before `Math.exp(-delta * 0.002)`, so ctrl/⌘-wheel zooms in Firefox's line mode rather than being dead.
 - **The star skip follows the side count.** `Instancing.star_skip/1` returns `3` for three or four sides and `div(sides - 1, 2)` otherwise, so a hexagon is a hexagram rather than three diameters through its centre while the square keeps its cross-shaped star. The binder passes `star_skip(sides) * 1.0`, keeping `Star.build!/3`'s float contract.
 - **Derived tone constants.** A missing palette tone shifts HSL lightness by `0.18` with hue and saturation kept, clamped to `[0.08, 0.92]`; a shift the clamp leaves unchanged is reversed.
 - **Overlay tints.** Five fixed hues — `#2563eb`, `#d97706`, `#0d9488`, `#db2777`, `#7c3aed` — cycled by `feature_id`, with fill opacity `0.12`, stroke opacity `0.5` and stroke width `0.75`.
+- **Pan clamping and delegated button listeners are deferred.** `CanvasZoom` clamps scale to `[0.6, 8.0]` only; pan translation is not clamped into the content's bounds, and the zoom buttons are bound per element at mount, so a button added by a later LiveView patch would be inert. Both are recorded in `docs/backlog.md`.
 - **The seam property is checked on rounded positions.** The test compares six-decimal rounded vertex positions, translating the exact position and rounding once; translating an already-rounded position double-rounds and can miss a counterpart that is present.

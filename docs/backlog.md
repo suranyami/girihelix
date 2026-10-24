@@ -164,8 +164,10 @@ listener on the hook element. Cost: a JS-only change with a manual gesture check
 The picker resolves all 348 combinations' colours and renders 348 radio rows on
 every controls render, and a reader can only scroll. Precompute the row data
 (compile time or a cached list) or window the scroll container, and add a search
-or filter over the combination number and its colours. Cost: a data-shape change
-in `Controls`, or a small JS hook for windowing, plus a filter input.
+over the combination number. Filtering by base colour is already covered by
+"Browsing palettes by base colour" above; this item is the rendering and
+number-search side, not a second colour filter. Cost: a data-shape change in
+`Controls`, or a small JS hook for windowing, plus a search input.
 
 ## Closed
 

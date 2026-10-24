@@ -56,7 +56,13 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
   end
 
   test "the palette control renders one swatch row per combination and checks the selected one" do
-    param = %Param{name: :palette, type: :palette, options: [:"1", :"253"], default: :"253"}
+    param = %Param{
+      name: :palette,
+      type: :palette,
+      options: [:"1", :"253"],
+      default: :"253",
+      doc: "Wada combination"
+    }
 
     html = render_component(&Controls.controls/1, params: [param], values: %{palette: :"253"})
     fragment = LazyHTML.from_fragment(html)
@@ -68,8 +74,12 @@ defmodule GirihelixWeb.Workbench.Components.ControlsTest do
 
     assert html =~ "background-color: #de4500"
     assert html =~ "background-color: #340059"
+
+    legend = LazyHTML.text(LazyHTML.query(fragment, "legend"))
+    assert legend =~ "palette"
+    assert legend =~ "Wada combination"
     # The legend names the fieldset itself, so it carries no dangling `for`.
-    refute html =~ ~s(for="palette")
+    assert Enum.empty?(LazyHTML.query(fragment, ~s(label[for="palette"])))
   end
 
   test "an unknown palette option renders a row with no swatches" do
