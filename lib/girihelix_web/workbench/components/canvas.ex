@@ -48,9 +48,12 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     assigns = assign(assigns, :ops, ops)
 
     ~H"""
-    <div id="canvas" class="w-full overflow-hidden">
-      <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
-    </div>
+    <.zoomable_canvas
+      class="relative w-full overflow-hidden"
+      ops={@ops}
+      viewport={@viewport}
+      aspect={@aspect}
+    />
     """
   end
 
@@ -67,11 +70,45 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
 
     ~H"""
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div id="canvas" class="min-w-0 flex-1 overflow-hidden">
-        <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
-      </div>
+      <.zoomable_canvas
+        class="relative min-w-0 flex-1 overflow-hidden"
+        ops={@ops}
+        viewport={@viewport}
+        aspect={@aspect}
+      />
       <div class="w-64 shrink-0">
         <.panel_view rows={@rows} />
+      </div>
+    </div>
+    """
+  end
+
+  attr :class, :string, required: true
+  attr :ops, :list, required: true
+  attr :viewport, :any, required: true
+  attr :aspect, :float, required: true
+
+  # The `CanvasZoom` hook transforms the inner wrapper and clips at the outer
+  # one, so a pan past the pinned viewport reveals the SVG's fringe without
+  # moving the page. The controls sit inside the hook element (their clicks are
+  # wired by it) but outside the transformed content (so they never scale or
+  # move).
+  defp zoomable_canvas(assigns) do
+    ~H"""
+    <div id="canvas" phx-hook="CanvasZoom" class={@class}>
+      <div data-zoom-content>
+        <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
+      </div>
+      <div class="absolute top-2 right-2 flex gap-1">
+        <button type="button" data-zoom="in" class="btn btn-xs btn-square" aria-label="Zoom in">
+          +
+        </button>
+        <button type="button" data-zoom="out" class="btn btn-xs btn-square" aria-label="Zoom out">
+          −
+        </button>
+        <button type="button" data-zoom="reset" class="btn btn-xs btn-square" aria-label="Reset zoom">
+          ⟳
+        </button>
       </div>
     </div>
     """

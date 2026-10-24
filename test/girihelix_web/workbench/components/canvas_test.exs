@@ -72,6 +72,21 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
     end
   end
 
+  test "the canvas carries the zoom hook and its controls" do
+    for drawing <- [
+          {:canvas, [{:line, {0.0, 0.0}, {1.0, 1.0}, []}]},
+          {:both, [{:line, {0.0, 0.0}, {1.0, 1.0}, []}], [{"b", "2"}]}
+        ] do
+      html = render_component(&Canvas.canvas/1, drawing: drawing, viewport: nil)
+
+      assert html =~ ~s(phx-hook="CanvasZoom")
+      assert html =~ ~s(data-zoom-content)
+      assert html =~ ~s(data-zoom="in")
+      assert html =~ ~s(data-zoom="out")
+      assert html =~ ~s(data-zoom="reset")
+    end
+  end
+
   test "canvas renders a panel as a two-column table" do
     html =
       render_component(&Canvas.canvas/1,
