@@ -500,7 +500,7 @@ Expected: FAIL — `patch_region/2` and `viewport/2` do not exist; the SVG root 
 - `Exhibit`: declare `@callback viewport(params, frames) :: :fit | Viewport.t()` and `@optional_callbacks viewport: 2`; update the module doc.
 - `ExhibitLive`: `exports_viewport?/1` checks arity `2`; `pinned_viewport` calls `exhibit.viewport(values, frames)`. Thread `frames` through the `viewport/3` helper.
 - Update the six existing `viewport/1` implementations to `viewport(params, _frames)`.
-- `Styles`: `@patch_cells 2`, `@visible_cells 2.0`, `@canvas_aspect 0.75`, `@nominal_width 1000.0`. `initial/1` and `steps/1` use `Construct.patch_region(tiling, @patch_cells)`. `viewport/2` takes the last frame's state, computes `cell`, `width`, and the content centre from the painted ops' bounds (or the map's vertex bounds, or the structure ops' bounds), and returns a `%Viewport{}`. If no bounds exist, return `Viewport.fit(nil)`.
+- `Styles`: `@patch_cells 2`, `@visible_cells 2.0`, `@canvas_aspect 0.75`, `@nominal_width 1000.0`. `initial/1` and `steps/1` use `Construct.patch_region(tiling, @patch_cells)`. `viewport/2` takes the last frame's state, computes `cell`, `width`, and the content centre from the **constructed map's vertex bounds** when the map has vertices, otherwise from the structure ops' bounds — never from the painted ops, because those include the tile overlay when it is on and would expand the window to the whole patch. If no bounds exist, return `Viewport.fit(nil)`.
 - `Canvas`: change `@svg_class` to `"w-full h-auto overflow-visible"` and add `overflow-hidden` to the canvas wrappers.
 
 - [ ] **Step 4: Run the tests to see them pass**
