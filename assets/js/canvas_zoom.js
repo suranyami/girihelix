@@ -7,6 +7,10 @@
 // remounting starts again at scale 1, translation 0.
 const MIN_SCALE = 0.6
 const MAX_SCALE = 8.0
+// Wheel deltas arrive in pixels (deltaMode 0), lines (1) or pages (2) depending
+// on the browser and device. Normalise lines and pages to pixels before zooming
+// so ctrl/⌘-wheel is not dead in Firefox's line mode.
+const LINE_HEIGHT = 16
 
 export const CanvasZoom = {
   mounted() {
@@ -16,6 +20,7 @@ export const CanvasZoom = {
     this.y = 0
     this.pointers = new Map()
     this.lastDistance = 0
+    this.lastMidpoint = null
     // Touch is ours: one finger pans, two pinch. Without this the browser
     // would scroll the page instead of reporting the gesture.
     this.el.style.touchAction = "none"
@@ -33,11 +38,21 @@ export const CanvasZoom = {
   },
   destroyed() {
     this.el.style.touchAction = ""
+    this.el.style.userSelect = ""
   },
   down(e) {
     if (e.target.closest("[data-zoom]")) return
+    if (e.pointerType === "mouse" && e.button !== 0) return
     this.el.setPointerCapture(e.pointerId)
+    // A pan over SVG text must not paint a selection highlight.
+    this.el.style.userSelect = "none"
     this.pointers.set(e.pointerId, {x: e.clientX, y: e.clientY})
+    // A second finger starts a fresh pinch: stale values from the previous
+    // gesture would otherwise make it jump.
+    if (this.pointers.size === 2) {
+      this.lastDistance = 0
+      this.lastMidpoint = null
+    }
   },
   move(e) {
     const previous = this.pointers.get(e.pointerId)
@@ -49,10 +64,17 @@ export const CanvasZoom = {
       this.y += next.y - previous.y
     } else {
       const [a, b] = [...this.pointers.values()]
+      const midpoint = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2}
+      // Two-finger drag pans by how far the midpoint moved, then zooms about it.
+      if (this.lastMidpoint) {
+        this.x += midpoint.x - this.lastMidpoint.x
+        this.y += midpoint.y - this.lastMidpoint.y
+      }
+      this.lastMidpoint = midpoint
       const distance = Math.hypot(a.x - b.x, a.y - b.y)
       if (this.lastDistance) {
         const rect = this.el.getBoundingClientRect()
-        this.zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, rect, distance / this.lastDistance)
+        this.zoomAt(midpoint.x, midpoint.y, rect, distance / this.lastDistance)
       }
       this.lastDistance = distance
     }
@@ -60,13 +82,20 @@ export const CanvasZoom = {
   },
   up(e) {
     this.pointers.delete(e.pointerId)
-    if (this.pointers.size < 2) this.lastDistance = 0
+    if (this.pointers.size === 0) this.el.style.userSelect = ""
+    if (this.pointers.size < 2) {
+      this.lastDistance = 0
+      this.lastMidpoint = null
+    }
   },
   wheel(e) {
     if (!(e.ctrlKey || e.metaKey)) return
     e.preventDefault()
     const rect = this.el.getBoundingClientRect()
-    this.zoomAt(e.clientX, e.clientY, rect, Math.exp(-e.deltaY * 0.002))
+    let delta = e.deltaY
+    if (e.deltaMode === 1) delta *= LINE_HEIGHT
+    else if (e.deltaMode === 2) delta *= rect.height
+    this.zoomAt(e.clientX, e.clientY, rect, Math.exp(-delta * 0.002))
   },
   zoomAt(clientX, clientY, rect, factor) {
     const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * factor))
@@ -87,6 +116,8 @@ export const CanvasZoom = {
       this.scale = 1
       this.x = 0
       this.y = 0
+      this.lastDistance = 0
+      this.lastMidpoint = null
     }
     this.apply()
   },

@@ -84,6 +84,20 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
       assert html =~ ~s(data-zoom="in")
       assert html =~ ~s(data-zoom="out")
       assert html =~ ~s(data-zoom="reset")
+
+      # The nesting the hook relies on. The SVG has no divs, so the first
+      # `</div>` closes the [data-zoom-content] wrapper: everything before it
+      # is the canvas plus the wrapper and the SVG, everything after it holds
+      # the controls.
+      assert [content, controls] = String.split(html, "</div>", parts: 2)
+      assert content =~ ~r/<div data-zoom-content>\s*<svg/
+      assert content =~ ~s(id="canvas")
+      assert controls =~ ~r/\A\s*<div[^>]*>\s*<button[^>]*data-zoom="in"/
+
+      for action <- ~w(in out reset) do
+        refute content =~ ~s(data-zoom="#{action}")
+        assert controls =~ ~s(data-zoom="#{action}")
+      end
     end
   end
 
