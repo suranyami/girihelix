@@ -236,7 +236,17 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
   defp promote(state, key) do
     case :dets.lookup(state.dets, disk_key(key)) do
-      [{_stored_key, %{size: _, inserted_at: _, accessed_at: _} = entry}] ->
+      [
+        {_stored_key,
+         %{
+           frames: _,
+           failure: _,
+           cells: _,
+           size: _,
+           inserted_at: _,
+           accessed_at: _
+         } = entry}
+      ] ->
         promoted = %{entry | accessed_at: now()}
         :ets.insert(state.ets, {key, promoted})
         evict_memory(state)
@@ -270,6 +280,16 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
       |> drop_index(stored_key)
       |> evict_disk(size)
 
+    store_dets(state, stored_key, entry, size)
+  end
+
+  defp store_dets(%{dets: nil} = state, _stored_key, _entry, _size) do
+    # Eviction may have degraded the tier on a delete error; the entry stays
+    # memory-only rather than writing to a closed table.
+    state
+  end
+
+  defp store_dets(state, stored_key, entry, size) do
     case :dets.insert(state.dets, {stored_key, entry}) do
       :ok ->
         index =
@@ -389,9 +409,10 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
 
     # Objects that cannot be interpreted are removed, so the index and the
     # file agree, then the cap is enforced against the current `:disk_bytes`.
-    state
-    |> Enum.reduce(malformed, fn stored_key, state -> remove_disk(state, stored_key) end)
-    |> evict_disk(0)
+    state =
+      Enum.reduce(malformed, state, fn stored_key, state -> remove_disk(state, stored_key) end)
+
+    evict_disk(state, 0)
   end
 
   defp reset_dets(%{dets: nil} = state), do: state

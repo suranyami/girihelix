@@ -171,6 +171,32 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
     refute version == {:stale_schema, "0.0.0"}
   end
 
+  test "an existing file with a matching version is indexed at boot" do
+    path = tmp_dets_file()
+    {cache, _ets} = start_cache(disk?: true, dets_file: path, disk_bytes: 1_000)
+    :ok = ConstructCache.put(cache, :k, ConstructCache.entry(:k, [:frame], nil, 2))
+    :ok = stop_supervised(ConstructCache)
+
+    # A malformed object in a version-matching file must be dropped at boot,
+    # not crash the indexing pass.
+    writer = :"writer_#{System.unique_integer([:positive])}"
+    {:ok, writer} = :dets.open_file(writer, file: String.to_charlist(path), type: :set)
+    :ok = :dets.insert(writer, {:malformed, :not_an_entry})
+    :ok = :dets.close(writer)
+
+    {cache, _ets} = start_cache(disk?: true, dets_file: path, disk_bytes: 1_000)
+    assert ConstructCache.get(cache, :k).frames == [:frame]
+    :ok = stop_supervised(ConstructCache)
+
+    reader = :"reader_#{System.unique_integer([:positive])}"
+    {:ok, reader} = :dets.open_file(reader, file: String.to_charlist(path), type: :set)
+    keys = :dets.foldl(fn {key, _}, acc -> [key | acc] end, [], reader)
+    :ok = :dets.close(reader)
+
+    refute :malformed in keys
+    assert :__version__ in keys
+  end
+
   test "a corrupt DETS file is deleted and the tier recovers" do
     path = tmp_dets_file()
     File.write!(path, "this is not a dets file")
