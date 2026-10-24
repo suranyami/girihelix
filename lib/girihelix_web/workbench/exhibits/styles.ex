@@ -162,7 +162,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
   def draw(%Steps.Frame{state: state}, params) do
-    paint = paint_map(params.style, state.map, params.palette)
+    paint = paint_map(params.style, state.map, params.palette, params)
     {ops, faces} = picture(paint, state, params)
     {:both, ops, rows(state, params, faces, paint)}
   end
@@ -293,11 +293,20 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   defp failure_name(reason), do: inspect(reason)
 
   # The draw's painting: the style's ops over the welded map, or its reason.
-  # Recomputed on every draw, so it never enters a frame.
-  defp paint_map(style, map, palette) do
+  # Recomputed on every draw, so it never enters a frame. A cached face
+  # colouring arrives in the params as `:cached_faces`, so `Filled` repaints a
+  # heavy cached map without extracting its faces again.
+  defp paint_map(style, map, palette, params) do
     case Palette.roles(palette, Style.roles(style)) do
-      {:ok, roles} -> Style.paint(style, map, roles)
+      {:ok, roles} -> Style.paint(style, map, roles, faces_opts(params))
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp faces_opts(params) do
+    case Map.get(params, :cached_faces) do
+      nil -> []
+      faces -> [faces: faces]
     end
   end
 

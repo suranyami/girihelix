@@ -185,6 +185,29 @@ over the combination number. Filtering by base colour is already covered by
 number-search side, not a second colour filter. Cost: a data-shape change in
 `Controls`, or a small JS hook for windowing, plus a search input.
 
+### A cache statistics page (captured 2026-10-24, construction cache)
+
+The construction cache is invisible: hits, misses, memory and disk sizes, evictions
+and the face-phase count are only in the process state. A small read-only page or a
+`ConstructCache.stats/1` row in the workbench panel would make the cache's behaviour
+checkable in production. The design's non-goals defer it. Cost: a call into the
+GenServer plus a panel row or page; no storage change.
+
+### Per-entry cache invalidation (captured 2026-10-24, construction cache)
+
+An entry lives until the disk cap evicts it or a deploy changes the version key, so a
+single wrong frame cannot be dropped without clearing the tier. A per-key delete would
+cover it. The design's non-goals defer it. Cost: one GenServer call and two tier deletes,
+plus a way to name the entry from outside.
+
+### The face phase is not single-flight (captured 2026-10-24, construction cache review)
+
+Two LiveViews opening the same cached map with no stored face colouring each run the
+extraction and each write the same result. The construction itself builds once. A
+`:global` lock keyed like `ConstructCache.fetch/3`'s, or an entry field marking the
+extraction as in progress, would dedupe it. Cost: one lock and a wait/retry path in the
+paint phase.
+
 ## Closed
 
 - **The star binder's fixed skip degenerated polygonal stars** (styles

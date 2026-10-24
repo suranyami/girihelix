@@ -53,6 +53,7 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
           required(:frames) => list(),
           required(:failure) => term(),
           required(:cells) => pos_integer(),
+          required(:faces) => nil | term(),
           required(:size) => non_neg_integer(),
           required(:inserted_at) => integer(),
           required(:accessed_at) => integer()
@@ -87,6 +88,9 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   Timestamps use the wall clock in microseconds, so disk eviction order is
   meaningful across restarts. The entry carries its external size, so the disk
   tier can decide whether it fits without re-measuring it.
+
+  `:faces` starts `nil`: the face colouring is filled in later by
+  `update_faces/3`, on the first `Filled` paint.
   """
   @spec entry(term(), list(), term(), pos_integer()) :: entry()
   def entry(key, frames, failure, cells) do
@@ -97,11 +101,22 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
       frames: frames,
       failure: failure,
       cells: cells,
+      faces: nil,
       size: :erlang.external_size(frames),
       inserted_at: now,
       accessed_at: now
     }
   end
+
+  @doc """
+  Stores `faces` in the entry for `key`, in memory and on disk.
+
+  `faces` is a `Faces.extract_faces/1` result — `{:ok, colouring}` or the
+  `{:error, reason}` it returned. An absent key is a no-op, so a colouring
+  computed for an evicted entry is not resurrected as an orphan.
+  """
+  @spec update_faces(GenServer.server(), term(), term()) :: :ok
+  def update_faces(server, key, faces), do: GenServer.call(server, {:update_faces, key, faces})
 
   @doc """
   Returns the entry for `key`, building it with `build_fun` on a miss.
@@ -212,6 +227,10 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     end
   end
 
+  def handle_call({:update_faces, key, faces}, _from, state) do
+    {:reply, :ok, store_faces(state, key, faces)}
+  end
+
   def handle_call(:reset, _from, state) do
     :ets.delete_all_objects(state.ets)
 
@@ -233,6 +252,31 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
     touched = %{entry | accessed_at: now()}
     :ets.insert(ets, {key, touched})
     touched
+  end
+
+  # The colouring arrives after the entry was built, so it is written back to
+  # both tiers and the recorded size grows with it. An entry in neither tier is
+  # not resurrected.
+  defp store_faces(state, key, faces) do
+    case touch(state.ets, key) do
+      nil ->
+        {entry, state} = promote(state, key)
+        store_faces(state, key, entry, faces)
+
+      entry ->
+        store_faces(state, key, entry, faces)
+    end
+  end
+
+  defp store_faces(state, _key, nil, _faces), do: state
+
+  defp store_faces(state, key, entry, faces) do
+    # Recomputing from the frames rather than adding to the stored size keeps a
+    # second LiveView's identical update from double-counting the colouring.
+    size = :erlang.external_size(entry.frames) + :erlang.external_size(faces)
+    updated = %{entry | faces: faces, size: size}
+    :ets.insert(state.ets, {key, updated})
+    put_disk(state, key, updated)
   end
 
   defp evict_memory(state), do: evict_oldest(state.ets, :ets.info(state.ets, :size) - state.memory_entries)

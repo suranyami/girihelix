@@ -1,7 +1,7 @@
 # Construction cache — design
 
 **Date:** 2026-10-24
-**Status:** draft for builder review
+**Status:** accepted (2026-10-24); implementation record at the end
 **Depends on:** the styles presentation work (`Run`, async exhibits, the adaptive patch span), merged in PR #24.
 
 ## Intent
@@ -30,6 +30,7 @@ Changing style, palette or the tile overlay re-runs the whole construction today
 - **No stale terms.** Keys carry a cache schema version and the app version; a mismatch clears the disk tier on boot.
 - **No blocking the LiveView.** Disk reads and builds happen in the existing async task; ETS hits are immediate.
 - **Graceful degradation.** A missing or unwritable cache directory disables the disk tier and the workbench still works; a corrupt DETS file is deleted and rebuilt.
+- **A writable volume in the deployment.** The homelab service mounts a volume for the cache directory and sets `GIRIHELIX_CACHE_DIR` (not edited in this repository; see `services/girihelix/girihelix.yml` in the homelab repo), so the cache survives container restarts.
 
 ## Architecture
 
@@ -102,8 +103,59 @@ The disk tier stores a `:"__version__"` entry. On boot, a mismatch with the curr
 
 ## Left to the builder
 
+All five answered by the implementation record below.
+
 - The exact DETS file layout, version key and corruption handling.
 - The external-size margin used for the caps.
 - The loading state's wording and whether a disk hit shows a determinate or indeterminate progress bar.
 - The cache directory's configuration name and the homelab volume path.
 - Whether the face colouring is stored as part of the entry or in a second keyed table.
+
+## Implementation record (2026-10-24)
+
+Built by `docs/superpowers/plans/2026-10-24-girihelix-construction-cache.md` on branch
+`feat/construct-cache`.
+
+- **DETS file and version key.** `construct_cache.dets` under `:cache_dir`, opened as a
+  `:set` with `access: :read_write`. The `:"__version__"` entry holds
+  `{1, Application.spec(:girihelix, :vsn)}`, and every stored key is
+  `{{1, app_vsn}, key}`, so an entry from another version is unreachable even before
+  the boot check clears the file. A version mismatch deletes every object and rewrites
+  the version entry; a file that cannot be opened is closed, deleted and reopened; an
+  unopenable directory degrades the cache to its memory tier.
+- **External-size margin.** None. Sizes are `:erlang.external_size/1` of the frames,
+  recomputed with the face colouring when it arrives, and the byte cap is enforced
+  exactly. The memory cap counts entries (four), not bytes.
+- **Face-phase wording.** The paint phase reports `painting from the cached map` through
+  the existing `#run-progress` status, and the colouring reaches the draw as
+  `params[:cached_faces]`. An indeterminately-progressing phase was chosen over a
+  determinate bar: the extraction reports no progress.
+- **Config names and directory.** `config :girihelix, :cache_dir` comes from
+  `GIRIHELIX_CACHE_DIR`, defaulting to `<working dir>/var/cache`;
+  `config :girihelix, :construct_cache_disk` is `config_env() == :prod`, so `dev` and
+  `test` never open the disk tier. `Application` reads the second flag; the cache reads
+  the first for its default DETS path.
+- **Face colouring storage.** In the entry's `:faces` field, memory and disk, written by
+  `ConstructCache.update_faces/3` when the async phase lands — not a second keyed table.
+- **Cache key.** `{exhibit slug, construct_key}`. The exhibit is part of the key, so two
+  exhibits naming the same tiling and figure never collide.
+- **Compaction.** A cached frame keeps `tiling`, `translations`, `map` and `failure`; a
+  cached failure's own frame list is compacted the same way.
+- **Single-flight.** `:global.trans({{ConstructCache, {server, key}}, self()})`: the
+  resource is the cache and key, the requester the calling process. The plan's literal
+  `{__MODULE__, {server, key}}` is not a lock — `:global` reads the id as
+  `{resource, requester}`, and two callers passing an identical tuple are treated as the
+  same owner.
+
+### Measurements
+
+Dev machine, 2026-10-24. "Cached load" clears the memory tier first, so it measures the
+DETS read and promotion, which is the slower of the two tiers.
+
+| Tiling | Build | Cached load (DETS) | Face extraction | Cached draw | Frames | Entry |
+| --- | --- | --- | --- | --- | --- | --- |
+| `7.6` | 1.281 s | 0.005 s | 0.024 s | 0.005 s | 5 | 827 KB |
+| `3-8-4-6` | 82.101 s | 0.042 s | 0.351 s | 0.004 s | 5 | 6.46 MB |
+
+Full suite: 644 tests in about 17 s, with `mix precommit` green and dialyzer
+`Total errors: 0`.

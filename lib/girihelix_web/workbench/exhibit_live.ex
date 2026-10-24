@@ -41,6 +41,12 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   goes through `ConstructCache`, so the construction is built once — across
   style, palette and `tiles` changes and across users — and later requests read
   it from memory or disk. An exhibit without a construct key is never cached.
+
+  **The paint phase.** A `Filled` draw needs the map's face colouring, and
+  extracting it is expensive even when the construction is free. The colouring
+  is therefore cached in the entry and injected into the draw's params as
+  `:cached_faces`; when the entry holds none, the LiveView computes it in a
+  second task and paints when it lands, so `handle_params/3` never blocks on it.
   """
 
   use GirihelixWeb, :live_view
@@ -51,6 +57,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
 
+  alias Girihelix.Engine.Faces
   alias GirihelixWeb.Workbench.ConstructCache
   alias GirihelixWeb.Workbench.Exhibit
   alias GirihelixWeb.Workbench.NotFound
@@ -77,6 +84,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
        source: {:error, :no_step},
        snippet: nil,
        cells: nil,
+       cached_faces: nil,
        loading: false,
        progress: nil,
        run_key: nil,
@@ -114,14 +122,18 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @impl true
   @spec handle_async(:run, {:ok, map()} | {:exit, term()}, Socket.t()) ::
           {:noreply, Socket.t()}
-  def handle_async(:run, {:ok, %{frames: frames, failure: failure, cells: cells}}, socket) do
-    values = Map.put(socket.assigns.values, :cells, cells)
-    index = Run.index(socket.assigns.requested_frame, length(frames))
+  def handle_async(:run, {:ok, %{frames: frames, failure: failure, cells: cells} = construct}, socket) do
+    requested = socket.assigns.requested_frame
 
-    {:noreply,
-     socket
-     |> assign(Run.view(frames, failure, index, %{exhibit: socket.assigns.exhibit, values: values}))
-     |> assign(cells: cells, loading: false, progress: nil)}
+    socket =
+      assign(socket,
+        cached_faces: faces_of(construct),
+        frames: frames,
+        failure: failure,
+        cells: cells
+      )
+
+    {:noreply, show_frames(socket, frames, failure, cells, requested)}
   end
 
   def handle_async(:run, {:exit, reason}, socket) do
@@ -134,6 +146,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
        progress: nil,
        failure: Run.generic_failure(reason),
        frames: nil,
+       cached_faces: nil,
        index: nil,
        count: nil,
        step: nil,
@@ -141,6 +154,21 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
        viewport: nil,
        source: {:error, :no_step}
      )}
+  end
+
+  @impl true
+  @spec handle_async(:faces, {:ok, term()} | {:exit, term()}, Socket.t()) ::
+          {:noreply, Socket.t()}
+  def handle_async(:faces, {:ok, faces}, socket) do
+    :ok = ConstructCache.update_faces(ConstructCache, socket.assigns.run_key, faces)
+
+    {:noreply, socket |> assign(cached_faces: faces) |> redraw_cached()}
+  end
+
+  def handle_async(:faces, {:exit, _reason}, socket) do
+    # The extraction died instead of returning its error tuple. The draw still
+    # has to land, and a supplied error makes it report rather than re-extract.
+    {:noreply, socket |> assign(cached_faces: {:error, :faces_unavailable}) |> redraw_cached()}
   end
 
   @impl true
@@ -328,19 +356,99 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   # the skeleton, as before.
   defp continue(socket, _previous_key, _run_key, requested), do: start_run(socket, requested, :same_exhibit)
 
+  # A `Filled` draw still needs the cached face colouring, which `show_frames/5`
+  # computes off the render path when it is missing.
   defp reuse(socket, requested) do
-    values = Map.put(socket.assigns.values, :cells, socket.assigns.cells)
-    index = Run.index(requested, length(socket.assigns.frames))
+    show_frames(
+      socket,
+      socket.assigns.frames,
+      socket.assigns.failure,
+      socket.assigns.cells,
+      requested
+    )
+  end
+
+  # The face colouring is part of a `Filled` draw, and extracting it can take
+  # seconds on a heavy map. When the cache holds none, a second task computes it
+  # and paints only when it lands, so no render blocks on the extraction.
+  defp show_frames(socket, frames, failure, cells, requested) do
+    show_frames(needs_faces?(socket, frames), socket, frames, failure, cells, requested)
+  end
+
+  defp show_frames(true, socket, frames, failure, cells, requested) do
+    start_faces(socket, frames, failure, cells, requested)
+  end
+
+  defp show_frames(false, socket, frames, failure, cells, requested) do
+    draw_frames(socket, frames, failure, cells, requested)
+  end
+
+  defp needs_faces?(socket, frames) do
+    faces_phase?(
+      Exhibit.construct_key(socket.assigns.exhibit, socket.assigns.values),
+      socket.assigns.cached_faces,
+      Map.get(socket.assigns.values, :style),
+      frames
+    )
+  end
+
+  # An exhibit without a construct key is never cached, so it has no entry to
+  # store a colouring in; its `Filled` draw extracts as it always did.
+  defp faces_phase?(nil, _faces, _style, _frames), do: false
+  defp faces_phase?(_key, nil, :filled, frames), do: is_map(faces_map(frames))
+  defp faces_phase?(_key, _faces, _style, _frames), do: false
+
+  defp faces_map([]), do: nil
+
+  defp faces_map(frames) do
+    case List.last(frames) do
+      %{state: %{map: map}} -> map
+      _frame -> nil
+    end
+  end
+
+  defp start_faces(socket, frames, failure, cells, requested) do
+    map = faces_map(frames)
 
     socket
     |> assign(
-      Run.view(socket.assigns.frames, socket.assigns.failure, index, %{
-        exhibit: socket.assigns.exhibit,
-        values: values
-      })
+      frames: frames,
+      failure: failure,
+      cells: cells,
+      requested_frame: requested,
+      loading: true,
+      progress: {1, 1, "painting from the cached map"},
+      index: nil,
+      count: nil
     )
-    |> assign(loading: false, progress: nil, requested_frame: requested)
+    |> start_async(:faces, fn -> Faces.extract_faces(map) end)
   end
+
+  defp draw_frames(socket, frames, failure, cells, requested) do
+    values =
+      socket.assigns.values
+      |> Map.put(:cells, cells)
+      |> Map.put(:cached_faces, socket.assigns.cached_faces)
+
+    index = Run.index(requested, length(frames))
+
+    socket
+    |> assign(Run.view(frames, failure, index, %{exhibit: socket.assigns.exhibit, values: values}))
+    |> assign(cells: cells, loading: false, progress: nil)
+  end
+
+  defp redraw_cached(socket) do
+    show_frames(
+      socket,
+      socket.assigns.frames,
+      socket.assigns.failure,
+      socket.assigns.cells,
+      socket.assigns.requested_frame
+    )
+  end
+
+  defp faces_of(%{faces: faces}), do: faces
+  defp faces_of(_uncached_construct), do: nil
 
   # A run started for another exhibit clears the previous picture; a parameter
   # change on the same exhibit keeps it as the loading skeleton.
