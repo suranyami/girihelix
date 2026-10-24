@@ -30,7 +30,7 @@
 2. **A one-colour combination on `Plain`/`Outline`.** The background is derived from the edge colour and must differ from it. Owner: Task 2.
 3. **Frame zero with the tile overlay on.** `state.translations` is empty, so the overlay must fall back to one identity lattice translation and still draw. Owner: Task 3.
 4. **A failed run when the viewport is pinned.** The last retained frame has no paint; the viewport must come from the map or structure bounds without re-running the construction or raising. Owner: Task 4.
-5. **The largest catalogue tiling at the enlarged patch.** `Girih Star` at 5×5 cells multiplies construction and face work; measure it before adopting three visible cells, and keep the registry suite acceptable. Owner: Tasks 4 and 8.
+5. **The largest catalogue tiling at the enlarged patch.** `Girih Star` at 5×5 cells multiplies construction and face work; measure it before adopting three visible cells, and keep the registry suite acceptable. Owner: Tasks 4 and 9.
 
 ## Setup
 
@@ -637,7 +637,62 @@ git commit -m "feat: run exhibits asynchronously with progress"
 
 ---
 
-### Task 6: `CanvasZoom` hook on every canvas
+### Task 6: Star skip by side count
+
+**Files:**
+
+- Modify: `lib/girihelix_web/workbench/exhibits/instancing.ex`
+- Test: `test/girihelix_web/workbench/exhibits/instancing_test.exs`
+
+**Interfaces:**
+
+- Produces: `Instancing.star_skip(pos_integer()) :: pos_integer()` — `3` for `sides <= 4`, otherwise `div(sides - 1, 2)`. `star_binder/1` uses it in place of the fixed `3.0` skip.
+
+- [ ] **Step 1: Write the failing tests**
+
+```elixir
+test "the star skip is non-degenerate for each tile side count" do
+  assert Instancing.star_skip(4) == 3
+  assert Instancing.star_skip(5) == 2
+  assert Instancing.star_skip(6) == 2
+  assert Instancing.star_skip(7) == 3
+  assert Instancing.star_skip(8) == 3
+  assert Instancing.star_skip(9) == 4
+end
+
+test "a hexagon star is a hexagram, not three diameters" do
+  figure = Instancing.star_binder(%Feature{id: 0, regular: 6, points: []})
+  assert {:ok, %{black: black, white: white}} = Faces.extract_faces(Figure.map(figure))
+  assert length(black) + length(white) > 3
+end
+```
+
+Add `Girihelix.Engine.Faces`, `Girihelix.Engine.Figures.Figure` and `Girihelix.Engine.Tilings.Feature` aliases to the test module.
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `mix test test/girihelix_web/workbench/exhibits/instancing_test.exs`
+Expected: FAIL — `star_skip/1` is undefined and the hexagon star has three faces.
+
+- [ ] **Step 3: Implement the skip**
+
+Add `star_skip/1` with two function heads (`sides <= 4` returns `3`; otherwise `div(sides - 1, 2)`) and use it in `star_binder/1`'s `StarFigure.build!(sides, star_skip(sides), 2)`. Update the binder's doc: the skip is chosen per side count so a hexagon is a hexagram rather than three diameters, and square tiles keep the cross-shaped four-point star.
+
+- [ ] **Step 4: Run the tests to see them pass**
+
+Run: `mix test test/girihelix_web/workbench/exhibits/instancing_test.exs test/girihelix_web/workbench/exhibits/styles_test.exs`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/girihelix_web/workbench/exhibits/instancing.ex test/girihelix_web/workbench/exhibits/instancing_test.exs
+git commit -m "fix: choose the star skip from the tile's side count"
+```
+
+---
+
+### Task 7: `CanvasZoom` hook on every canvas
 
 **Files:**
 
@@ -777,7 +832,7 @@ git commit -m "feat: add pan and zoom to every workbench canvas"
 
 ---
 
-### Task 7: Palette parameter type and swatch picker
+### Task 8: Palette parameter type and swatch picker
 
 **Files:**
 
@@ -844,11 +899,11 @@ git commit -m "feat: pick palettes from swatch rows"
 
 ---
 
-### Task 8: Homogenisation, documents, full gate
+### Task 9: Homogenisation, documents, full gate
 
 **Files:**
 
-- Modify the modules touched by Tasks 1–7
+- Modify the modules touched by Tasks 1–8
 - Modify: `docs/superpowers/specs/2026-10-24-girihelix-styles-presentation-design.md`
 - Modify: `docs/backlog.md`
 
