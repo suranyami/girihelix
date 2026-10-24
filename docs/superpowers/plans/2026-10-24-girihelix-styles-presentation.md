@@ -19,7 +19,7 @@
 - **Palette roles are content-declared.** `Filled` asks for `edge, darker, lighter`; `Plain` and `Outline` ask for `edge, background`. Missing tones are derived by shifting HSL lightness with hue and saturation kept (`0.18` step, clamped to `[0.08, 0.92]`, direction flipped at a clamp). No colour is recycled.
 - **Composition order.** Background → figure → translucent tile overlay (on top). The style returns `background` separately from `ops` so the composition is explicit; the overlay is translucent so the design stays readable through the tiles.
 - **Asynchronous runs.** The construct and the SVG serialization run in a LiveView task, not in `handle_params`. The process stays responsive; a superseded run is cancelled; progress messages carry the current step; navigating frames reuses the finished frames instead of re-running the construct.
-- **Patch and frame.** The patch spans `cells = 2` (a 5×5 grid of lattice translations). The viewport shows `2.0` unit cells vertically, centred on the final frame's content bounds, at the canvas aspect `0.75`, nominal width `1000.0`.
+- **Patch and frame.** The patch spans `cells = 2` (a 5×5 grid of lattice translations) and the viewport shows `2.0` unit cells vertically, centred on the final frame's content bounds, at the canvas aspect `0.75`, nominal width `1000.0`. **Adaptive guard:** when the constructed one-cell map exceeds a vertex budget (calibrated so `8.5` keeps two cells and `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` use one), both the patch and the visible count drop to `1`.
 - **Canvas.** One `CanvasZoom` hook on every canvas; the SVG root is `overflow-visible` and the wrapper clips. No inline scripts.
 - **Gates.** The commit hook runs `mix precommit.fast`. Before the branch is pushed, `mix precommit` passes with `mix dialyzer` reporting `Total errors: 0`, and no module exceeds 800 lines.
 - **Git.** Create `feat/styles-presentation` from `feat/render-styles` (or from `main` after Plan 5 merges, rebasing). Run `git commit` as its own command; commits are signed via 1Password — on a signing error, stop and ask.
@@ -501,7 +501,7 @@ Expected: FAIL — `patch_region/2` and `viewport/2` do not exist; the SVG root 
 
 - `Construct.patch_region/2`: build the extreme points as in the test, take their bounding box, add the margin, and return the four corners counter-clockwise using the same helper as `default_region/1`.
 - `Exhibit`: declare `@callback viewport(params, frames) :: :fit | Viewport.t()` and `@optional_callbacks viewport: 2`; update the module doc.
-- `ExhibitLive`: `exports_viewport?/1` checks arity `2`; `pinned_viewport` calls `exhibit.viewport(values, frames)`. Thread `frames` through the `viewport/3` helper.
+- `ExhibitLive`: `exports_viewport?/1` checks arity `2`; `pinned_viewport` calls `exhibit.viewport(values, frames)`. Thread `frames` through the LiveView's viewport helper.
 - Update the six existing `viewport/1` implementations to `viewport(params, _frames)`.
 - `Styles`: `@patch_cells 2`, `@visible_cells 2.0`, `@canvas_aspect 0.75`, `@nominal_width 1000.0`. `initial/1` and `steps/1` use `Construct.patch_region(tiling, @patch_cells)`. `viewport/2` takes the last frame's state, computes `cell`, `width`, and the content centre from the **constructed map's vertex bounds** when the map has vertices, otherwise from the structure ops' bounds — never from the painted ops, because those include the tile overlay when it is on and would expand the window to the whole patch. If no bounds exist, return `Viewport.fit(nil)`.
 - `Canvas`: change `@svg_class` to `"w-full h-auto overflow-visible"` and add `overflow-hidden` to the canvas wrappers.
@@ -524,7 +524,7 @@ git commit -m "feat: pin a seamless patch viewport and allow panning past it"
 
 ---
 
-### Task 5: Asynchronous runs with progress
+### Task 5: Asynchronous runs with progress and an adaptive patch span
 
 **Files:**
 
@@ -539,6 +539,7 @@ git commit -m "feat: pin a seamless patch viewport and allow panning past it"
 - Produces: `Steps.run(steps, initial, opts)` gains `:on_step`, a 1-arity function called with each built `%Frame{}` after its step completes. Frame zero is not reported. `run!/3` passes the option through.
 - Produces: `GirihelixWeb.Workbench.Run.build(exhibit, values, requested_frame, on_step \\ nil) :: map` with `frames`, `failure`, `index`, `count`, `drawing`, `viewport`, `source` and `snippet`; it runs the steps, picks the requested frame or the last, and derives everything the page needs. `Run.view(frames, failure, index, params)` derives the same fields for one already-built frame, for frame navigation without a re-run.
 - Produces: the LiveView assigns `:run_key` (`{slug, values}`), `:frames`, `:loading`, `:progress` (`nil | {index, total, label}`), `:requested_frame`.
+- Produces: `Run.build/4` probes `cells: 1`, measures the final frame's map, and either keeps those frames (`cells: 1`, `visible_cells: 1`) or runs again with `cells: 2` (`cells: 2`, `visible_cells: 2`). `Styles.initial/1`, `steps/1` and `viewport/2` read `Map.get(params, :cells, 2)`.
 - Produces: `start_async(:run, ...)`, `handle_async(:run, ...)`, `cancel_async(:run)` and `handle_info({:run_progress, index, total, label})`; navigating frames with `go` reuses the assigned frames when `run_key` matches and starts no async.
 
 - [ ] **Step 1: Write the failing tests**
@@ -584,6 +585,16 @@ test "navigating frames reuses the finished frames", %{conn: conn} do
 end
 ```
 
+```elixir
+test "heavy tilings use one cell and light ones two" do
+  params = defaults()
+  assert %{cells: 2} = Run.build(Styles, params, nil)
+  assert %{cells: 1} = Run.build(Styles, %{params | tiling: :"Girih Star"}, nil)
+end
+```
+
+`Run.build` probes at `cells: 1`: it measures the final frame's map and, when the vertex count exceeds `@vertex_budget`, keeps those frames; otherwise it discards them and runs again with `cells: 2`. Calibrate the budget from `Construct.patch_region(tiling, 1)`'s vertex count: `8.5` is about 432 and `7.6` about 1,257, so a budget around 1,200 puts `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` above it. A raising figure in the probe falls back to `cells: 2`; the full run reports the failure.
+
 Use `import Girihelix.Engine.Steps, only: [step: 4]` (or `require Girihelix.Engine.Steps`) in `steps_test.exs` for the `step` macro.
 
 - [ ] **Step 2: Run them to see them fail**
@@ -600,7 +611,9 @@ In `Steps.run/3`, read `:on_step` and call it with each frame after `run_one/6` 
 In `ExhibitLive`:
 
 - `handle_params/3` decodes the values and computes `run_key = {slug, values}`. When `run_key` equals the assigned one and `:frames` is assigned, select the requested frame and draw it synchronously; no async. Otherwise assign `loading: true`, `progress: nil`, `requested_frame`, keep the previous drawing, `cancel_async(socket, :run)` when a run is in flight, capture `parent = self()`, and `start_async(:run, fn -> run_task(exhibit, values, requested_frame, parent) end)`.
-- `run_task/4` calls `Run.build(exhibit, values, requested_frame, on_step)` with `on_step: fn frame -> send(parent, {:run_progress, frame.index, total, label(frame.step)}) end`. `Run.build/4` runs the steps, derives the frames/failure, picks the requested index or the last frame, draws it, and returns the page's fields. Expected step failures are returned in the map, never raised. The LiveView's existing `run/2`, `viewport/3`, `source/1` and snippet derivation move into `Run`, so frame navigation calls `Run.view/4` with the assigned frames and starts no async.
+- `Styles.initial/1`, `steps/1` and `viewport/2` read `cells = Map.get(params, :cells, 2)` and use `Construct.patch_region(tiling, cells)`; `viewport/2` uses `cells` in place of the fixed `2.0` visible count.
+- `Run.build/4` probes: it runs the steps with `values = Map.put(values, :cells, 1)`, measures the final frame's map with `PlanarMap.num_vertices/1`, and keeps the run when the count exceeds `@vertex_budget`; otherwise it discards it and runs the steps again with `:cells` set to `2`. The returned map carries `:cells`, and a raising figure in the probe falls back to `cells: 2` so the full run reports the failure.
+- `run_task/4` calls `Run.build(exhibit, values, requested_frame, on_step)` with `on_step: fn frame -> send(parent, {:run_progress, frame.index, total, label(frame.step)}) end`. `Run.build/4` runs the steps, derives the frames/failure, picks the requested index or the last frame, draws it, and returns the page's fields. Expected step failures are returned in the map, never raised. The LiveView's existing `run/2`, viewport derivation, `source/1` and snippet derivation move into `Run`, so frame navigation calls `Run.view/4` with the assigned frames and starts no async.
 - `handle_async(:run, {:ok, result}, socket)` assigns the result and sets `loading: false`, `progress: nil`. `handle_async(:run, {:exit, reason}, socket)` clears loading and assigns a generic failure.
 - `handle_info({:run_progress, index, total, label}, socket)` updates `:progress` while loading.
 - The `render(%{index: nil})` branch becomes the loading branch: it keeps the controls, shows `#run-progress` with the current step and `index/total`, and shows the previous drawing when one exists.
@@ -835,7 +848,7 @@ git commit -m "feat: pick palettes from swatch rows"
 
 **Files:**
 
-- Modify the modules touched by Tasks 1–6
+- Modify the modules touched by Tasks 1–7
 - Modify: `docs/superpowers/specs/2026-10-24-girihelix-styles-presentation-design.md`
 - Modify: `docs/backlog.md`
 
