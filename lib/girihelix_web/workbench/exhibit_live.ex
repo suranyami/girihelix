@@ -169,9 +169,11 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   # A run in flight has no frame index yet, but the page it renders has the same
   # header, grid and controls as a finished one. The canvas slot keeps the
-  # previous picture when there is one and an empty framed canvas otherwise, and
-  # the panel it will fill is already there with `n/a` values and the previous
-  # run's labels, so nothing below the header moves when the run lands.
+  # previous picture when there is one and an empty framed canvas otherwise. When
+  # the previous drawing filled the right column, that panel is already there with
+  # `n/a` values and the previous run's labels; otherwise a placeholder box of the
+  # panel's height stands in. Either way, nothing below the header moves when the
+  # run lands.
   @impl true
   @spec render(map()) :: Phoenix.LiveView.Rendered.t()
   def render(%{index: nil} = assigns) do
@@ -242,7 +244,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
               :if={@loading and @panel_rows == []}
               id="panel-placeholder"
               aria-hidden="true"
-              class="min-h-40 rounded-box border border-base-300"
+              class="min-h-64 rounded-box border border-base-300"
             >
             </div>
           </aside>
