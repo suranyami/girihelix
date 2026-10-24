@@ -29,11 +29,15 @@ defmodule GirihelixWeb.Workbench.Run do
   alias Girihelix.Engine.Steps
   alias Girihelix.Engine.Steps.Failure
   alias Girihelix.Engine.Steps.Frame
+  alias GirihelixWeb.Workbench.Exhibit
   alias GirihelixWeb.Workbench.Source
 
   # The same cap the workbench's runs use everywhere; a run longer than this is
   # a bug in the exhibit, not a page worth rendering.
   @max_frames 200
+
+  # A cached frame keeps only what the page reads from it; see `compact/1`.
+  @compact_state_keys [:tiling, :translations, :map, :failure]
 
   # A one-cell welded map above this many vertices is a heavy tiling. Calibrated
   # against the shipped catalogue with the rosette binder: 8.5's three-by-three
@@ -66,11 +70,47 @@ defmodule GirihelixWeb.Workbench.Run do
   """
   @spec build(module(), map(), nil | String.t(), nil | (Frame.t() -> any())) :: map()
   def build(exhibit, values, requested_frame, on_step \\ nil) do
-    {frames, failure, run_values, cells} = adaptive(exhibit, values, on_step)
+    %{frames: frames, failure: failure, cells: cells} = construct(exhibit, values, on_step)
+    values = Map.put(values, :cells, cells)
 
     exhibit
-    |> page(frames, failure, requested_frame, run_values)
+    |> page(frames, failure, requested_frame, values)
     |> Map.put(:cells, cells)
+  end
+
+  @doc """
+  Runs `exhibit`'s steps and returns the construction the cache stores.
+
+  The result is `%{frames: frames, failure: failure, cells: cells}`. For a
+  cacheable exhibit — one declaring `construct_key/1` — the frames are
+  compacted: only the state a draw, a row or the viewport reads survives, and
+  nothing style- or palette-dependent does.
+  """
+  @spec construct(module(), map(), nil | (Frame.t() -> any())) :: %{
+          frames: [Frame.t()],
+          failure: Failure.t() | nil,
+          cells: pos_integer()
+        }
+  def construct(exhibit, values, on_step \\ nil) do
+    {frames, failure, _run_values, cells} = adaptive(exhibit, values, on_step)
+    {frames, failure} = compact_for(exhibit, values, frames, failure)
+
+    %{frames: frames, failure: failure, cells: cells}
+  end
+
+  @doc """
+  Strips every frame's state to what drawing a cached frame reads.
+
+  `tiling`, `translations`, `map` and `failure` are kept; `bindings`,
+  `feature_maps`, `binder` and `region` are dropped, because no draw, row or
+  viewport reads them and a cached frame is never rebuilt. The frame's index
+  and step are untouched.
+  """
+  @spec compact([Frame.t()]) :: [Frame.t()]
+  def compact(frames) do
+    Enum.map(frames, fn %Frame{state: state} = frame ->
+      %{frame | state: Map.take(state, @compact_state_keys)}
+    end)
   end
 
   @doc """
@@ -136,6 +176,21 @@ defmodule GirihelixWeb.Workbench.Run do
   end
 
   # -- adaptive span ----------------------------------------------------------
+
+  # Only an exhibit declaring a construct key is cached, so only its frames are
+  # compacted: another exhibit's state may carry anything its own draw reads.
+  # A failure's own frame list is compacted too, so a failed heavy run does not
+  # cache the construction it had built twice.
+  defp compact_for(exhibit, values, frames, failure) do
+    case Exhibit.construct_key(exhibit, values) do
+      nil -> {frames, failure}
+      _key -> {compact(frames), compact_failure(failure)}
+    end
+  end
+
+  defp compact_failure(nil), do: nil
+
+  defp compact_failure(%Failure{frames: frames} = failure), do: %{failure | frames: compact(frames)}
 
   defp adaptive(exhibit, values, on_step) do
     probe_values = Map.put(values, :cells, 1)

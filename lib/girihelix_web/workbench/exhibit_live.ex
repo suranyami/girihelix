@@ -36,6 +36,11 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
   A superseded run is cancelled rather than left to finish unseen, and an
   unexpected task exit clears the loading state with a generic failure.
+
+  **One construction, shared.** A run keyed by an exhibit's `construct_key/1`
+  goes through `ConstructCache`, so the construction is built once — across
+  style, palette and `tiles` changes and across users — and later requests read
+  it from memory or disk. An exhibit without a construct key is never cached.
   """
 
   use GirihelixWeb, :live_view
@@ -46,6 +51,8 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   import GirihelixWeb.Workbench.Components.SourcePane, only: [source_pane: 1]
   import GirihelixWeb.Workbench.Components.Transport, only: [transport: 1]
 
+  alias GirihelixWeb.Workbench.ConstructCache
+  alias GirihelixWeb.Workbench.Exhibit
   alias GirihelixWeb.Workbench.NotFound
   alias GirihelixWeb.Workbench.Param
   alias GirihelixWeb.Workbench.Registry
@@ -84,7 +91,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     exhibit = fetch!(slug)
     param_defs = exhibit.params()
     values = Param.decode(param_defs, params)
-    run_key = {slug, values}
+    # A cacheable exhibit's identity is its construct key, so a parameter that
+    # only changes the drawing keeps this key and redraws the frames in hand.
+    run_key = {slug, Exhibit.construct_key(exhibit, values) || values}
     previous_key = socket.assigns.run_key
     requested = params["frame"]
 
@@ -105,8 +114,14 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   @impl true
   @spec handle_async(:run, {:ok, map()} | {:exit, term()}, Socket.t()) ::
           {:noreply, Socket.t()}
-  def handle_async(:run, {:ok, result}, socket) do
-    {:noreply, socket |> assign(result) |> assign(loading: false, progress: nil)}
+  def handle_async(:run, {:ok, %{frames: frames, failure: failure, cells: cells}}, socket) do
+    values = Map.put(socket.assigns.values, :cells, cells)
+    index = Run.index(socket.assigns.requested_frame, length(frames))
+
+    {:noreply,
+     socket
+     |> assign(Run.view(frames, failure, index, %{exhibit: socket.assigns.exhibit, values: values}))
+     |> assign(cells: cells, loading: false, progress: nil)}
   end
 
   def handle_async(:run, {:exit, reason}, socket) do
@@ -332,6 +347,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
   defp start_run(socket, requested, mode) do
     exhibit = socket.assigns.exhibit
     values = socket.assigns.values
+    run_key = socket.assigns.run_key
     parent = self()
 
     socket
@@ -348,19 +364,30 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
       requested_frame: requested
     )
     |> cancel_async(:run)
-    |> start_async(:run, fn -> run_task(exhibit, values, requested, parent) end)
+    |> start_async(:run, fn -> run_task(exhibit, values, run_key, parent) end)
   end
 
   defp clear_picture(socket, :new_exhibit), do: assign(socket, drawing: nil, viewport: nil)
   defp clear_picture(socket, :same_exhibit), do: socket
 
   # The task body. The step count is the same for the probe and the run that
-  # follows it, so one total serves every `:run_progress` message.
-  defp run_task(exhibit, values, requested, parent) do
+  # follows it, so one total serves every `:run_progress` message. A cacheable
+  # exhibit builds through the shared cache, so a second caller — including
+  # another user's LiveView — waits for the one build and receives its entry.
+  defp run_task(exhibit, values, run_key, parent) do
     total = length(exhibit.steps(values))
     on_step = fn frame -> send(parent, {:run_progress, frame.index, total, frame.step.label}) end
 
-    Run.build(exhibit, values, requested, on_step)
+    case Exhibit.construct_key(exhibit, values) do
+      nil ->
+        Run.construct(exhibit, values, on_step)
+
+      _key ->
+        ConstructCache.fetch(ConstructCache, run_key, fn ->
+          construct = Run.construct(exhibit, values, on_step)
+          ConstructCache.entry(run_key, construct.frames, construct.failure, construct.cells)
+        end)
+    end
   end
 
   defp target(_to, nil, _count), do: 0

@@ -155,20 +155,23 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     {:ok, view, _html} = live(conn, "/workbench/styles")
     await_run(view)
 
-    render_change(view, "params", %{"palette" => "348"})
-    assert await_run(view) =~ "Wada 348"
+    # The construction is cached, so a palette change repaints the frames in hand
+    # within the patch's own render rather than starting another run.
+    html = render_change(view, "params", %{"palette" => "348"})
+    assert html =~ "Wada 348"
+    refute html =~ ~s(id="run-progress")
   end
 
   test "the tiles toggle draws the overlay tint in the rendered SVG", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/styles")
     refute await_run(view) =~ ~s(fill="#2563eb")
 
-    render_change(view, "params", %{"tiles" => "true"})
+    html = render_change(view, "params", %{"tiles" => "true"})
 
     # The overlay's fill polygon: the first fixed tint at the declared opacity,
     # with the serializer's default stroke width, drawn after the figure.
-    assert await_run(view) =~
-             ~s(fill="#2563eb" stroke="none" stroke-width="1.0" opacity="0.12")
+    assert html =~ ~s(fill="#2563eb" stroke="none" stroke-width="1.0" opacity="0.12")
+    refute html =~ ~s(id="run-progress")
   end
 
   test "navigating to another exhibit clears the previous picture", %{conn: conn} do

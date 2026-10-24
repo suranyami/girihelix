@@ -5,6 +5,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Viewport
   alias Girihelix.Engine.Steps
+  alias GirihelixWeb.Workbench.Exhibits.Instancing
   alias GirihelixWeb.Workbench.Exhibits.Styles
   alias GirihelixWeb.Workbench.Param
 
@@ -50,6 +51,22 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {"vertices", "2928"} in rows
     assert {"edges", "3904"} in rows
     assert {"failure", "none"} in rows
+  end
+
+  test "the construct key is the tiling and figure only" do
+    params = defaults()
+
+    assert Styles.construct_key(params) == {:styles, :"8.5", :rosette}
+    assert Styles.construct_key(%{params | figure: :star}) == {:styles, :"8.5", :star}
+
+    # Style, palette and tiles only change the painting, so they must not split
+    # the cache: a cached construction serves all of them.
+    assert Styles.construct_key(%{params | style: :outline, palette: :"5", tiles: true}) ==
+             Styles.construct_key(params)
+
+    # The same tiling and figure are a different construction in another exhibit:
+    # the exhibit is part of the key, so the two can never collide in the cache.
+    assert Instancing.construct_key(params) == {:instancing, :"8.5", :rosette}
   end
 
   test "style and palette repaint one frame without re-running the steps" do

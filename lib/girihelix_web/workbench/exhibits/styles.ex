@@ -6,7 +6,9 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   chosen style paints the welded map in `draw/2`, never in a step: the frame
   carries the construction and nothing style- or palette-dependent, so a style,
   palette or `tiles` change redraws the same frame instead of reconstructing
-  it. Frame zero and the construct's intermediate frames draw the same static
+  it. The construction's identity is the tiling and figure (`construct_key/1`),
+  which is what lets the shared cache serve every style and palette from one
+  build. Frame zero and the construct's intermediate frames draw the same static
   structure `Instancing` shows, so a reader can step through the construction
   before the finished picture.
 
@@ -152,6 +154,10 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
     Construct.steps(tiling, binder(figure), Construct.patch_region(tiling, cells(params)))
   end
+
+  @impl true
+  @spec construct_key(map()) :: term()
+  def construct_key(%{tiling: tiling, figure: figure}), do: {:styles, tiling, figure}
 
   @impl true
   @spec draw(Steps.Frame.t(), map()) :: Exhibit.drawing()
