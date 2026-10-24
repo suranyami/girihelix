@@ -17,8 +17,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   from the run (two by default, one for a tiling the run measured as heavy), so
   every vertex the pinned window shows has its periodic counterparts a cell
   away. The window itself shows the same `cells` count, centred on the
-  constructed map's own content, and the canvas no longer clips, so panning
-  reveals the fringe rather than empty space.
+  constructed map's own content, and the SVG root no longer clips, the wrapper
+  does, so panning reveals the fringe rather than empty space.
 
   A map the style cannot paint still draws. An unbound run leaves the map empty,
   so `Filled` reports `:no_faces` and the panel falls back to the construct

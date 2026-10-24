@@ -105,6 +105,17 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
     end
   end
 
+  test "the hook element carries the exhibit key for lifecycle resets" do
+    html =
+      render_component(&Canvas.canvas/1,
+        drawing: {:canvas, []},
+        viewport: nil,
+        canvas_key: "styles"
+      )
+
+    assert html =~ ~r/<div[^>]*id="canvas"[^>]*data-canvas-key="styles"/
+  end
+
   test "canvas renders a panel as a two-column table" do
     html =
       render_component(&Canvas.canvas/1,

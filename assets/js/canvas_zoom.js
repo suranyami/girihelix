@@ -3,8 +3,14 @@
 // The transform lives on the inner [data-zoom-content] wrapper; the outer
 // element (#canvas) clips, so panning reveals the SVG's fringe beyond the
 // pinned viewport without moving the page layout. State is held on the hook,
-// so a LiveView patch of the frame keeps the current view; unmounting and
-// remounting starts again at scale 1, translation 0.
+// so a LiveView patch of the frame keeps the current view. A navigation to
+// another exhibit is a patch of the same #canvas element too, so the server
+// stamps it with data-canvas-key: a changed key resets the view rather than
+// carrying the previous exhibit's pan and zoom across.
+//
+// LiveView's patch writes the server tree's attributes back onto the element,
+// dropping the styles set here. `updated` re-applies them, which is what makes
+// the transform survive frame and parameter updates.
 const MIN_SCALE = 0.6
 const MAX_SCALE = 8.0
 // Wheel deltas arrive in pixels (deltaMode 0), lines (1) or pages (2) depending
@@ -15,12 +21,9 @@ const LINE_HEIGHT = 16
 export const CanvasZoom = {
   mounted() {
     this.content = this.el.querySelector("[data-zoom-content]")
-    this.scale = 1
-    this.x = 0
-    this.y = 0
+    this.key = this.el.dataset.canvasKey
     this.pointers = new Map()
-    this.lastDistance = 0
-    this.lastMidpoint = null
+    this.reset()
     // Touch is ours: one finger pans, two pinch. Without this the browser
     // would scroll the page instead of reporting the gesture.
     this.el.style.touchAction = "none"
@@ -36,9 +39,33 @@ export const CanvasZoom = {
     }
     this.apply()
   },
+  updated() {
+    // The wrapper and the styles the hook owns are patched away by morphdom,
+    // so re-find the content, restore touch-action and re-apply the transform.
+    this.content = this.el.querySelector("[data-zoom-content]")
+    this.el.style.touchAction = "none"
+    this.syncKey()
+    this.apply()
+  },
   destroyed() {
     this.el.style.touchAction = ""
     this.el.style.userSelect = ""
+  },
+  // A different exhibit in the same #canvas resets; the same exhibit patched
+  // with new parameters or frames keeps the reader's current view.
+  syncKey() {
+    const key = this.el.dataset.canvasKey
+    if (key === this.key) return
+    this.key = key
+    this.pointers.clear()
+    this.reset()
+  },
+  reset() {
+    this.scale = 1
+    this.x = 0
+    this.y = 0
+    this.lastDistance = 0
+    this.lastMidpoint = null
   },
   down(e) {
     if (e.target.closest("[data-zoom]")) return
@@ -113,11 +140,7 @@ export const CanvasZoom = {
     if (action === "in") this.zoomAt(centreX, centreY, rect, 1.25)
     if (action === "out") this.zoomAt(centreX, centreY, rect, 0.8)
     if (action === "reset") {
-      this.scale = 1
-      this.x = 0
-      this.y = 0
-      this.lastDistance = 0
-      this.lastMidpoint = null
+      this.reset()
     }
     this.apply()
   },

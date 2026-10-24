@@ -77,7 +77,7 @@ One hook, `CanvasZoom`, in `assets/js/`, registered in `app.js`, attached by the
 - **Zoom:** pinch on touch, or ctrl/⌘-wheel on a trackpad/mouse, zooms about the pointer. Plain wheel scrolls the page and never traps it.
 - **Controls:** small `+`, `−` and reset buttons in the canvas corner, so zoom is reachable without a gesture.
 - **Clamps:** scale between roughly 0.6 and 8. Translation is not clamped for v1, so panning can move into blank space; the clamp is recorded in the backlog.
-- **Lifecycle:** the transform survives frame and parameter updates (LiveView patches the SVG inside the hook's wrapper); reset returns to the fitted view. Navigating to another exhibit remounts the hook and resets.
+- **Lifecycle:** the transform survives frame and parameter updates (LiveView patches the SVG inside the hook's wrapper, and the hook re-applies its styles after each patch); reset returns to the fitted view. Navigating to another exhibit reuses the same `#canvas`, so a changed `data-canvas-key` resets the view instead of remounting.
 - The SVG remains server-rendered and unchanged; the hook only transforms the wrapper's content with CSS.
 
 ## Palette roles and derived tones
@@ -112,7 +112,7 @@ The controls component renders a `:palette` parameter as:
 - **Palette:** `:palette` round-trips through `Param.decode/2` and `Param.encode/2`; the controls render one row per combination with the right number of swatches; selecting one updates the exhibit.
 - **Canvas:** the component test asserts the hook attribute and the zoom/reset controls; drag/pinch behaviour is checked manually in the browser.
 - **Registry:** the `tiles` extremes run and every frame still draws non-empty ops and rows.
-- **Performance:** measure construction and rendering for the largest catalogue tilings at each adaptive span, and the styles exhibit's share of the registry property test. The vertex budget is the guard: heavy tilings show one cell so their construction stays in seconds, and a construction-cache or weld-scaling improvement is a recorded follow-up.
+- **Performance:** measure construction and rendering for the largest catalogue tilings at each adaptive span, and the styles exhibit's share of the registry property test. The vertex budget is the guard: heavy tilings show one cell to keep the cost down, though the heaviest, `3-8-4-6`, still takes about 87 seconds at one cell, and a construction-cache or weld-scaling improvement is a recorded follow-up.
 
 ## Decisions taken (our calls, for review)
 
@@ -137,4 +137,5 @@ The calls the draft left open, as shipped.
 - **Derived tone constants.** A missing palette tone shifts HSL lightness by `0.18` with hue and saturation kept, clamped to `[0.08, 0.92]`; a shift the clamp leaves unchanged is reversed.
 - **Overlay tints.** Five fixed hues — `#2563eb`, `#d97706`, `#0d9488`, `#db2777`, `#7c3aed` — cycled by `feature_id`, with fill opacity `0.12`, stroke opacity `0.5` and stroke width `0.75`.
 - **Pan clamping and delegated button listeners are deferred.** `CanvasZoom` clamps scale to `[0.6, 8.0]` only; pan translation is not clamped into the content's bounds, and the zoom buttons are bound per element at mount, so a button added by a later LiveView patch would be inert. Both are recorded in `docs/backlog.md`.
+- **The hook's state survives patches; navigation is keyed.** LiveView's morphdom writes the server tree's attributes back over `#canvas` and `[data-zoom-content]`, dropping the `transform` and `touch-action` the hook sets, so `updated()` restores both after every patch. `#canvas` is morphed in place across exhibits rather than remounted, so the canvas component stamps it with `data-canvas-key` (the exhibit slug); `updated()` resets scale, translation and pointer state when the key changes, which is what makes a navigation start at the fitted view.
 - **The seam property is checked on rounded positions.** The test compares six-decimal rounded vertex positions, translating the exact position and rounding once; translating an already-rounded position double-rounds and can miss a counterpart that is present.

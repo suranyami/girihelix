@@ -51,6 +51,10 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
     default: @default_aspect,
     doc: "Height divided by width; pass the aspect the viewport was fitted with."
 
+  attr :canvas_key, :string,
+    default: nil,
+    doc: "A stable key for the exhibit; the hook resets pan and zoom when it changes."
+
   @spec canvas(map()) :: Rendered.t()
   def canvas(%{drawing: {:canvas, ops}} = assigns) do
     assigns = assign(assigns, :ops, ops)
@@ -61,6 +65,7 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
       ops={@ops}
       viewport={@viewport}
       aspect={@aspect}
+      canvas_key={@canvas_key}
     />
     """
   end
@@ -83,15 +88,18 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
   attr :ops, :list, required: true
   attr :viewport, :any, required: true
   attr :aspect, :float, required: true
+  attr :canvas_key, :string, default: nil
 
   # The `CanvasZoom` hook transforms the inner wrapper and clips at the outer
   # one, so a pan past the pinned viewport reveals the SVG's fringe without
   # moving the page. The controls sit inside the hook element (their clicks are
   # wired by it) but outside the transformed content (so they never scale or
-  # move).
+  # move). The key names the exhibit so the hook can tell a navigation — where
+  # the previous exhibit's pan and zoom must not carry over — from a patch of
+  # the same one.
   defp zoomable_canvas(assigns) do
     ~H"""
-    <div id="canvas" phx-hook="CanvasZoom" class={@class}>
+    <div id="canvas" phx-hook="CanvasZoom" data-canvas-key={@canvas_key} class={@class}>
       <div data-zoom-content>
         <.svg_view ops={@ops} viewport={@viewport} aspect={@aspect} />
       </div>

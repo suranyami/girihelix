@@ -234,7 +234,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
 
         <div class="flex flex-col gap-2 lg:flex-row xl:items-start">
           <section id="picture" class="min-w-0 flex-1">
-            <.canvas drawing={@plot} viewport={@viewport} />
+            <.canvas drawing={@plot} viewport={@viewport} canvas_key={@exhibit.slug()} />
           </section>
 
           <aside class="flex w-80 shrink-0 flex-col gap-2">
@@ -303,8 +303,15 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     reuse(socket, requested)
   end
 
-  # New parameters: supersede any run in flight and build this one in a task.
-  defp continue(socket, _previous_key, _run_key, requested), do: start_run(socket, requested)
+  # Another exhibit: the picture in hand belongs to the old one, so it must not
+  # sit under the new title while this run builds.
+  defp continue(socket, {previous_slug, _}, {slug, _}, requested) when previous_slug != slug do
+    start_run(socket, requested, :new_exhibit)
+  end
+
+  # New parameters for the same exhibit: keep the previous picture on screen as
+  # the skeleton, as before.
+  defp continue(socket, _previous_key, _run_key, requested), do: start_run(socket, requested, :same_exhibit)
 
   defp reuse(socket, requested) do
     values = Map.put(socket.assigns.values, :cells, socket.assigns.cells)
@@ -320,12 +327,15 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     |> assign(loading: false, progress: nil, requested_frame: requested)
   end
 
-  defp start_run(socket, requested) do
+  # A run started for another exhibit clears the previous picture; a parameter
+  # change on the same exhibit keeps it as the loading skeleton.
+  defp start_run(socket, requested, mode) do
     exhibit = socket.assigns.exhibit
     values = socket.assigns.values
     parent = self()
 
     socket
+    |> clear_picture(mode)
     |> assign(
       loading: true,
       progress: nil,
@@ -340,6 +350,9 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
     |> cancel_async(:run)
     |> start_async(:run, fn -> run_task(exhibit, values, requested, parent) end)
   end
+
+  defp clear_picture(socket, :new_exhibit), do: assign(socket, drawing: nil, viewport: nil)
+  defp clear_picture(socket, :same_exhibit), do: socket
 
   # The task body. The step count is the same for the probe and the run that
   # follows it, so one total serves every `:run_progress` message.

@@ -151,6 +151,37 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert await_run(view) =~ "Girihelix.Engine.Geometry.Point.new(2.0, 4.0)"
   end
 
+  test "the palette picker's choice reaches the finished run's panel", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    await_run(view)
+
+    render_change(view, "params", %{"palette" => "348"})
+    assert await_run(view) =~ "Wada 348"
+  end
+
+  test "the tiles toggle draws the overlay tint in the rendered SVG", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/styles")
+    refute await_run(view) =~ ~s(fill="#2563eb")
+
+    render_change(view, "params", %{"tiles" => "true"})
+
+    # The overlay's fill polygon: the first fixed tint at the declared opacity,
+    # with the serializer's default stroke width, drawn after the figure.
+    assert await_run(view) =~
+             ~s(fill="#2563eb" stroke="none" stroke-width="1.0" opacity="0.12")
+  end
+
+  test "navigating to another exhibit clears the previous picture", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/workbench/point")
+    assert await_run(view) =~ "<circle"
+
+    # The loading render under the new title shows an empty canvas, not the
+    # previous exhibit's drawing.
+    html = render_patch(view, "/workbench/loose")
+    refute html =~ "<circle"
+    assert html =~ "Loose"
+  end
+
   test "a raising step renders the failure", %{conn: conn} do
     {:ok, view, _html} =
       live(conn, "/workbench/intersect?x1=0.0&y1=0.0&x2=0.0&y2=0.0")

@@ -94,6 +94,10 @@ point.
 
 ## Palettes (our call)
 
+> **Superseded by `2026-10-24-girihelix-styles-presentation-design.md`** for the
+> role mapping: missing tones are now derived by shifting lightness, not
+> recycled. Kept as the Plan 5 record.
+
 - **Dataset.** `colors.json` from `dblodorn/sanzo-wada` (MIT — the data behind
   <https://sanzo-wada.dmbk.io>): 157 colours with names, slugs, hex and
   combination membership; 348 numbered combinations. Vendored to
@@ -113,6 +117,10 @@ point.
   when the style produces ops, and the SVG serializer emits them unchanged.
 
 ## The exhibit
+
+> **Superseded by `2026-10-24-girihelix-styles-presentation-design.md`**: the
+> shipped exhibit adds a `tiles` boolean and pins a content-centred viewport
+> instead of `:fit`. Kept as the Plan 5 record.
 
 `GirihelixWeb.Workbench.Exhibits.Styles` — `slug/0 == "styles"`, `category/0 ==
 :styles`, registered after the tilings exhibits.
@@ -152,6 +160,10 @@ point.
    may read muddy and that is acceptable for v1.
 
 ## Decisions taken at implementation
+
+> **Superseded by `2026-10-24-girihelix-styles-presentation-design.md`** for the
+> role mapping recorded below: the shipped mapping derives missing tones by
+> shifting lightness. The rest of this section is the Plan 5 record.
 
 - **Module split.** `Style` is the behaviour: it declares `paint/2`, lists the
   ids in control order, dispatches an id to its module, and owns the padded

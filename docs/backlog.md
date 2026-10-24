@@ -17,6 +17,22 @@ two triages unchanged is a signal it should be closed rather than carried.
 
 ## Open
 
+### The loading placeholder shifts the layout by about 1rem (captured 2026-10-24, Styles presentation review)
+
+The run's skeleton reserves `min-h-64` (16rem) for the panel, but the finished
+styles panel is about 17.4rem tall, so the page grows by roughly 1rem when a
+run lands and the content below it shifts. Fixing it means measuring the panel
+or reserving its real height in the loading branch, and pinning the shift with
+a LiveView assertion on the loading and finished renders.
+
+### The reproduce snippet omits the tile overlay (captured 2026-10-24, Styles presentation review)
+
+`Styles.reproduce/1` names the painted construct but never the overlay's
+`Tilings.tile_ops/2` call, so a reader who copies the snippet while `tiles` is
+on gets the figure without the lattice. Fixing it means appending the overlay
+call and its tiling/translation arguments when the toggle is on, and extending
+the reproduce test.
+
 ### `Faces.Walk` has no iteration cap (captured 2026-10-20, Plan 1c homogenisation)
 
 The walk stops only on returning to its start, as Taprats' does, so a map whose

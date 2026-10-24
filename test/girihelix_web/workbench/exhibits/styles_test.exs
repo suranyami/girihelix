@@ -136,6 +136,20 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
 
     assert_in_delta viewport.width, 2.0 * cell / 0.75, 1.0e-9
     assert_in_delta viewport.scale, 1000.0 / viewport.width, 1.0e-9
+
+    # Centred on the constructed map's vertex bounds, not on the origin: the
+    # catalogue's placements put the content off the lattice origin.
+    positions =
+      for vertex <- PlanarMap.vertices(state.map), do: PlanarMap.position!(state.map, vertex)
+
+    xs = Enum.map(positions, & &1.x)
+    ys = Enum.map(positions, & &1.y)
+    centre_x = (Enum.min(xs) + Enum.max(xs)) / 2.0
+    centre_y = (Enum.min(ys) + Enum.max(ys)) / 2.0
+
+    assert_in_delta viewport.left, centre_x - viewport.width / 2.0, 1.0e-9
+    assert_in_delta viewport.top, centre_y + viewport.width * 0.75 / 2.0, 1.0e-9
+    refute_in_delta centre_x, 0.0, 1.0e-6
   end
 
   test "the windowed interior is periodic in both lattice directions" do
