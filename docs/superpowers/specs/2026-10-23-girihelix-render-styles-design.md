@@ -114,10 +114,13 @@ point.
 `GirihelixWeb.Workbench.Exhibits.Styles` — `slug/0 == "styles"`, `category/0 ==
 :styles`, registered after the tilings exhibits.
 
-- Parameters: `tiling` enum (catalogue, default `4.5`), `figure` enum
+- Parameters: `tiling` enum (catalogue, default `8.5`), `figure` enum
   (`:rosette` / `:star` / `:none`, default `:rosette`), `style` enum
   (`:plain` / `:filled` / `:outline`, default `:filled`), `palette` enum (the
-  348 Wada combinations, default a curated one).
+  348 Wada combinations, default `253`).
+- The default tiling is `8.5` for a reason: tiling `4.5` with a rosette has one
+  kept face, so `Filled` paints one flat region, while `8.5` produces 9 black
+  and 8 white faces.
 - Steps: the `Construct` sequence as in `instancing`, plus one terminal `:paint`
   step that runs the chosen style over the constructed map. The construct's
   frames remain for review; the last frame is the deliverable.
