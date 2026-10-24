@@ -47,9 +47,13 @@ defmodule Girihelix.Engine.FacesTest do
     end
   end
 
-  test "two parallel edges give two two-corner faces" do
+  test "two parallel edges give two-corner faces" do
     map = build([{0.0, 0.0}, {2.0, 0.0}], [{0, 1}, {0, 1}])
 
+    # `neighbour!/3` cannot tell two parallel edges apart, so the second walk
+    # repeats the first side and discovery keeps three two-corner faces for two
+    # geometric sides. Every island is now seeded, so the repeat is coloured
+    # too, white against the first side's black.
     assert Faces.extract_faces(map) ==
              {:ok,
               %{
@@ -57,7 +61,7 @@ defmodule Girihelix.Engine.FacesTest do
                   [Point.new(0.0, 0.0), Point.new(2.0, 0.0)],
                   [Point.new(2.0, 0.0), Point.new(0.0, 0.0)]
                 ],
-                white: []
+                white: [[Point.new(0.0, 0.0), Point.new(2.0, 0.0)]]
               }}
   end
 
@@ -89,6 +93,23 @@ defmodule Girihelix.Engine.FacesTest do
     {map, _mid} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
 
     assert {:ok, %{black: [_], white: [_]}} = Faces.extract_faces(map)
+  end
+
+  test "every disconnected island is coloured" do
+    map =
+      build([{0.0, 0.0}, {2.0, 0.0}, {0.0, 10.0}, {2.0, 10.0}], [
+        {0, 1},
+        {0, 1},
+        {2, 3},
+        {2, 3}
+      ])
+
+    {map, _mid} = PlanarMap.insert_vertex(map, Point.new(1.0, 0.0))
+    {map, _mid} = PlanarMap.insert_vertex(map, Point.new(1.0, 10.0))
+
+    assert {:ok, %{black: black, white: white}} = Faces.extract_faces(map)
+    assert length(black) == 2
+    assert length(white) == 2
   end
 
   test "extract_faces/1 is the final frame of its steps" do

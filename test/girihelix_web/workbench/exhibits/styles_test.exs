@@ -41,7 +41,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
     assert {"figure", "rosette"} in rows
     assert {"style", "filled"} in rows
     assert {"palette", "Wada 253"} in rows
-    assert {"faces", "17"} in rows
+    assert {"faces", "153"} in rows
     assert {"vertices", "432"} in rows
     assert {"edges", "576"} in rows
     assert {"failure", "none"} in rows
@@ -72,7 +72,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.StylesTest do
 
     assert {:both, [_ | _], rows} = Styles.draw(last_frame(params), params)
     assert {"palette", "Wada 5"} in rows
-    assert {"faces", "17"} in rows
+    assert {"faces", "153"} in rows
     assert {"failure", "none"} in rows
   end
 

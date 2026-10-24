@@ -26,14 +26,23 @@ defmodule Girihelix.Engine.Faces do
 
   ## Colouring
 
-  The first discovered face is the seed, and faces are coloured from a stack.
+  Faces are coloured from a stack. The first discovered face seeds an island,
+  that island is drained, and each remaining island is then seeded in
+  discovery order from its own first discovered face. Every island is
+  therefore coloured.
+
+  A face with no coloured neighbour is black, so each island's first face is
+  black. This differs from Taprats, which seeds only the first face: faces
+  that meet only at a vertex share no edge and so form separate islands, and
+  seeding one leaves every other island uncoloured. In a flower tiling that
+  leaves all but one rosette blank.
+
   A neighbour that is on the stack but not yet coloured contributes no
   constraint, so an inconsistent colouring is detected only when a face meets
   two differently coloured neighbours. That check is order-dependent and can
   miss a violation; `{:error, :filling_conflict}` means a conflict was seen,
-  not that the map is provably two-colourable.
-
-  A face with no coloured neighbour is black, so the seed is always black.
+  not that the map is provably two-colourable. A recorded conflict stops any
+  further seeding.
 
   A map with no kept face at all returns `{:error, :no_faces}`.
   """
@@ -116,7 +125,7 @@ defmodule Girihelix.Engine.Faces do
       step(
         :colour,
         "colour faces",
-        "Colours the faces from the first discovered one, recording a conflict or an empty map.",
+        "Colours every island of faces from its first discovered face, recording a conflict or an empty map.",
         &colour/1
       ),
       step(
@@ -201,9 +210,26 @@ defmodule Girihelix.Engine.Faces do
   defp colour(%{order: []} = state), do: %{state | failure: :no_faces}
 
   defp colour(%{order: [seed | _]} = state) do
-    %{state | stack: [seed]}
-    |> put_state(seed, :processing)
-    |> drain()
+    state |> seed_component(seed) |> colour_remaining()
+  end
+
+  defp seed_component(state, id) do
+    %{state | stack: [id]} |> put_state(id, :processing) |> drain()
+  end
+
+  defp colour_remaining(%{failure: reason} = state) when not is_nil(reason), do: state
+
+  defp colour_remaining(%{order: order} = state) do
+    Enum.reduce(order, state, &colour_if_undone/2)
+  end
+
+  defp colour_if_undone(_id, %{failure: reason} = state) when not is_nil(reason), do: state
+
+  defp colour_if_undone(id, state) do
+    case state.infos[id].state do
+      :undone -> seed_component(state, id)
+      _coloured -> state
+    end
   end
 
   defp drain(%{failure: reason} = state) when not is_nil(reason), do: state
