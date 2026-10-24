@@ -180,7 +180,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
         plot: assigns.drawing || {:canvas, []},
         panel_rows: placeholder_rows(assigns.drawing),
         transcript_index: 0,
-        transcript_snippet: assigns.snippet || ""
+        transcript_snippet: assigns.snippet || "Preparing the run…"
       )
 
     page(assigns)
@@ -238,6 +238,13 @@ defmodule GirihelixWeb.Workbench.ExhibitLive do
           <aside class="flex w-80 shrink-0 flex-col gap-2">
             <.controls params={@param_defs} values={@values} />
             <.panel :if={@panel_rows != []} rows={@panel_rows} />
+            <div
+              :if={@loading and @panel_rows == []}
+              id="panel-placeholder"
+              aria-hidden="true"
+              class="min-h-40 rounded-box border border-base-300"
+            >
+            </div>
           </aside>
         </div>
 

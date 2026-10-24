@@ -14,8 +14,10 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
 
   While a run is still building there is no frame to move through, so the
   component takes its loading form: the failure banner, if any, and a
-  `#run-progress` status naming the step in flight and its `index/total`. The
-  frame controls return as soon as the run completes.
+  `#run-progress` status naming the step in flight and its `index/total`. That
+  form reserves at least the finished form's height (its buttons and step
+  summary), so a header carrying the transport does not grow when the run lands.
+  The frame controls return as soon as the run completes.
   """
 
   use GirihelixWeb, :html
@@ -47,7 +49,7 @@ defmodule GirihelixWeb.Workbench.Components.Transport do
   @spec transport(map()) :: Phoenix.LiveView.Rendered.t()
   def transport(%{index: nil} = assigns) do
     ~H"""
-    <div class="flex flex-col gap-4">
+    <div class="flex min-h-28 flex-col gap-4">
       <p :if={@failure} role="alert" class="alert alert-error">
         Step failed: {@failure.step.label} — {Exception.message(@failure.exception)}
       </p>

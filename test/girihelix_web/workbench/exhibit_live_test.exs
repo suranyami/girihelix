@@ -174,6 +174,11 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
   test "a large tiling renders asynchronously with progress", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
 
+    # The loading branch is the finished page's skeleton: the canvas slot and
+    # the panel's box are already in place, so nothing moves when the run lands.
+    assert has_element?(view, "#canvas")
+    assert has_element?(view, "#panel-placeholder")
+    assert has_element?(view, "#reproduce", "Preparing the run…")
     assert has_element?(view, "#run-progress")
     assert render_async(view, @run_timeout) =~ ~s(id="canvas")
     refute has_element?(view, "#run-progress")
@@ -200,6 +205,7 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     {:ok, view, _html} = live(conn, "/workbench/styles")
     html = await_run(view)
 
+    assert has_element?(view, "header #transport")
     assert html =~ ~s(id="transport")
     assert html =~ ~s(id="controls")
     assert html =~ ~s(id="panel")
@@ -218,15 +224,6 @@ defmodule GirihelixWeb.Workbench.ExhibitLiveTest do
     assert html =~ "<details"
     refute html =~ ~s(<details open)
     assert html =~ "Show source and reproduce"
-  end
-
-  @tag :heavy
-  @tag timeout: 900_000
-  test "the loading branch keeps the canvas slot", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
-    assert has_element?(view, "#canvas")
-    assert has_element?(view, "#run-progress")
-    render_async(view, @run_timeout)
   end
 
   test "an unknown slug is a 404", %{conn: conn} do

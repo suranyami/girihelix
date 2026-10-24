@@ -74,18 +74,9 @@ defmodule GirihelixWeb.Workbench.Components.Canvas do
   end
 
   # A `:both` drawing's rows belong to `panel/1`; the page decides where that
-  # sits, so the picture here is the same as a canvas-only drawing's.
+  # sits, so the picture half is exactly a canvas-only drawing's.
   def canvas(%{drawing: {:both, ops, _rows}} = assigns) do
-    assigns = assign(assigns, :ops, ops)
-
-    ~H"""
-    <.zoomable_canvas
-      class="relative w-full overflow-hidden"
-      ops={@ops}
-      viewport={@viewport}
-      aspect={@aspect}
-    />
-    """
+    canvas(%{assigns | drawing: {:canvas, ops}})
   end
 
   attr :class, :string, required: true

@@ -41,7 +41,7 @@ defmodule GirihelixWeb.Workbench.Components.CanvasTest do
     assert render_component(&Canvas.panel/1, rows: [{"b", "2"}]) =~ "b"
   end
 
-  test "canvas labels both regions and sizes the SVG to its box" do
+  test "canvas labels the picture and sizes the SVG to its box" do
     html =
       render_component(&Canvas.canvas/1,
         drawing: {:both, [], [{"b", "2"}]},
