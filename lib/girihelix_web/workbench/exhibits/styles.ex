@@ -9,9 +9,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   static structure `Instancing` shows, so a reader can step through the
   construction before the finished picture.
 
-  With `tiles` on, the faint lattice overlay is composited between the style's
-  background and its figure, so the tile boundaries stay legible under the
-  paint.
+  With `tiles` on, the faint lattice overlay is composited above the figure, so
+  the tile boundaries stay legible over the paint rather than hidden beneath it.
 
   A map the style cannot paint still draws. An unbound run leaves the map empty,
   so `Filled` reports `:no_faces` and the panel falls back to the construct
@@ -115,7 +114,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
         name: :tiles,
         type: :boolean,
         default: false,
-        doc: "Draws the faint lattice tile overlay beneath the figure."
+        doc: "Draws the faint lattice tile overlay above the figure."
       }
     ]
   end
@@ -168,15 +167,15 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   # A painted result with ops is the picture; frame zero, an empty painting and
   # a retained failure frame all fall back to the shared construct structure.
-  # The background is composed beneath the tile overlay, and the overlay beneath
-  # the figure, so the lattice reads under the painting in every frame.
+  # The background is composed beneath the figure and the tile overlay above it,
+  # so the lattice reads over the paint in every frame.
   defp picture(state, params) do
     case Map.get(state, :paint) do
       {:ok, %{background: background, ops: [_ | _] = ops, faces: faces}} ->
-        {List.wrap(background) ++ overlay(state, params) ++ ops, faces}
+        {List.wrap(background) ++ ops ++ overlay(state, params), faces}
 
       _absent_or_failed ->
-        {overlay(state, params) ++ Tilings.structure_ops(state), nil}
+        {Tilings.structure_ops(state) ++ overlay(state, params), nil}
     end
   end
 
