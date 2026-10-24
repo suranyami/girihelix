@@ -214,6 +214,27 @@ defmodule GirihelixWeb.Workbench.ConstructCacheTest do
     assert ConstructCache.get(cache, :k).frames == [:frame]
   end
 
+  test "two concurrent first fetches build once" do
+    {cache, _ets} = start_cache()
+    counter = :counters.new(1, [])
+    parent = self()
+
+    build = fn ->
+      :counters.add(counter, 1, 1)
+      send(parent, :built)
+      Process.sleep(100)
+      ConstructCache.entry(:k, [:frame], nil, 2)
+    end
+
+    results =
+      [build, build]
+      |> Enum.map(fn fun -> Task.async(fn -> ConstructCache.fetch(cache, :k, fun) end) end)
+      |> Enum.map(&Task.await/1)
+
+    assert :counters.get(counter, 1) == 1
+    assert Enum.map(results, & &1.frames) == [[:frame], [:frame]]
+  end
+
   test "disk?: false keeps the tier working and creates no file" do
     path = tmp_dets_file()
     {cache, _ets} = start_cache(disk?: false, dets_file: path)

@@ -113,6 +113,26 @@ defmodule GirihelixWeb.Workbench.ConstructCache do
   @spec fetch(GenServer.server(), term(), (-> entry())) :: entry()
   def fetch(server, key, build_fun) do
     case get(server, key) do
+      nil -> locked_fetch(server, key, build_fun)
+      entry -> entry
+    end
+  end
+
+  # Two concurrent first requests for one key must build once. The lock is keyed
+  # by server and key so distinct caches never contend, and the miss is
+  # re-checked under the lock because a waiter's key may have been built while
+  # it waited.
+  # `:global` reads the id as `{resource, requester}`: the resource is the
+  # cache and key, the requester is this process. Two callers must never share
+  # a requester id, or `:global` treats them as the same owner and admits both.
+  defp locked_fetch(server, key, build_fun) do
+    :global.trans({{__MODULE__, {server, key}}, self()}, fn ->
+      build_miss(server, key, build_fun)
+    end)
+  end
+
+  defp build_miss(server, key, build_fun) do
+    case get(server, key) do
       nil ->
         entry = build_fun.()
         :ok = put(server, key, entry)
