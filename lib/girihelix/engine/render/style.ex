@@ -18,6 +18,7 @@ defmodule Girihelix.Engine.Render.Style do
   alias Girihelix.Engine.Render.Bounds
   alias Girihelix.Engine.Render.Op
   alias Girihelix.Engine.Render.Palette
+  alias Girihelix.Engine.Render.Styles.Filled
   alias Girihelix.Engine.Render.Styles.Plain
 
   @padding 0.02
@@ -52,6 +53,7 @@ defmodule Girihelix.Engine.Render.Style do
   """
   @spec paint(id(), PlanarMap.t(), Palette.roles()) :: {:ok, result()} | {:error, reason()}
   def paint(:plain, map, roles), do: Plain.paint(map, roles)
+  def paint(:filled, map, roles), do: Filled.paint(map, roles)
 
   @doc """
   `ops` with a filled background op prepended.
