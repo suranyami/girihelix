@@ -568,7 +568,7 @@ Add to `exhibit_live_test.exs`:
 
 ```elixir
 test "a large tiling renders asynchronously with progress", %{conn: conn} do
-  {:ok, view, _html} = live(conn, "/workbench/styles?tiling=3-8-4-6")
+  {:ok, view, _html} = live(conn, "/workbench/styles?tiling=7.6")
 
   assert has_element?(view, "#run-progress")
   assert render_async(view) =~ ~s(id="canvas")
@@ -593,7 +593,7 @@ test "heavy tilings use one cell and light ones two" do
 end
 ```
 
-`Run.build` probes at `cells: 1`: it measures the final frame's map and, when the vertex count exceeds `@vertex_budget`, keeps those frames; otherwise it discards them and runs again with `cells: 2`. Calibrate the budget from `Construct.patch_region(tiling, 1)`'s vertex count: `8.5` is about 432 and `7.6` about 1,257, so a budget around 1,200 puts `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` above it. A raising figure in the probe falls back to `cells: 2`; the full run reports the failure.
+`Run.build` probes at `cells: 1`: it measures the final frame's map and, when the vertex count exceeds `@vertex_budget`, keeps those frames; otherwise it discards them and runs again with `cells: 2`. The measured one-cell welded maps are `8.5` = 1,392, `7.6` = 4,321 and `6.5 flower` = 6,164 vertices, so `@vertex_budget` is `2_000`: `8.5` keeps two cells, and `7.6`, `6.5 flower`, `3-8-4-6` and `Girih Star` use one. A raising figure in the probe falls back to `cells: 2`; the full run reports the failure.
 
 Use `import Girihelix.Engine.Steps, only: [step: 4]` (or `require Girihelix.Engine.Steps`) in `steps_test.exs` for the `step` macro.
 
