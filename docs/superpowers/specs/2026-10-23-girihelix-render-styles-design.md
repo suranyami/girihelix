@@ -1,7 +1,7 @@
 # Render styles — design (Plan 5)
 
 **Date:** 2026-10-23
-**Status:** draft for builder review
+**Status:** accepted (2026-10-24)
 **Porting source:** Taprats 1.1.12 (changeset `b6c172`)
 **Depends on:** Plans 1b/1c (`PlanarMap`, the harness, `Faces` two-colouring), Plan 2 (draw ops, SVG serializer, viewport, exhibit behaviour), Plan 4 (`Construct`, the catalogue)
 **Follows:** the plan series (`2026-10-16-girihelix-workbench-design.md`, Plan 5 row) and the domain model design (`2026-10-16-girihelix-domain-model-design.md`, "Render styles" section)
@@ -50,10 +50,12 @@ Taprats' own renders, not a canonical golden.
 
 - **Engine purity.** Styles live under `lib/girihelix/engine/`, standard
   library only. Hex colours are plain data and are allowed; Phoenix/Ash are not.
-- **No new dependencies.** The palette dataset is vendored JSON read at compile
-  time exactly as the tiling catalogue is (`Jason` + `@external_resource`,
-  compile-time index, runtime path resolution through `:code.priv_dir/1` — the
-  Plan 4 lesson, not a CWD-relative read).
+- **No new dependencies.** The palette dataset is vendored JSON decoded at
+  compile time with the standard library's `JSON` module and
+  `@external_resource`, so the colours are embedded in the beam: there is no
+  runtime file read and no `:code.priv_dir/1` path to resolve. (The tiling
+  catalogue is the distinct case: it keeps its compile-time index and resolves
+  its runtime `.tiling` reads through `:code.priv_dir/1`.)
 - **Faithful first.** The two-colouring follows `Faces.java`'s face walk,
   clockwise test and parity propagation; the styles follow `rendering.md`'s
   class graph and call sequence. Where a style's Taprats behaviour is ambiguous,
@@ -148,13 +150,36 @@ point.
    documented at the point of decision; near-identical-luminance combinations
    may read muddy and that is acceptable for v1.
 
-## Left to the builder
+## Decisions taken at implementation
 
-- The exact module split (`Style` behaviour vs three structs, the palette
-  module, where role mapping lives).
-- `Outline`'s precise geometry: which cycles become outlines (porting notes §1
-  vs the Java `Outline` implementation).
-- The role-mapping rule and the default palette.
-- How `Filled`'s boundary pass composes with the face fills (Java order).
-- Whether the exhibit's `:paint` step belongs in `Construct`'s list or the
-  exhibit composes its own sequence over the construct's result.
+- **Module split.** `Style` is the behaviour: it declares `paint/2`, lists the
+  ids in control order, dispatches an id to its module, and owns the padded
+  background op. The three styles are `Styles.Plain`, `Styles.Filled` and
+  `Styles.Outline`; `Palette` holds the dataset and the role mapper. A caller
+  that holds only an id never names a module.
+- **Role mapping.** Colours sort ascending by WCAG relative luminance (hex
+  breaks ties) and map to `edge`, `darker`, `lighter` and `background` by their
+  count: one colour fills every role; two make the dark one the edge and the
+  light one everything else; three map `[dark, mid, light]` to the edge, darker,
+  lighter and background; four map in order; five or more take the first,
+  second, second-to-last and last. Near-identical luminances sort arbitrarily
+  and read muddy, and a one-colour combination paints flat. Both are visual,
+  not errors, and are accepted for v1.
+- **`Outline`'s geometry.** Each edge is one six-point ribbon polygon: the
+  mitred offset points at each end with the vertex between them. A degree-one
+  end is capped perpendicular; a degree-two end is mitred against its only
+  neighbour; a higher-degree end is mitred against the neighbours either side
+  of the edge. `sin θ` below `1e-7` means the miter is unbounded, so the corner
+  falls back to the perpendicular offset.
+- **`Filled`'s order.** White faces paint first in the lighter colour, then
+  black faces in the darker one, then every map edge is stroked once in the
+  edge colour. The boundary stroke stays and no background op is emitted: the
+  faces cover the box themselves, and a background would paint a colour the
+  picture does not use.
+- **The paint step lives in the exhibit.** `Construct`'s step list is
+  unchanged; `Styles` composes the construct sequence plus one terminal
+  `:paint` step over the welded map. Painting is presentation, not
+  construction, and the step-through exhibits stay uncoloured.
+- **Defaults.** The exhibit defaults to tiling `8.5` because it yields nine
+  black and eight white faces, while `4.5` with a rosette paints one flat
+  region; the default palette is Wada `253`.

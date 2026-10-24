@@ -27,6 +27,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   import Girihelix.Engine.Steps, only: [step: 4]
 
+  alias Girihelix.Engine.Geometry.Transform
   alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Palette
   alias Girihelix.Engine.Render.Style
@@ -39,6 +40,21 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   alias GirihelixWeb.Workbench.Exhibits.Instancing
   alias GirihelixWeb.Workbench.Exhibits.Tilings
   alias GirihelixWeb.Workbench.Param
+
+  @typedoc """
+  The construct state with the paint step's outcome beside it.
+
+  `paint` is `nil` before the terminal step, then either the style's result or
+  its reason. The construct's own keys are unchanged.
+  """
+  @type state :: %{
+          required(:tiling) => Tiling.t(),
+          required(:translations) => [Transform.t()],
+          required(:map) => PlanarMap.t(),
+          required(:failure) => nil | Construct.reason(),
+          required(:paint) => nil | {:ok, Style.result()} | {:error, term()},
+          optional(atom()) => any()
+        }
 
   @impl true
   @spec slug() :: String.t()
@@ -95,7 +111,7 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   end
 
   @impl true
-  @spec initial(map()) :: Construct.state()
+  @spec initial(map()) :: state()
   def initial(%{tiling: name, figure: figure}) do
     tiling = load(name)
     state = Construct.start(tiling, binder(figure), Construct.default_region(tiling))
@@ -139,17 +155,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   end
 
   # A painted result with ops is the picture; frame zero, an empty painting and
-  # a retained failure frame all fall back to the construct's own structure.
-  defp picture(%{paint: {:ok, %{ops: [_ | _] = ops, faces: faces}}}), do: {ops, faces}
-
-  defp picture(%{tiling: tiling, translations: translations, map: map}) do
-    {
-      Tilings.translation_ops(tiling) ++
-        Tilings.cell_ops(translations) ++
-        Tilings.outline_ops(tiling) ++
-        Figures.map_ops(map),
-      nil
-    }
+  # a retained failure frame all fall back to the shared construct structure.
+  defp picture(state) do
+    case Map.get(state, :paint) do
+      {:ok, %{ops: [_ | _] = ops, faces: faces}} -> {ops, faces}
+      _absent_or_failed -> {Tilings.structure_ops(state), nil}
+    end
   end
 
   defp rows(%{tiling: %Tiling{name: name}, map: map} = state, params, faces) do
@@ -167,11 +178,15 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
 
   # The construct records its own reason; the paint step records its reason
   # beside it. Either is the panel's failure row, and both absent is `none`.
-  defp failure(%{failure: nil, paint: {:error, reason}}), do: failure_name(reason)
-  defp failure(%{failure: reason}), do: failure_name(reason)
+  @spec failure(state()) :: String.t()
+  defp failure(%{failure: reason}) when not is_nil(reason), do: failure_name(reason)
+  defp failure(%{paint: {:error, reason}}), do: failure_name(reason)
+  defp failure(_state), do: "none"
 
   defp failure_name(nil), do: "none"
-  defp failure_name(reason), do: Atom.to_string(reason)
+  defp failure_name(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp failure_name({:figure_failed, exception}), do: Exception.message(exception)
+  defp failure_name(reason), do: inspect(reason)
 
   # The paint step: the style's ops over the welded map, or its reason.
   defp paint_step(style, palette) do
@@ -194,17 +209,11 @@ defmodule GirihelixWeb.Workbench.Exhibits.Styles do
   @spec load(atom()) :: Tiling.t()
   defp load(name), do: Catalogue.load!(Atom.to_string(name))
 
-  # One binder per declared figure, reusing the public instancing binders so the
-  # styled pattern binds its figures exactly as the instancing exhibit does.
+  # One binder per declared figure, delegated so the styled pattern binds its
+  # figures exactly as the instancing exhibit does.
   @spec binder(atom()) :: Construct.binder()
-  defp binder(:none), do: &nil_binder/1
-  defp binder(:rosette), do: &Instancing.rosette_binder/1
-  defp binder(:star), do: &Instancing.star_binder/1
+  defdelegate binder(figure), to: Instancing
 
-  # "No figure": every feature is placed, none is bound to one.
-  defp nil_binder(_feature), do: nil
-
-  defp binder_call(:none), do: "fn _feature -> nil end"
-  defp binder_call(:rosette), do: "&GirihelixWeb.Workbench.Exhibits.Instancing.rosette_binder/1"
-  defp binder_call(:star), do: "&GirihelixWeb.Workbench.Exhibits.Instancing.star_binder/1"
+  @spec binder_call(atom()) :: String.t()
+  defdelegate binder_call(figure), to: Instancing
 end

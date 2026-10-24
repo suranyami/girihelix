@@ -93,11 +93,11 @@ defmodule Girihelix.Engine.Render.Palette do
   @spec combination(atom() | pos_integer()) ::
           {:ok, [colour()]} | {:error, :unknown_combination}
   def combination(id) do
-    case fetch(id) do
-      nil -> {:error, :unknown_combination}
-      colours -> {:ok, colours}
-    end
+    id |> fetch() |> combination_result()
   end
+
+  defp combination_result(nil), do: {:error, :unknown_combination}
+  defp combination_result(colours), do: {:ok, colours}
 
   @doc """
   The colours of a combination, raising `ArgumentError` when it is unknown.

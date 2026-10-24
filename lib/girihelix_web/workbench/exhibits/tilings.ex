@@ -6,8 +6,8 @@ defmodule GirihelixWeb.Workbench.Exhibits.Tilings do
   `t1` and `t2` from the origin as guides, closed into the unit cell — the
   parallelogram the generators span — every placed tile as a stroked outline,
   and, once a construction has placed the lattice, a small marker at every
-  unit cell's origin. One helper spells them all so the `:tilings` exhibits
-  draw the same way.
+  unit cell's origin. `structure_ops/1` spells that whole composition once, so
+  the tiling exhibits that show a construction draw it the same way.
 
   `rows/1` returns a tiling's own numbers: the name, `t1`, `t2`, features,
   placements.
@@ -18,10 +18,12 @@ defmodule GirihelixWeb.Workbench.Exhibits.Tilings do
 
   alias Girihelix.Engine.Geometry.Point
   alias Girihelix.Engine.Geometry.Transform
+  alias Girihelix.Engine.PlanarMap
   alias Girihelix.Engine.Render.Op
   alias Girihelix.Engine.Tilings.Feature
   alias Girihelix.Engine.Tilings.PlacedFeature
   alias Girihelix.Engine.Tilings.Tiling
+  alias GirihelixWeb.Workbench.Exhibits.Figures
   alias GirihelixWeb.Workbench.Exhibits.Format
 
   @unit_cell_opts [width: 1.0]
@@ -43,6 +45,24 @@ defmodule GirihelixWeb.Workbench.Exhibits.Tilings do
       end)
 
     polygons ++ [name_label(name)]
+  end
+
+  @doc """
+  The static structure every constructed-tiling exhibit draws.
+
+  It composes the translation guides, the cell-origin markers, every placed
+  tile's outline and the welded map's own edges, in that order. Frame zero, an
+  unbound run and a retained failure frame all draw the first three; only a
+  welded map adds the last.
+  """
+  @spec structure_ops(%{
+          tiling: Tiling.t(),
+          translations: [Transform.t()],
+          map: PlanarMap.t()
+        }) :: [Op.t()]
+  def structure_ops(%{tiling: tiling, translations: translations, map: map}) do
+    translation_ops(tiling) ++
+      cell_ops(translations) ++ outline_ops(tiling) ++ Figures.map_ops(map)
   end
 
   @doc """

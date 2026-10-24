@@ -94,17 +94,34 @@ above does; a release started elsewhere would read nothing, or fail
 `File.read!/1`. Resolve the read paths with `:code.priv_dir(:girihelix)` when the
 workbench is first run from a release started outside a project-root cwd.
 
-### Jason is compile-time-only in the engine (2026-10-23, Plan 4 review)
+### Browsing palettes by base colour (captured 2026-10-24, Plan 5 homogenisation)
 
-`Girihelix.Engine.Tilings.Catalogue` decodes `priv/tilings/index.json` with
-`Jason.decode!/1` at compile time, so the engine holds no runtime Jason
-dependency — the plan mandated Jason over the stdlib `JSON` module then. Record
-the ruling and act on it when the catalogue is next touched: move the decode to
-stdlib `JSON` (no dependency), or keep Jason under an explicit documented
-allowance.
+The palette control is one 348-entry enum of combination numbers. The dataset
+is organised the other way round too — each of the 157 colours lists the
+combinations it appears in — so a reader could pick a colour and see the
+combinations built on it. That needs a second control and a filter over
+`Palette`'s combination index.
+
+### A styled figure exhibit without a tiling (captured 2026-10-24, Plan 5 homogenisation)
+
+The `:styles` exhibit always paints a constructed catalogue tiling, so a figure
+or a welded figure map cannot be painted directly. The design names this as a
+follow-up: it needs a figure-focused exhibit over the existing binders plus the
+same terminal paint step.
+
+### Palette labels in the controls (captured 2026-10-24, Plan 5 homogenisation)
+
+The palette enum renders each combination as its raw number (`253`), because
+`Palette.options/0` returns digit atoms. A reader cannot tell what a combination
+looks like before choosing it. Fixing it needs the param layer to carry a
+display label per option, or the palette control to resolve a combination's
+colours for a swatch.
 
 ## Closed
 
+- **Jason is compile-time-only in the engine** (Plan 4 review). Closed
+  2026-10-24: new engine data modules use the standard library's `JSON` module;
+  `Tilings.Catalogue` keeps Jason until it is next touched.
 - **`Point.compare_to/2` had no documented sorting idiom** (Plan 1a review).
   Closed 2026-10-22: `Point.sorter/0` converts the comparator into the boolean
   predicate `Enum.sort/2` expects, keeping the `tolerance2` band, and is pinned
